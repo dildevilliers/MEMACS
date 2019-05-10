@@ -1,7 +1,6 @@
 # ToDo list for new code
 
 # General
-- [ ] write setup
 - [ ] write README
 - [ ] include property for code version in all classes
 
