@@ -54,7 +54,7 @@ S = S1;
 % 
 % plot(t,real(sn(1,:)),'k'), grid on, hold on
 
-arraySys = ArraySystem(r,channelPhasors,Pn,LNAGain,IFGain,fLO,fSamp,Nt,Nbits);
+arraySys = ArraySystem(r,channelPhasors,1,Pn,LNAGain,IFGain,fLO,fSamp,Nt,Nbits);
 arraySys.plotPortSignal(S);
 x = arraySys.getPortSignal(S);
 
