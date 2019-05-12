@@ -40,7 +40,7 @@ classdef ArrayADC
             obj.outLevels = linspace(obj.minV,obj.maxV,obj.Nthresholds+1).';
             switch obj.ADCtype
                 case 'binary'
-                    obj.outBinary = dec2bin(0:(2^obj.Nbits - 1),Nbits);
+                    obj.outBinary = dec2logical(0:(2^obj.Nbits - 1),Nbits);
                 otherwise
                     error(['ADCtype: ', obj.ADCtype, ' not implemented yet']);
             end
@@ -68,7 +68,7 @@ classdef ArrayADC
             bV = reshape(b,Nsig*Nsamp,obj.Nbits);
             switch obj.ADCtype
                 case 'binary'
-                    binNumber = bin2dec(bV) + 1;
+                    binNumber = logical2dec(bV) + 1;
             end
             x = obj.outLevels(binNumber);
             x = reshape(x,Nsig,Nsamp);
