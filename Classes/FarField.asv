@@ -92,7 +92,7 @@ classdef FarField
         mu0 = 1.256637061435917e-06;
         eta0 = 3.767303134749689e+02;
         nSigDig = 8;
-        projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
+        projectionGrids = {'TrueView','Arcsin','Mollweide'};
         astroGrids = {'AzAlt','RAdec','GalLongLat'};
         sphereGrids = {'PhTh','AzEl','ElAz','AzAlt','RAdec','GalLongLat'};
     end
@@ -642,9 +642,44 @@ classdef FarField
             end
         end
         
+        %         function obj = grid2AzAlt(obj)
+        %             % GRID2AZALT Change the current FarField object grid to an AzAlt grid.
+        %
+        %             formerNx = obj.Nx;
+        %             formerNy = obj.Ny;
+        %             if ~any(strcmp([obj.projectionGrids,obj.astroGrids],obj.gridType))
+        %                 currGridType = obj.gridType;
+        %                 if ~strcmp(currGridType,'PhTh')
+        %                     obj = obj.grid2PhTh;
+        %                 end
+        %                 %TODO: fix this rotation
+        %                 obj = obj.rotate(@rotGRASPsph,[wrap2pi(pi/2-obj.orientation(2)),-obj.orientation(1),0]);
+        %                 eval(['obj = grid2',currGridType,'(obj);']);
+        %             end
+        %             obj = obj.grid2Base;
+        %             if ~strcmp(obj.gridType,'AzAlt')
+        %                 [obj.x,obj.y] = getAzAlt(obj);
+        %                 obj.gridType = 'AzAlt';
+        %             end
+        %             % Get the grid step sizes from the original
+        %             xmin = min(obj.x);
+        %             xmax = max(obj.x);
+        %             ymin = min(obj.y);
+        %             ymax = max(obj.y);
+        %             stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
+        %             stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
+        %             stepDeg = rad2deg([stepx,stepy]);
+        %             % Set the baseGrid of the rotated object.  This is required
+        %             % since all transformations operate from the base grid
+        %             obj = obj.sortGrid;
+        %             obj = obj.setBase;
+        %             obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
+        %         end
+        
         function obj = grid2AzAlt(obj)
             % GRID2AZALT Change the current FarField object grid to an AzAlt grid.
             
+            obj = obj.grid2Base;
             formerNx = obj.Nx;
             formerNy = obj.Ny;
             if ~any(strcmp([obj.projectionGrids,obj.astroGrids],obj.gridType))
@@ -656,7 +691,7 @@ classdef FarField
                 obj = obj.rotate(@rotGRASPsph,[wrap2pi(pi/2-obj.orientation(2)),-obj.orientation(1),0]);
                 eval(['obj = grid2',currGridType,'(obj);']);
             end
-            obj = obj.grid2Base;
+            
             if ~strcmp(obj.gridType,'AzAlt')
                 [obj.x,obj.y] = getAzAlt(obj);
                 obj.gridType = 'AzAlt';

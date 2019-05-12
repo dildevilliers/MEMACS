@@ -6,6 +6,7 @@
 
 # Farfield
 - [ ] Plan help files
+- [ ] Fix grid2AzAlt orientation rotation
 - [ ] ReadCSTascii
 - [ ] Multiple frequency concat
 - [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
