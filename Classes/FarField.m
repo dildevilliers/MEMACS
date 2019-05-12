@@ -19,6 +19,10 @@ classdef FarField
         r(1,1) double {mustBeReal, mustBeFinite}        % Radius where E-field is evaluated in (m)
         radEff(1,:) double {mustBeReal, mustBeFinite}   % Radiation efficiency per unit
         slant(1,1) double {mustBeReal, mustBeFinite}    % slant angle (for polType=slant) in radians
+        time(1,1) datetime                              % Time as a datetime object (used, for instance, in astronomical observation)
+        orientation(1,3) double {mustBeReal, mustBeFinite}      % Antenna orientation - in Euler angles (alpha,beta,gamma) in radians relative to an x->North, y->West, z->Zenith system  ([0,0,0])
+        earthLocation(1,3)  double {mustBeReal, mustBeFinite}   % Antenna location on the Earth longitude and latitude in radians, and height above sea level in meters - defaults to the roof of the Stellenbosch University E&E Engineering Dept. :)
+        
     end
     
     properties (SetAccess = private)
@@ -30,7 +34,7 @@ classdef FarField
         Prad        % Radiated power per frequency
         coorType    % Coordinate system type {'spherical','Ludwig1','Ludwig2AE','Ludwig2EA','Ludwig3'}
         polType     % polarization type {'linear','circular','slant'}
-        gridType    % Grid type {'PhTh','DirCos','AzEl','ElAz','AzAlt','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'}
+        gridType    % Grid type {'PhTh','DirCos','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'}
         freqUnit    % Frequency Unit {'Hz','kHz','MHz','GHz','THz'}
         symmetryXZ  % XZ plane symmetry type {'none','electric','magnetic'}
         symmetryYZ  % YZ plane symmetry type {'none','electric','magnetic'}
@@ -62,13 +66,14 @@ classdef FarField
         symYZ   % YZ plane symmetry
         symXY   % XY plane symmetry
         julDate % Julian Date
+        sphereGrids % Set of all spherical grids
+        baseTypeDifferent % Flag that indicates base grid and current grid are local and astro (or changed astro) (true) or both local/both astro (false)
+        coorOrientation % Coordinate system indicating the orientation
+        angBackRotate   % Required Euler rotation angles to align the antenna to to North,Zenith system
     end
     
     properties (SetAccess = private, Hidden = true)
         E3 = []         % Radial E-field component
-        orientation     % Antenna orientation - altitude/azimuth in radians relative to zenith/North ([0,pi/2])
-        earthLocation   % Antenna location on the Earth longitude and latitude in radians, and height above sea level in meters - defaults to the roof of the Stellenbosch University E&E Engineering Dept. :)
-        time            % Time as a datetime object (used, for instance, in astronomical observation)
         
         % Keep the input data here to not lose some info when going through
         % transformations and back...
@@ -93,8 +98,8 @@ classdef FarField
         eta0 = 3.767303134749689e+02;
         nSigDig = 8;
         projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
-        astroGrids = {'AzAlt','RAdec','GalLongLat'};
-        sphereGrids = {'PhTh','AzEl','ElAz','AzAlt','RAdec','GalLongLat'};
+        astroGrids = {'Horiz','RAdec','GalLongLat'};
+        localGrids = {'PhTh','AzEl','ElAz'};
     end
     
     methods
@@ -116,7 +121,7 @@ classdef FarField
             %   -- E3:          Radial component of E-field ([]), [Nang x 1]
             %   -- coorType:    {('spherical')|'Ludwig1'|'Ludwig2AE'|'Ludwig2EA'|'Ludwig3'}
             %   -- polType:     {('linear')|'circular'|'slant'}
-            %   -- gridType:    {('PhTh')|'DirCos'|'AzEl'|'ElAz'|'AzAlt'|'TrueView'|'ArcSin'|'Mollweide'|'RAdec'|'GalLongLat'}
+            %   -- gridType:    {('PhTh')|'DirCos'|'AzEl'|'ElAz'|'Horiz'|'TrueView'|'ArcSin'|'Mollweide'|'RAdec'|'GalLongLat'}
             %   -- freqUnit:    {('Hz'),'kHz','MHz','GHz','THz'}
             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
             %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
@@ -124,7 +129,7 @@ classdef FarField
             %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
             %   -- r:           Radius where the E-Field is evaluated in m, (1)
             %   -- slant:       slant angle in rad for polType=slant, (pi/4)
-            %   -- orientation: Antenna orientation, altitude/azimuth in radians relative to zenith/North ([0,pi/2]), [1 x 2]
+            %   -- orientation: Antenna orientation - in Euler angles (alpha,beta,gamma) in radians relative to an x->North, y->West, z->Zenith system  ([0,0,0])
             %   -- earthLocation: Antenna location, East-longitude/North-latitude in rad
             %                     and height above sea level in m, ([deg2rad(18.86) deg2rad(-33.93) 300])
             %   -- time:        Time, datetime object data type (datetime(2018,7,22,0,0,0))
@@ -182,7 +187,7 @@ classdef FarField
             expected_polType = {'linear','circular','slant'};
             parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType)));
             
-            expected_gridType = {'PhTh','DirCos','AzEl','ElAz','AzAlt','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
+            expected_gridType = {'PhTh','DirCos','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
             parseobj.addParameter('gridType','PhTh', @(x) any(validatestring(x,expected_gridType)));
             
             expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
@@ -200,8 +205,8 @@ classdef FarField
             parseobj.addParameter('r',1,typeValidation_scalar);
             parseobj.addParameter('slant',pi/4,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'FarField');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -279,11 +284,11 @@ classdef FarField
         
         %% Dependency-based Setters
         function ph = get.ph(obj)
-            [ph,~] = getPhThCurrent(obj);
+            [ph,~] = getPhTh(obj);
         end
         
         function th = get.th(obj)
-            [~,th] = getPhThCurrent(obj);
+            [~,th] = getPhTh(obj);
         end
         
         function Nf = get.Nf(obj)
@@ -389,6 +394,25 @@ classdef FarField
         
         function julDate = get.julDate(obj)
             julDate = convert.date2jd([obj.time.Day,obj.time.Month,obj.time.Year,obj.time.Hour,obj.time.Minute,obj.time.Second]);
+        end
+        
+        function sphereGrids = get.sphereGrids(obj)
+            sphereGrids = [obj.astroGrids,obj.localGrids];
+        end
+        
+        function baseTypeDifferent = get.baseTypeDifferent(obj)
+            baseTypeDifferent = (any(strcmp(obj.gridType,obj.astroGrids)) && any(strcmp(obj.gridTypeBase,obj.localGrids))) || ...
+                    (any(strcmp(obj.gridTypeBase,obj.astroGrids)) && any(strcmp(obj.gridType,obj.localGrids))) || ...
+                    (any(strcmp(obj.gridType,obj.astroGrids)) && any(strcmp(obj.gridTypeBase,obj.astroGrids)) && ~strcmp(obj.gridType,obj.gridTypeBase));
+        end
+        
+        function coorOrientation = get.coorOrientation(obj)
+            C0 = CoordinateSystem;
+            coorOrientation = C0.rotEuler(obj.orientation);
+        end
+        
+        function angBackRotate = get.angBackRotate(obj)
+            angBackRotate = getEulerangBetweenCoors(CoordinateSystem,obj.coorOrientation);
         end
         
         function obj = setFreq(obj,freq,freqUnit)
@@ -554,7 +578,7 @@ classdef FarField
         function obj = changeGrid(obj,gridTypeString)
             % CHANGEGRID Change the current FarField object grid.  
             
-            mustBeMember(gridTypeString, {'PhTh','DirCos','AzEl','ElAz','TrueView','ArcSin','AzAlt','RAdec','GalLongLat'});
+            mustBeMember(gridTypeString, {'PhTh','DirCos','AzEl','ElAz','TrueView','ArcSin','Horiz','RAdec','GalLongLat'});
             handleGridType = str2func(['grid2',gridTypeString]);
             obj = handleGridType(obj);  
         end
@@ -562,34 +586,43 @@ classdef FarField
         function obj = grid2PhTh(obj)
             % GRID2PHTH Change the current FarField object grid to a PhTh grid.
             
-            formerGridType = obj.gridType;
-            formerNx = obj.Nx;
-            formerNy = obj.Ny;
-            if any(strcmp(obj.gridType,obj.astroGrids))
-                obj = obj.grid2AzAlt;
-            end
             obj = obj.grid2Base;
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
             if ~strcmp(obj.gridType,'PhTh')
                 [obj.x,obj.y] = getPhTh(obj);
                 obj.gridType = 'PhTh';
-                if strcmp(formerGridType,'AzAlt')
-                    % Get the grid step sizes from the original
-                    obj = obj.rotate(@rotEulersph,[0,0,obj.orientation(1)]);
-                    obj = obj.rotate(@rotEulersph,[0,-pi/2+obj.orientation(2),0]);
-                    xmin = min(obj.x);
-                    xmax = max(obj.x);
-                    ymin = min(obj.y);
-                    ymax = max(obj.y);
-                    stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
-                    stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
-                    stepDeg = rad2deg([stepx,stepy]);
-                    % Set the baseGrid of the rotated object.  This is required
-                    % since all transformations operate from the base grid
-                    obj = obj.sortGrid;
-                    obj = obj.setBase;
-                    obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
-                end
+                % Rotate to sort out orientation
+                if mustRotate, obj = obj.rotate(@rotEulersph,obj.angBackRotate); end
             end
+            
+%             formerGridType = obj.gridType;
+%             formerNx = obj.Nx;
+%             formerNy = obj.Ny;
+%             if any(strcmp(obj.gridType,obj.astroGrids))
+%                 obj = obj.grid2Horiz;
+%             end
+%             obj = obj.grid2Base;
+%             if ~strcmp(obj.gridType,'PhTh')
+%                 [obj.x,obj.y] = getPhTh(obj);
+%                 obj.gridType = 'PhTh';
+%                 if strcmp(formerGridType,'Horiz')
+%                     % Get the grid step sizes from the original
+%                     obj = obj.rotate(@rotEulersph,[0,0,obj.orientation(1)]);
+%                     obj = obj.rotate(@rotEulersph,[0,-pi/2+obj.orientation(2),0]);
+%                     xmin = min(obj.x);
+%                     xmax = max(obj.x);
+%                     ymin = min(obj.y);
+%                     ymax = max(obj.y);
+%                     stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
+%                     stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
+%                     stepDeg = rad2deg([stepx,stepy]);
+%                     % Set the baseGrid of the rotated object.  This is required
+%                     % since all transformations operate from the base grid
+%                     obj = obj.sortGrid;
+%                     obj = obj.setBase;
+%                     obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
+%                 end
+%             end
         end
         
         function obj = grid2DirCos(obj)
@@ -605,7 +638,12 @@ classdef FarField
         function obj = grid2AzEl(obj)
             % GRID2AZEL Change the current FarField object grid to a AzEl grid.
             
+            % First get in PhTh from the base, then transform the current
+            % system to AzEl.  This way the rotation is done on the PhTh
+            % grid only...
             obj = obj.grid2Base;
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
+            if mustRotate, obj = obj.grid2PhTh; end
             if ~strcmp(obj.gridType,'AzEl')
                 [obj.x,obj.y] = getAzEl(obj);
                 obj.gridType = 'AzEl';
@@ -615,7 +653,12 @@ classdef FarField
         function obj = grid2ElAz(obj)
             % GRID2ELAZ Change the current FarField object grid to a ElAz grid.
             
+            % First get in PhTh from the base, then transform the current
+            % system to AzEl.  This way the rotation is done on the PhTh
+            % grid only...
             obj = obj.grid2Base;
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
+            if mustRotate, obj = obj.grid2PhTh; end
             if ~strcmp(obj.gridType,'ElAz')
                 [obj.x,obj.y] = getElAz(obj);
                 obj.gridType = 'ElAz';
@@ -642,92 +685,117 @@ classdef FarField
             end
         end
         
-        function obj = grid2AzAlt(obj)
-            % GRID2AZALT Change the current FarField object grid to an AzAlt grid.
+        function obj = grid2Horiz(obj)
+            % GRID2Horiz Change the current FarField object grid to an Horiz grid.
             
-            formerNx = obj.Nx;
-            formerNy = obj.Ny;
-            if ~any(strcmp([obj.projectionGrids,obj.astroGrids],obj.gridType))
-                currGridType = obj.gridType;
-                if ~strcmp(currGridType,'PhTh')
-                    obj = obj.grid2PhTh;
-                end
-                %TODO: fix this rotation
-                obj = obj.rotate(@rotGRASPsph,[wrap2pi(pi/2-obj.orientation(2)),-obj.orientation(1),0]);
-                eval(['obj = grid2',currGridType,'(obj);']);
-            end
             obj = obj.grid2Base;
-            if ~strcmp(obj.gridType,'AzAlt')
-                [obj.x,obj.y] = getAzAlt(obj);
-                obj.gridType = 'AzAlt';
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
+            if ~strcmp(obj.gridType,'Horiz')
+                [obj.x,obj.y] = getHoriz(obj);
+                obj.gridType = 'Horiz';
             end
-            % Get the grid step sizes from the original
-            xmin = min(obj.x);
-            xmax = max(obj.x);
-            ymin = min(obj.y);
-            ymax = max(obj.y);
-            stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
-            stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
-            stepDeg = rad2deg([stepx,stepy]);
-            % Set the baseGrid of the rotated object.  This is required
-            % since all transformations operate from the base grid
-            obj = obj.sortGrid;
-            obj = obj.setBase;
-            obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
+            
+%             formerNx = obj.Nx;
+%             formerNy = obj.Ny;
+%             if ~any(strcmp([obj.projectionGrids,obj.astroGrids],obj.gridType))
+%                 currGridType = obj.gridType;
+%                 if ~strcmp(currGridType,'PhTh')
+%                     obj = obj.grid2PhTh;
+%                 end
+%                 %TODO: fix this rotation
+%                 obj = obj.rotate(@rotGRASPsph,[wrap2pi(pi/2-obj.orientation(2)),-obj.orientation(1),0]);
+%                 eval(['obj = grid2',currGridType,'(obj);']);
+%             end
+%             obj = obj.grid2Base;
+%             if ~strcmp(obj.gridType,'Horiz')
+%                 [obj.x,obj.y] = getHoriz(obj);
+%                 obj.gridType = 'Horiz';
+%             end
+%             % Get the grid step sizes from the original
+%             xmin = min(obj.x);
+%             xmax = max(obj.x);
+%             ymin = min(obj.y);
+%             ymax = max(obj.y);
+%             stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
+%             stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
+%             stepDeg = rad2deg([stepx,stepy]);
+%             % Set the baseGrid of the rotated object.  This is required
+%             % since all transformations operate from the base grid
+%             obj = obj.sortGrid;
+%             obj = obj.setBase;
+%             obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
         end
         
         function obj = grid2RAdec(obj)
             % GRID2RAdec Change the current FarField object grid to a RAdec grid.
             
-            formerNx = obj.Nx;
-            formerNy = obj.Ny;
-            assert(any(strcmp(obj.gridTypeBase,[obj.projectionGrids,obj.astroGrids])),'Current grid must be a projection or be in an astronomical reference frame')
-            %must also check RA/dec lengths here...
             obj = obj.grid2Base;
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'RAdec')
                 [obj.x,obj.y] = getRAdec(obj);
                 obj.gridType = 'RAdec';
             end
-            % Get the grid step sizes from the original
-            xmin = min(obj.x);
-            xmax = max(obj.x);
-            ymin = min(obj.y);
-            ymax = max(obj.y);
-            stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
-            stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
-            stepDeg = rad2deg([stepx,stepy]);
-            % Set the baseGrid of the rotated object.  This is required
-            % since all transformations operate from the base grid
-            obj = obj.sortGrid;
-            obj = obj.setBase;
-            obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
+            
+            
+%             formerNx = obj.Nx;
+%             formerNy = obj.Ny;
+%             assert(any(strcmp(obj.gridTypeBase,[obj.projectionGrids,obj.astroGrids])),'Current grid must be a projection or be in an astronomical reference frame')
+%             %must also check RA/dec lengths here...
+%             obj = obj.grid2Base;
+%             if ~strcmp(obj.gridType,'RAdec')
+%                 [obj.x,obj.y] = getRAdec(obj);
+%                 obj.gridType = 'RAdec';
+%             end
+%             % Get the grid step sizes from the original
+%             xmin = min(obj.x);
+%             xmax = max(obj.x);
+%             ymin = min(obj.y);
+%             ymax = max(obj.y);
+%             stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
+%             stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
+%             stepDeg = rad2deg([stepx,stepy]);
+%             % Set the baseGrid of the rotated object.  This is required
+%             % since all transformations operate from the base grid
+%             obj = obj.sortGrid;
+%             obj = obj.setBase;
+%             obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
         end
         
         function obj = grid2GalLongLat(obj)
             % GRID2GALLONGLAT Change the current FarField object grid to a GalLongLat grid.
             
-            formerNx = obj.Nx;
-            formerNy = obj.Ny;
-            assert(any(strcmp(obj.gridTypeBase,[obj.projectionGrids,obj.astroGrids])),'Current grid must be a projection or be in an astronomical reference frame');
-            %must also check RA/dec lengths here...
             obj = obj.grid2Base;
+            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'GalLongLat')
                 [obj.x,obj.y] = getGalLongLat(obj);
                 obj.gridType = 'GalLongLat';
             end
-            % Get the grid step sizes from the original
-            xmin = min(obj.x);
-            xmax = max(obj.x);
-            ymin = min(obj.y);
-            ymax = max(obj.y);
-            stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
-            stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
-            stepDeg = rad2deg([stepx,stepy]);
-            % Set the baseGrid of the rotated object.  This is required
-            % since all transformations operate from the base grid
-            obj = obj.sortGrid;
-            obj = obj.setBase;
-            obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
+            
+%             formerNx = obj.Nx;
+%             formerNy = obj.Ny;
+%             assert(any(strcmp(obj.gridTypeBase,[obj.projectionGrids,obj.astroGrids])),'Current grid must be a projection or be in an astronomical reference frame');
+%             %must also check RA/dec lengths here...
+%             obj = obj.grid2Base;
+%             if ~strcmp(obj.gridType,'GalLongLat')
+%                 [obj.x,obj.y] = getGalLongLat(obj);
+%                 obj.gridType = 'GalLongLat';
+%             end
+%             % Get the grid step sizes from the original
+%             xmin = min(obj.x);
+%             xmax = max(obj.x);
+%             ymin = min(obj.y);
+%             ymax = max(obj.y);
+%             stepx = (max(obj.x) - min(obj.x))./(formerNx-1);
+%             stepy = (max(obj.y) - min(obj.y))./(formerNy-1);
+%             stepDeg = rad2deg([stepx,stepy]);
+%             % Set the baseGrid of the rotated object.  This is required
+%             % since all transformations operate from the base grid
+%             obj = obj.sortGrid;
+%             obj = obj.setBase;
+%             obj = obj.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
         end
         
         %% Grid range shifters
@@ -2119,11 +2187,14 @@ classdef FarField
             gridType = obj.gridType;
             
             % Evaluate the field on the base grid - this is where the output function
-            % should be best suited for interpolation
-            obj = obj.grid2Base;
+            % should be best suited for interpolation.  Can't do this for
+            % astroGrids, or cases where we have transformed from local to
+            % astro or vice versa
+            if ~obj.baseTypeDifferent, obj = obj.grid2Base; end
+            
             % Shift to -180:180 range (if applicable) - this is where the DirCos spits
             % everything out after transforming
-            if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
+            if any(strcmp(obj.gridType,obj.localGrids))
                 obj = obj.setXrange('sym');
             end
             % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
@@ -2359,7 +2430,7 @@ classdef FarField
             %
             % onlyRotPowerPattern is an optional argument which speeds up
             % the method in the case where only the rotated power pattern
-            % is of interest.  The field values will be arbitrary, bu the
+            % is of interest.  The field values will be arbitrary, but the
             % power pattern (directivity etc.) will be correct.  Used often
             % for noise temeperature calculations.
             
@@ -2663,7 +2734,8 @@ classdef FarField
             
             if isGridEqual(obj1,obj2)
                 P = obj1.getU.*obj2.getU;
-                FF_T = FarField.farFieldFromPowerPattern(obj1.phBase,obj1.thBase,P,obj1.freq);
+%                 FF_T = FarField.farFieldFromPowerPattern(obj1.phBase,obj1.thBase,P,obj1.freq);
+                FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType);
                 T = FF_T.pradInt;
             else
                 error('Can only convolve FarFields with equal base grids')
@@ -2683,7 +2755,7 @@ classdef FarField
             
             
             switch obj.gridType
-                case {'PhTh','AzAlt','RAdec','GalLongLat'}
+                case {'PhTh','Horiz','RAdec','GalLongLat'}
                     if strcmp(obj.gridType,'PhTh')
                         JacFunc = @sin;
                     else
@@ -3064,33 +3136,33 @@ classdef FarField
         end
         
         %% Astronomical methods
-        function obj = setOrientation(obj,newOrientation)
-            % SETORIENTATION Set the antenna orientation.
-            
-            currGridType = obj.gridType;
-            obj = obj.grid2PhTh;
-            obj.orientation = newOrientation;
-            obj = obj.grid2AzAlt;
-            eval(['obj = grid2',currGridType,'(obj);']);
-        end
+%         function obj = setOrientation(obj,newOrientation)
+%             % SETORIENTATION Set the antenna orientation.
+%             
+%             currGridType = obj.gridType;
+%             obj = obj.grid2PhTh;
+%             obj.orientation = newOrientation;
+%             obj = obj.grid2Horiz;
+%             eval(['obj = grid2',currGridType,'(obj);']);
+%         end
         
-        function obj = setTime(obj,newTime)
-            % SETTIME Set time.
-            
-            currGridType = obj.gridType;
-            obj = obj.grid2AzAlt;
-            obj.time = newTime;
-            eval(['obj = grid2',currGridType,'(obj);']);
-        end
+%         function obj = setTime(obj,newTime)
+%             % SETTIME Set time.
+%             
+%             currGridType = obj.gridType;
+%             obj = obj.grid2Horiz;
+%             obj.time = newTime;
+%             eval(['obj = grid2',currGridType,'(obj);']);
+%         end
         
-        function obj = setEarthLocation(obj,newEarthLocation)
-            % SETEARTHLOCATION Set the antenna location on Earth.
-            
-            currGridType = obj.gridType;
-            obj = obj.grid2AzAlt;
-            obj.earthLocation = newEarthLocation;
-            eval(['obj = grid2',currGridType,'(obj);']);
-        end
+%         function obj = setEarthLocation(obj,newEarthLocation)
+%             % SETEARTHLOCATION Set the antenna location on Earth.
+%             
+%             currGridType = obj.gridType;
+%             obj = obj.grid2Horiz;
+%             obj.earthLocation = newEarthLocation;
+%             eval(['obj = grid2',currGridType,'(obj);']);
+%         end
         
         %% File Output methods
         function writeGRASPcut(obj,pathName)
@@ -3213,8 +3285,8 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'readGRASPcut');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -3405,8 +3477,8 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'readGRASPcut');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -3555,8 +3627,8 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'readGRASPcut');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -3708,8 +3780,8 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'readGRASPcut');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -3874,7 +3946,7 @@ classdef FarField
             expected_fieldPol = {'linearX','linearY','circularLH','circularRH'};
             parseobj.addParameter('fieldPol','linearY', @(x) any(validatestring(x,expected_fieldPol)));
             
-            expected_gridType = {'PhTh','DirCos','AzEl','ElAz','AzAlt','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
+            expected_gridType = {'PhTh','DirCos','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
             parseobj.addParameter('gridType','PhTh', @(x) any(validatestring(x,expected_gridType)));
             
             expected_symPlane = {'none','electric','magnetic'};
@@ -3888,8 +3960,8 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,2]},'readGRASPcut');
-            parseobj.addParameter('orientation',[0,pi/2],typeValidation_orientation);
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
@@ -3978,59 +4050,47 @@ classdef FarField
     %% Internal helper functions
     methods (Access = private)
         %% Grid getters
+        % All grid getters operate on current coordinate system.  Use the
+        % grid2* functions to change to the base or not - depending on the
+        % specific situation
+        
+    %         function [ph,th] = getPhThCurrent(obj)
+    %             % GETPHTHCURRENT Get current PhTh grid.
+    %             
+    %             % This does not operate on the base grid, but instead the
+    %             % current grid
+    %             if strcmp(obj.gridType,'PhTh')
+    %                 ph = obj.x;
+    %                 th = obj.y;
+    %             else
+    %                 handle2DirCos = str2func([obj.gridType,'2DirCos']);
+    %                 [u,v,w] = handle2DirCos(obj.x,obj.y);
+    %                 [ph,th] = DirCos2PhTh(u,v,w);
+    %             end
+    %         end
+        
+        
         function [u, v, w] = getDirCos(obj)
             % GETDIRCOS Get DirCos grid.
             
-            handle2DirCos = str2func([obj.gridTypeBase,'2DirCos']);
-            [u,v,w] = handle2DirCos(obj.xBase,obj.yBase);
-        end
-        
-        function [ph, th] = getPhTh(obj)
-            % GETPHTH Get PhTh grid.
-            
-            switch obj.gridTypeBase
-                case 'PhTh'
-                    ph = obj.xBase;
-                    th = obj.yBase;
+            switch obj.gridType
+                case 'DirCos'
+                    u = obj.x;
+                    v = obj.y;
+                    w = zeros(size(u));
                 otherwise
-                    [u,v,w] = getDirCos(obj);
-                    [ph,th] = DirCos2PhTh(u,v,w);
-            end
-        end
-        
-        function [az, el] = getAzEl(obj)
-            % GETAZEL Get AzEl grid.
-            
-            switch obj.gridTypeBase
-                case 'AzEl'
-                    el = obj.yBase;
-                    az = obj.xBase;
-                otherwise
-                    [u,v,w] = getDirCos(obj);
-                    [az,el] = DirCos2AzEl(u,v,w);
-            end
-        end
-        
-        function [ep, al] = getElAz(obj)
-            % GETELAZ Get ElAz grid.
-            
-            switch obj.gridTypeBase
-                case 'ElAz'
-                    ep = obj.xBase;
-                    al = obj.yBase;
-                otherwise
-                    [u,v,w] = getDirCos(obj);
-                    [ep,al] = DirCos2ElAz(u,v,w);
+                    handle2DirCos = str2func([obj.gridType,'2DirCos']);
+                    [u,v,w] = handle2DirCos(obj.x,obj.y);
             end
         end
         
         function [Xg, Yg] = getTrueView(obj)
             % GETTRUEVIEW Get TrueView grid.
             
-            switch obj.gridTypeBase
+            switch obj.gridType
                 case 'TrueView'
-                    Xg = obj.xBase;
-                    Yg = obj.xBase;
+                    Xg = obj.x;
+                    Yg = obj.x;
                 otherwise
                     [u,v,w] = getDirCos(obj);
                     [Xg,Yg] = DirCos2TrueView(u,v,w);
@@ -4050,80 +4110,215 @@ classdef FarField
             end
         end
         
-        function [az,alt] = getAzAlt(obj)
-            % GETAZALT Get AzAlt grid.
+        function [ph, th] = getPhTh(obj)
+            % GETPHTH Get PhTh grid.
             
-            switch obj.gridTypeBase
-                case 'AzAlt'
-                    az = obj.xBase;
-                    alt = obj.yBase;
-                case 'RAdec'
-                    horzCoords= wrap2pi(celestial.coo.horiz_coo([obj.x obj.y],obj.julDate,obj.earthLocation(1:2),'h'));
-                    az = horzCoords(:,1); %right ascension
-                    alt = horzCoords(:,2); %declination
-                case 'GalLongLat'
-                    obj1 = obj.grid2RAdec;
-                    horzCoords= wrap2pi(celestial.coo.horiz_coo([obj1.x obj1.y],obj.julDate,obj1.earthLocation(1:2),'h'));
-                    az = horzCoords(:,1); %right ascension
-                    alt = horzCoords(:,2); %declination
-                otherwise
+            if strcmp(obj.gridType,'PhTh')
+                ph = obj.x;
+                th = obj.y;
+            else
+                if any(strcmp(obj.gridType,obj.astroGrids))
+                    if strcmp(obj.gridType,'Horiz')
+                        az = obj.x;
+                        alt = obj.y;
+                    else
+                        handle2Horiz = str2func([obj.gridType,'2Horiz']);
+                        [az,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                    end
+                    [u,v,w] = Horiz2DirCos(az,alt);
+                else
                     [u,v,w] = getDirCos(obj);
-                    [az,alt] = DirCos2AzAlt(u,v,w);
+                end
+                [ph,th] = DirCos2PhTh(u,v,w);
             end
+        end
+        
+        function [az, el] = getAzEl(obj)
+            % GETAZEL Get AzEl grid.
+            
+            if strcmp(obj.gridType,'AzEl')
+                az = obj.x;
+                el = obj.y;
+            else
+                if any(strcmp(obj.gridType,obj.astroGrids))
+                    if strcmp(obj.gridType,'Horiz')
+                        azH = obj.x;
+                        alt = obj.y;
+                    else
+                        handle2Horiz = str2func([obj.gridType,'2Horiz']);
+                        [azH,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                    end
+                    [u,v,w] = Horiz2DirCos(azH,alt);
+                else
+                    [u,v,w] = getDirCos(obj);
+                end
+                [az,el] = DirCos2AzEl(u,v,w);
+            end
+            
+%             switch obj.gridType
+%                 case 'AzEl'
+%                     el = obj.y;
+%                     az = obj.x;
+%                 otherwise
+%                     [u,v,w] = getDirCos(obj);
+%                     [az,el] = DirCos2AzEl(u,v,w);
+%             end
+        end
+        
+        function [ep, al] = getElAz(obj)
+            % GETELAZ Get ElAz grid.
+            
+            if strcmp(obj.gridType,'AzEl')
+                ep = obj.x;
+                al = obj.y;
+            else
+                if any(strcmp(obj.gridType,obj.astroGrids))
+                    if strcmp(obj.gridType,'Horiz')
+                        az = obj.x;
+                        alt = obj.y;
+                    else
+                        handle2Horiz = str2func([obj.gridType,'2Horiz']);
+                        [az,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                    end
+                    [u,v,w] = Horiz2DirCos(az,alt);
+                else
+                    [u,v,w] = getDirCos(obj);
+                end
+                [ep,al] = DirCos2ElAz(u,v,w);
+            end
+            
+%             switch obj.gridType
+%                 case 'ElAz'
+%                     ep = obj.x;
+%                     al = obj.y;
+%                 otherwise
+%                     [u,v,w] = getDirCos(obj);
+%                     [ep,al] = DirCos2ElAz(u,v,w);
+%             end
+        end
+        
+        function [az,alt] = getHoriz(obj)
+            % GETHoriz Get Horiz grid.
+            
+            switch obj.gridType
+                case 'Horiz'
+                    az = obj.x;
+                    alt = obj.y;
+                case [obj.localGrids,obj.projectionGrids]
+                    [u,v,w] = getDirCos(obj);
+                    [az,alt] = DirCos2Horiz(u,v,w);
+                otherwise
+                    handle2Horiz = str2func([obj.gridType,'2Horiz']);
+                    [az,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+            end
+            
+%             switch obj.gridType
+%                 case 'Horiz'
+%                     az = obj.x;
+%                     alt = obj.y;
+%                 case 'RAdec'
+%                     horzCoords= wrap2pi(celestial.coo.horiz_coo([obj.x obj.y],obj.julDate,obj.earthLocation(1:2),'h'));
+%                     az = horzCoords(:,1); 
+%                     alt = horzCoords(:,2); 
+%                 case 'GalLongLat'
+%                     obj1 = obj.grid2RAdec;
+%                     horzCoords= wrap2pi(celestial.coo.horiz_coo([obj1.x obj1.y],obj.julDate,obj1.earthLocation(1:2),'h'));
+%                     az = horzCoords(:,1); 
+%                     alt = horzCoords(:,2); 
+%                 case obj.projectionGrids    % Assumed to be projected from the current spherical grid
+%                     [u,v,w] = getDirCos(obj);
+%                     [az,alt] = DirCos2Horiz(u,v,w);
+%                 case obj.localGrids
+%                     [az,alt] = PhTh2Horiz(obj.ph,obj.th);
+%                 otherwise
+%                     error(['Unknown gridType: ', obj.gridType])
+%             end
         end
         
         function [RA, dec] = getRAdec(obj)
             % GETRADEC Get RAdec grid.
             
-            switch obj.gridTypeBase
-                case 'AzAlt'
-                    equCoords= wrap2pi(celestial.coo.horiz_coo([obj.x obj.y],obj.julDate,obj.earthLocation(1:2),'e'));
-                    RA = equCoords(:,1); %right ascension
-                    dec = equCoords(:,2); %declination
+            switch obj.gridType
                 case 'RAdec'
-                    RA = obj.xBase;
-                    dec = obj.yBase;
-                case 'GalLongLat'
-                    [equCoords,~] = celestial.coo.coco([obj.x obj.y],'g','j2000.0','r','r');
-                    RA = wrap2pi(equCoords(:,1)); %right ascension
-                    dec = wrap2pi(equCoords(:,2)); %declination
+                    RA = obj.x;
+                    dec = obj.y;
                 case obj.projectionGrids
                     [u,v,w] = getDirCos(obj);
-                    [RA,dec] = DirCos2AzAlt(u,v,w);
-                otherwise
-                    error('Grid type must either be AzAlt, GalLongLat or a projection grid')
+                    [RA,dec] = DirCos2RAdec(u,v,w);
+                case obj.localGrids
+                    [az,alt] = PhTh2Horiz(obj.ph,obj.th);
+                    [RA,dec] = Horiz2RAdec(az,alt,obj.julDate,obj.earthLocation(1:2));
+                case 'Horiz'
+                    [RA,dec] = Horiz2RAdec(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                case 'GalLongLat'
+                    [RA,dec] = GalLongLat2RAdec(obj.x,obj.y);
             end
+            
+%             switch obj.gridTypeBase
+%                 case 'Horiz'
+%                     equCoords= wrap2pi(celestial.coo.horiz_coo([obj.x obj.y],obj.julDate,obj.earthLocation(1:2),'e'));
+%                     RA = equCoords(:,1); %right ascension
+%                     dec = equCoords(:,2); %declination
+%                 case 'RAdec'
+%                     RA = obj.xBase;
+%                     dec = obj.yBase;
+%                 case 'GalLongLat'
+%                     [equCoords,~] = celestial.coo.coco([obj.x obj.y],'g','j2000.0','r','r');
+%                     RA = wrap2pi(equCoords(:,1)); %right ascension
+%                     dec = wrap2pi(equCoords(:,2)); %declination
+%                 case obj.projectionGrids
+%                     [u,v,w] = getDirCos(obj);
+%                     [RA,dec] = DirCos2Horiz(u,v,w);
+%                 otherwise
+%                     error('Grid type must either be Horiz, GalLongLat or a projection grid')
+%             end
         end
         
         function [long, lat] = getGalLongLat(obj)
             % GETGALLINGLAT Get GalLongLat grid.
             
-            switch obj.gridTypeBase
-                case 'PhTh'
-                    obj1 = obj.grid2AzAlt;
-                    obj1 = obj1.grid2RAdec;
-                    [galCoords,~] = celestial.coo.coco([obj1.x obj1.y],'j2000.0','g','r','r');
-                    long = wrap2pi(galCoords(:,1)); %galactic longitude
-                    lat = galCoords(:,2); %galactic latitude
-                case 'AzAlt'
-                    obj1 = obj.grid2RAdec;
-                    [galCoords,~] = celestial.coo.coco([obj1.x obj1.y],'j2000.0','g','r','r');
-                    long = wrap2pi(galCoords(:,1)); %galactic longitude
-                    lat = galCoords(:,2); %galactic latitude
-                case 'RAdec'
-                    [galCoords,~] = celestial.coo.coco([obj.x obj.y],'j2000.0','g','r','r');
-                    long = wrap2pi(galCoords(:,1)); %galactic longitude
-                    lat = galCoords(:,2); %galactic latitude
+            switch obj.gridType
                 case 'GalLongLat'
-                    long = obj.xBase;
-                    lat = obj.yBase;
+                    long = obj.x;
+                    lat = obj.y;
                 case obj.projectionGrids
                     [u,v,w] = getDirCos(obj);
-                    [long,lat] = DirCos2AzAlt(u,v,w);
-                otherwise
-                    error('Grid type must either be AzAlt, GalLongLat or a projection grid')
-                    
+                    [long,lat] = DirCos2GalLongLat(u,v,w);
+                case obj.localGrids
+                    [az,alt] = PhTh2Horiz(obj.ph,obj.th);
+                    [long,lat] = Horiz2GalLongLat(az,alt,obj.julDate,obj.earthLocation(1:2));
+                case 'Horiz'
+                    [long,lat] = Horiz2GalLongLat(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                case 'RAdec'
+                    [long,lat] = RAdec2GalLongLat(obj.x,obj.y);
             end
+            
+%             switch obj.gridTypeBase
+%                 case 'PhTh'
+%                     obj1 = obj.grid2Horiz;
+%                     obj1 = obj1.grid2RAdec;
+%                     [galCoords,~] = celestial.coo.coco([obj1.x obj1.y],'j2000.0','g','r','r');
+%                     long = wrap2pi(galCoords(:,1)); %galactic longitude
+%                     lat = galCoords(:,2); %galactic latitude
+%                 case 'Horiz'
+%                     obj1 = obj.grid2RAdec;
+%                     [galCoords,~] = celestial.coo.coco([obj1.x obj1.y],'j2000.0','g','r','r');
+%                     long = wrap2pi(galCoords(:,1)); %galactic longitude
+%                     lat = galCoords(:,2); %galactic latitude
+%                 case 'RAdec'
+%                     [galCoords,~] = celestial.coo.coco([obj.x obj.y],'j2000.0','g','r','r');
+%                     long = wrap2pi(galCoords(:,1)); %galactic longitude
+%                     lat = galCoords(:,2); %galactic latitude
+%                 case 'GalLongLat'
+%                     long = obj.xBase;
+%                     lat = obj.yBase;
+%                 case obj.projectionGrids
+%                     [u,v,w] = getDirCos(obj);
+%                     [long,lat] = DirCos2Horiz(u,v,w);
+%                 otherwise
+%                     error('Grid type must either be Horiz, GalLongLat or a projection grid')
+%                     
+%             end
         end
         
         %% Coordinate system getters
@@ -4262,22 +4457,7 @@ classdef FarField
             obj.coorTypeBase = obj.coorType;
             obj.polTypeBase = obj.polType;
         end
-        
-        function [ph,th] = getPhThCurrent(obj)
-            % GETPHTHCURRENT Get current PhTh grid.
-            
-            % This does not operate on the base grid, but instead the
-            % current grid
-            if strcmp(obj.gridType,'PhTh')
-                ph = obj.x;
-                th = obj.y;
-            else
-                handle2DirCos = str2func([obj.gridType,'2DirCos']);
-                [u,v,w] = handle2DirCos(obj.x,obj.y);
-                [ph,th] = DirCos2PhTh(u,v,w);
-            end
-        end
-        
+                
         %% Polarization type getters
         function [E1lin, E2lin, E3lin] = getElin(obj)
             % GETELIN Get linear polarization.
@@ -4363,7 +4543,7 @@ classdef FarField
                 case 'Mollweide'
                     xname = 'Xg';
                     yname = 'Yg';
-                case 'AzAlt'
+                case 'Horiz'
                     xname = 'North-az';
                     yname = 'alt';
                 case 'RAdec'
@@ -4418,7 +4598,7 @@ classdef FarField
             % Not much error checking is done - assume somewhat
             % sensible inputs are provided most of the time.
             xRangeType = 'sym';
-            if (strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz') || strcmp(obj.gridType,'AzAlt') || strcmp(obj.gridType,'RAdec') || strcmp(obj.gridType,'GalLongLat') )
+            if (strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz') || strcmp(obj.gridType,'Horiz') || strcmp(obj.gridType,'RAdec') || strcmp(obj.gridType,'GalLongLat') )
                 if min(obj.x) >= 0 && obj.symXZ == 0
                     xRangeType = 'pos';
                 end

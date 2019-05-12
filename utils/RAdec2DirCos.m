@@ -1,5 +1,5 @@
 function [u,v,w] = RAdec2DirCos(RA,dec)
-% function [u,v,w] = PhTh2DirCos(ph,th)
+% function [u,v,w] = RAdec2DirCos(RA,dec)
 % Try to maintain the ph angles in the pole
 dec(dec == 0 & RA ~= 0) = eps;
 dec = pi/2 - dec;

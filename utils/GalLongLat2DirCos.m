@@ -1,5 +1,5 @@
 function [u,v,w] = GalLongLat2DirCos(long,lat)
-% function [u,v,w] = PhTh2DirCos(ph,th)
+% function [u,v,w] = GalLongLat2DirCos(long,lat)
 % Try to maintain the ph angles in the pole
 lat(lat == 0 & long ~= 0) = eps;
 lat = pi/2 - lat;
