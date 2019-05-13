@@ -6,7 +6,7 @@
 
 # Farfield
 - [ ] Plan help files
-- [ ] Fix grid2AzAlt orientation rotation
+- [ ] Extent isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] ReadCSTascii
 - [ ] Multiple frequency concat
 - [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
@@ -42,6 +42,8 @@
 - [ ] General CBFP/SWE/Zernike interpolation over parameters
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
+- [x] Fix grid2AzAlt orientation rotation
+
 
 # Arrays
 ## General

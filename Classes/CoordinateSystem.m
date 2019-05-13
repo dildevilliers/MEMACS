@@ -200,9 +200,9 @@ classdef CoordinateSystem
        end
        
        %% Rotation
-       function obj = rotX(obj,angleRadians)
+       function obj = rotx(obj,angleRadians)
            %ROTX rotates the object around the x-axis
-           % obj = rotX(obj,angleRadians) rotates the object around the
+           % obj = rotx(obj,angleRadians) rotates the object around the
            % x-axis by an angle of angleRadians in radians
            %
            % Inputs
@@ -232,9 +232,9 @@ classdef CoordinateSystem
            obj.y_axis = rotx(obj.y_axis,angleRadians);
        end
        
-       function obj = rotY(obj,angleRadians)
+       function obj = roty(obj,angleRadians)
            %ROTY rotates the object around the y-axis
-           % obj = rotY(obj,angleRadians) rotates the object around the
+           % obj = roty(obj,angleRadians) rotates the object around the
            % y-axis by an angle of angleRadians in radians
            %
            % Inputs
@@ -264,9 +264,9 @@ classdef CoordinateSystem
            obj.y_axis = roty(obj.y_axis,angleRadians);
        end
        
-       function obj = rotZ(obj,angleRadians)
+       function obj = rotz(obj,angleRadians)
            %ROTZ rotates the object around the z-axis
-           % obj = rotZ(obj,angleRadians) rotates the object around the
+           % obj = rotz(obj,angleRadians) rotates the object around the
            % z-axis by an angle of angleRadians in radians
            %
            % Inputs

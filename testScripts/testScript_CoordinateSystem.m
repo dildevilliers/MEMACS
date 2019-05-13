@@ -58,32 +58,32 @@ end
 
 %% Rotate
 C0 = CoordinateSystem;
-Cr = C0.rotX(deg2rad(45));
+Cr = C0.rotx(deg2rad(45));
 if all(abs(Cr.z_axis - [0;-sqrt(2);sqrt(2)]./2) < 1e-12)
-    disp('Pass: rotX')
+    disp('Pass: rotx')
     rotXPass = true;
 else
-    disp('FAIL: rotX')
+    disp('FAIL: rotx')
     rotXPass = false;
 end
 
 C0 = CoordinateSystem;
-Cr = C0.rotY(deg2rad(45));
+Cr = C0.roty(deg2rad(45));
 if all(abs(Cr.z_axis - [sqrt(2);0;sqrt(2)]./2) < 1e-12)
-    disp('Pass: rotY')
+    disp('Pass: roty')
     rotYPass = true;
 else
-    disp('FAIL: rotY')
+    disp('FAIL: roty')
     rotYPass = false;
 end
 
 C0 = CoordinateSystem;
-Cr = C0.rotZ(deg2rad(45));
+Cr = C0.rotz(deg2rad(45));
 if all(abs(Cr.x_axis - [sqrt(2);sqrt(2);0]./2) < 1e-12)
-    disp('Pass: rotZ')
+    disp('Pass: rotz')
     rotZPass = true;
 else
-    disp('FAIL: rotZ')
+    disp('FAIL: rotz')
     rotZPass = false;
 end
 

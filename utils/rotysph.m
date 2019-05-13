@@ -13,7 +13,7 @@ if Ncomp ~= 2
     end
 end
 [x,y,z] = PhTh2DirCos(sphAngIn(1,:),sphAngIn(2,:));
-Xp = roty3D([x;y;z],th);
+Xp = roty([x;y;z],th);
 [php,thp] = DirCos2PhTh(Xp(1,:),Xp(2,:),Xp(3,:));
 sphAngOut = [php;thp];
 
