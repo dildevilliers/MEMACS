@@ -6,9 +6,10 @@
 
 # Farfield
 - [ ] Plan help files
-- [ ] Extent isGrid4Pi to operate on all spherical grids directly for speed
+- [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] ReadCSTascii
 - [ ] Multiple frequency concat
+- [ ] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
 - [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
@@ -32,6 +33,7 @@
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
 - [ ] Fix 3D plot for negative y-(th)axis cases
+- [ ] provide 3D plot for users without Antennas toolbox
 - [ ] Jones getter
 - [ ] Jones plotter (fix up)
 - [ ] Stokes getter
