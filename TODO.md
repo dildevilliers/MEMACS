@@ -23,8 +23,6 @@
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] readFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
-- [ ] CBFP expansion (Fahmi)
-- [ ] SWE of a given field (Fahmi + Brandt)
 - [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] writeCSTffs
 - [ ] writeFEKOfft
@@ -44,7 +42,7 @@
 - [ ] General CBFP/SWE/Zernike interpolation over parameters
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
-- [x] Fix grid2AzAlt orientation rotation
+- [x] Set coorType = power for astrogrids by default
 
 
 # Arrays

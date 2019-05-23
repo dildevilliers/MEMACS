@@ -693,6 +693,7 @@ classdef FarField
             % GRID2Horiz Change the current FarField object grid to an Horiz grid.
             
             obj = obj.grid2Base;
+            obj = obj.coor2power;
             mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
             if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'Horiz')
@@ -705,6 +706,7 @@ classdef FarField
             % GRID2RAdec Change the current FarField object grid to a RAdec grid.
             
             obj = obj.grid2Base;
+            obj = obj.coor2power;
             mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
             if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'RAdec')
@@ -717,6 +719,7 @@ classdef FarField
             % GRID2GALLONGLAT Change the current FarField object grid to a GalLongLat grid.
             
             obj = obj.grid2Base;
+            obj = obj.coor2power;
             mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
             if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'GalLongLat')
@@ -1344,7 +1347,6 @@ classdef FarField
         
         %% Plotting methods
         function plot(obj,varargin)
-            
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -1358,9 +1360,29 @@ classdef FarField
             %   -- output:      {('Directivity') | 'Gain' | 'E1' | 'E2' | 'AxialRatio'
             %                   | 'AxialRatioInv', 'CO_XP' | 'XP_CO' | 'W' | 'U'}
             %   -- outputType:  {('mag') | 'phase' | 'real' | 'imag'}
+            %   -- norm:        Boolean (false) to normalise output
+            %   -- dynamicRange_dB: A (positive) dB value for the magnitude plot dynamic range (40)
+            %   -- scaleMag:    {('dB') | 'lin'}, only used for magnitude plots
+            %   -- scalePhase:  {('deg') | 'rad'}, only used for phase plots
+            %   -- freqUnit:    {('GHz') | 'Hz' | 'kHz' | 'MHz' | 'THz'}
+            %   -- cutConstant: determines along which axis to cut in 1D plots {('x') | 'y'} 
+            %   -- cutValue:    Any value in the available angle range for 1D cuts range in rad (0)
+            %   -- step:        Plot step size in deg. Can be empty - then the available data will
+            %                   be used and no surface will be plotted.  If
+            %                   not, a griddata interpolant will be made.
+            %                   ([])
+            %   -- plotProperties: can be a variety of name, value pairs
+            %                      including LineWidth, LineStyle, Color (like '-.')
+            %   -- showGrid:   Boolean (false) to show the 2D grid where the data is
+            %                  calculated before interpolation.
+            %   -- hemisphere: Used in gridTypes DirCos and ArcSin {('top')
+            %                  | 'bot'}
             %
             % Outputs
             % - []
+            %
+            % Dependencies
+            % - MATLAB Antennas Toolbox for 3D plot
             %
             % Created: 2019-05-06, Dirk de Villiers
             % Updated: 2019-05-06, Dirk de Villiers
@@ -1372,56 +1394,6 @@ classdef FarField
             % Example
             %   FF = FarField;
             %   FF.plot('plotType','2D','step',1)
-            
-            
-            
-            % function plot(obj,name,value)
-            % Plots a representation of the farfield object in obj
-            % name, value are name value pairs, and can be the following:
-            %
-            % freqIndex is the index of the frequency to be plotted (default 1)
-            %
-            % plotType can be:
-            %   ('3D') | '2D' | 'polar' | 'cartesian'
-            %
-            % output can be:
-            %   ('Directivity') | 'Gain' | 'E1' | 'E2' | 'AxialRatio' | 'AxialRatioInv'
-            %   'CO_XP' | 'XP_CO' | 'W' | 'U'
-            %
-            % outputType can be:
-            %   ('mag') | 'phase' | 'real' | 'imag' last 3 only used for on E-field plots
-            %
-            % norm is a boolean (false) to normalize to maximum magnitude
-            %
-            % dynamicRange_dB is a (positive) dB value for the magnitude plot dynamic
-            % range (40)
-            %
-            % scaleMag can be:
-            %   ('dB') | 'lin' - only used for magnitude plots
-            %
-            % scalePhase can be:
-            %   ('deg') | 'rad' - only used for phase plots
-            %
-            % freqUnit can be:
-            %   ('GHz') | 'Hz' | 'kHz' | 'MHz' | 'THz'
-            %
-            % cutConstant can be (used only for polar and cartesian plots):
-            %   ('x') | 'y'  (x = [ph|az|ep|u|Xg|asin(u)]; y = [th|el|al|Yg|asin(v)]
-            %
-            % cutValue can be any value in the available angle range (in rad).
-            %
-            % step is the plot step size.  Can be empty - then the available data will
-            % be used and no surface will be plotted.  If not, a griddata interpolant will be made.
-            %
-            % plotProperties can be a variety of name, value pairs including:
-            %   LineWidth, LineStyle, Color (like '-.')
-            %
-            % showGrid is a boolean (false) to show the 2D grid where the data is
-            % calculated before interpolation.
-            %
-            % hemisphere is used in gridTypes DirCos and ArcSin and can be:
-            %   ('top') | 'bot'
-            
             
             
             narginchk(1,40);
@@ -2490,7 +2462,7 @@ classdef FarField
                 for ff = 1:obj1.Nf
                     Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                 end
-                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit);
+                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
             else
                 % Perform the rotation of the field vectors
                 % Vector origin points before rotation
@@ -2545,7 +2517,7 @@ classdef FarField
                     for ff = 1:obj1.Nf
                         Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                     end
-                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','linearY','freqUnit',FFsph.freqUnit);
+                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
                 else
                     FFsph = FFsph.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
                 end
@@ -2660,7 +2632,7 @@ classdef FarField
             if isGridEqual(obj1,obj2) && typesAreEqual(obj1,obj2)
                 obj = obj1;
                 obj.E1 = obj1.E1.*obj2.E1;
-                if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+                if ~isempty(obj1.E2) && ~isempty(obj2.E2)
                     obj.E2 = obj1.E2.*obj2.E2;
                 else
                     obj.E2 = [];
@@ -2695,7 +2667,11 @@ classdef FarField
             % Scale the FarField object E-fields by the scaleFactor
             obj = obj1;
             obj.E1 = obj1.E1.*scaleFactor;
-            obj.E2 = obj1.E2.*scaleFactor;
+            if ~isempty(obj1.E2)
+                obj.E2 = obj1.E2.*scaleFactor;
+            else
+                obj.E2 = obj1.E2;
+            end
             obj.Prad = obj1.Prad.*(abs(scaleFactor).^2);
         end
         
@@ -2764,8 +2740,10 @@ classdef FarField
                 case {'PhTh','Horiz','RAdec','GalLongLat'}
                     if strcmp(obj.gridType,'PhTh')
                         JacFunc = @sin;
-                    else
+                    elseif strcmp(obj.gridType,'Horiz')
                         JacFunc = @cos;
+                    else
+                        JacFunc = @sin;
                     end
                     PH = reshape(obj.x,obj.Ny,obj.Nx);
                     TH = reshape(obj.y,obj.Ny,obj.Nx);
@@ -2814,10 +2792,12 @@ classdef FarField
             elseif length(powerWatt) ~= obj1.Nf
                 error('powerWatt should be scalar or of length obj1.Nf');
             end
-            P = obj1.Prad;
+            P = obj1.pradInt;
             Cn = powerWatt./(P);
             obj = obj1;
+            obj.Prad = P;
             obj = scale(obj,sqrt(Cn));
+            obj = obj.setBase;
         end
         
         %% Frequency modifications
@@ -3278,7 +3258,7 @@ classdef FarField
     methods (Static = true)
         %% Farfield reading methods
         function FF = readGRASPgrd(pathName,varargin)
-            % READGRASPGRD Create a FarFiled object from a GRASP .grd file. 
+            % READGRASPGRD Create a FarField object from a GRASP .grd file. 
             
             % function FF = readGRASPgrd(filePathName)
             % Reads a GRASP .grd file and returns the FarField object.
@@ -3422,7 +3402,8 @@ classdef FarField
             fclose(fid);
             
             % Build the object
-            [Xmat,Ymat] = ndgrid(X,Y);
+%             [Xmat,Ymat] = ndgrid(X,Y);
+            [Xmat,Ymat] = meshgrid(X,Y);
             x = Xmat(:);
             y = Ymat(:);
             switch ICOMP
@@ -3441,22 +3422,38 @@ classdef FarField
             switch IGRID
                 case 1
                     gridType = 'DirCos';
+                    [xScale,yScale] = deal(1);
                 case 4
                     gridType = 'AzEl';
+                    [xScale,yScale] = deal(pi/180);
                 case 5
                     gridType = 'TrueView';
+                    [xScale,yScale] = deal(1);
                 case 6
                     gridType = 'ElAz';
+                    [xScale,yScale] = deal(pi/180);
                 case 7
                     gridType = 'PhTh';
+                    [xScale,yScale] = deal(pi/180);
                 otherwise
                     error(['IGRID ',num2str(IGRID),' case not implemented yet'])
             end
-           
+            
+            % Fix the shapes of the field data
+            for ff = 1:NSET
+                e1 = reshape(E1(:,ff),NX,NY).';
+                E1(:,ff) = e1(:);
+                e2 = reshape(E2(:,ff),NX,NY).';
+                E2(:,ff) = e2(:);
+                if NCOMP == 3
+                    e3 = reshape(E3(:,ff),NX,NY).';
+                    E3(:,ff) = e3(:);
+                end
+            end
             % keyboard;
-            Prad = ones(size(freq)).*4*pi;
+            Prad = ones(size(freq)).*4*pi./(2*obj.eta0);
             radEff = ones(size(freq));
-            FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
+            FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,'E3',E3,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
@@ -4017,24 +4014,24 @@ classdef FarField
                 switch fieldPol
                     case 'linearX' % linearly polarised along X-axis
                         polType = 'linear';
-                        E1  = sqrt(P.*2*eta0);
+                        E1  = sqrt(P./r^2.*2*eta0);
                         E2  = zeros(size(P));
                     case 'linearY' % linearly polarised along Y-axis
                         polType = 'linear';
                         E1  = zeros(size(P));
-                        E2  = sqrt(P.*2*eta0);
+                        E2  = sqrt(P./r^2.*2*eta0);
                     case 'circularLH'  % Lefthand Circular polarization
                         polType = 'circular';
-                        E1  = sqrt(P.*2*eta0);
+                        E1  = sqrt(P./r^2.*2*eta0);
                         E2  = zeros(size(P));
                     case 'circularRH'  % Righthand Circular polarization
                         polType = 'circular';
                         E1  = zeros(size(P));
-                        E2  = sqrt(P.*2*eta0);
+                        E2  = sqrt(P./r^2.*2*eta0);
                     case 'power' % Only real power pattern of interest
                         polType = 'none';
                         coorType = 'power';
-                        E1 = sqrt(P.*2*eta0);
+                        E1 = sqrt(P./r^2.*2*eta0);
                         E2 = [];
                     otherwise
                         error('fieldPol input string unrecognised')
@@ -4049,12 +4046,12 @@ classdef FarField
                 switch fieldPol
                     case 'linearX' 
                         polType = 'linear';
-                        E1(iph0,:)  = sqrt(P(iph0,:).*2*eta0);
-                        E2(iph90,:)  = -sqrt(P(iph90,:).*2*eta0);
+                        E1(iph0,:)  = sqrt(P(iph0,:)./r^2.*2*eta0);
+                        E2(iph90,:)  = -sqrt(P(iph90,:)./r^2.*2*eta0);
                     case 'linearY'
                         polType = 'linear';
-                        E1(iph90,:)  = sqrt(P(iph90,:).*2*eta0);
-                        E2(iph0,:)  = sqrt(P(iph0,:).*2*eta0);
+                        E1(iph90,:)  = sqrt(P(iph90,:)./r^2.*2*eta0);
+                        E2(iph0,:)  = sqrt(P(iph0,:)./r^2.*2*eta0);
                     otherwise
                         error('BOR1 functionality for CP not yet implemented')
                 end
