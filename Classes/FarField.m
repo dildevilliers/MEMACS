@@ -1926,7 +1926,10 @@ classdef FarField
             %% Plot the result
             
             % Estimate a nice step size
-            step = median(diff(unique(FF.thBase)));
+            thRange = (max(FF.thBase) - min(FF.thBase));
+            Nstep = round(sqrt(FF.Nang));
+            Nstep = Nstep + 1-mod(Nstep,2);
+            step = thRange/(Nstep-1);
             if strcmp(FF.gridType,'DirCos') || strcmp(FF.gridType,'ArcSin')
                 step = asin(step);
             end
@@ -2118,7 +2121,7 @@ classdef FarField
             
             % Main code
             
-            gridType = obj.gridType;
+            gridTypeIn = obj.gridType;
             
             % Evaluate the field on the base grid - this is where the output function
             % should be best suited for interpolation.  Can't do this for
@@ -2126,17 +2129,18 @@ classdef FarField
             % astro or vice versa
             if ~obj.baseTypeDifferent, obj = obj.grid2Base; end
             
-            % Shift to -180:180 range (if applicable) - this is where the DirCos spits
+            % Shift to x = sym and y = 180 range (if applicable) - this is where the DirCos spits
             % everything out after transforming
             if any(strcmp(obj.gridType,obj.localGrids))
                 obj = obj.setXrange('sym');
+                obj = obj.setYrange(180);
             end
             % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
             % angular grids
-            grid2DirCoshandle = str2func([gridType,'2DirCos']);
+            grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
             [ui,vi,wi] = grid2DirCoshandle(xi,yi);
             % Check for bottom hemisphere plot - fix the w to be the negative root
-            if (strcmp(gridType,'DirCos') || strcmp(gridType,'ArcSin')) && strcmp(hemisphere,'bot')
+            if (strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')) && strcmp(hemisphere,'bot')
                 wi = -wi;
             end
             DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
@@ -2144,7 +2148,7 @@ classdef FarField
             % Find the invalid points included by the external meshgrid
             valAngi = sqrt(ui.^2 + vi.^2) <= 1;
             % Sort out the TrueView special case invalid points
-            if strcmp(gridType,'TrueView')
+            if strcmp(gridTypeIn,'TrueView')
                 valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= 1;
             end
             
@@ -2152,7 +2156,7 @@ classdef FarField
             % +- 180 degrees
             % Get the indexes only, no later reshaping done, different from the grids
             % required for plotting in plot.m
-            if strcmp(gridType,'DirCos') || strcmp(gridType,'ArcSin')
+            if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')
                 grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
                 [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
                 if strcmp(hemisphere,'top')
@@ -2197,23 +2201,23 @@ classdef FarField
                     yVal = [yVal(iNeg);yVal;yVal(iPos)];
                     zVal = [zVal(iNeg);zVal;zVal(iPos)];
                 end
-                %     % Also extend the y-axis
-                %     if abs(min(yVal) - 0) < tol
-                %         edgeAngDeg = edgeAngExtent_deg;
-                %         iNeg = find(xVal < 0 & yVal < deg2rad(edgeAngDeg));
-                %         iPos = find(xVal > 0 & yVal < deg2rad(edgeAngDeg));
-                %         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
-                %         yVal = [yVal;-yVal(iNeg);-yVal(iPos)];
-                %         zVal = [zVal;zVal(iNeg);zVal(iPos)];
-                %     end
-                %     if abs(max(yVal) - pi) < tol
-                %         edgeAngDeg = 180 - edgeAngExtent_deg;
-                %         iNeg = find(xVal < 0 & yVal > deg2rad(edgeAngDeg));
-                %         iPos = find(xVal > 0 & yVal > deg2rad(edgeAngDeg));
-                %         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
-                %         yVal = [yVal;2*pi-yVal(iNeg);2*pi-yVal(iPos)];
-                %         zVal = [zVal;zVal(iNeg);zVal(iPos)];
-                %     end
+%                     % Also extend the y-axis
+%                     if abs(min(yVal) - 0) < tol
+%                         edgeAngDeg = edgeAngExtent_deg;
+%                         iNeg = find(xVal < 0 & yVal < deg2rad(edgeAngDeg));
+%                         iPos = find(xVal > 0 & yVal < deg2rad(edgeAngDeg));
+%                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
+%                         yVal = [yVal;-yVal(iNeg);-yVal(iPos)];
+%                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
+%                     end
+%                     if abs(max(yVal) - pi) < tol
+%                         edgeAngDeg = 180 - edgeAngExtent_deg;
+%                         iNeg = find(xVal < 0 & yVal > deg2rad(edgeAngDeg));
+%                         iPos = find(xVal > 0 & yVal > deg2rad(edgeAngDeg));
+%                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
+%                         yVal = [yVal;2*pi-yVal(iNeg);2*pi-yVal(iPos)];
+%                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
+%                     end
                 
             end
             
@@ -2265,6 +2269,34 @@ classdef FarField
             % Get the values on the scattered set of inputs
             Zi = Zf(xi_bGT,yi_bGT);
             Zi(~valAngi) = NaN;
+            
+            % Fix the poles on a case-by-case basis - mostly a futile
+            % excericise so far...
+            % Reinterpolate the points in the pole on the new grid with the
+            % interpolated function which is already spread out around the
+            % pole
+            tol = deg2rad(2);
+            if strcmp(obj.coorTypeBase,'Ludwig2AE') && strcmp(obj.coorType,'spherical')
+                % Pole at th = 0:
+                % Check if there are multiple points there
+                if length(find(yi == 0)) > 1
+                    iPole = find(abs(yi - 0) < tol);
+                    iClose = find(abs(yi) < deg2rad(edgeAngExtent_deg)); 
+                    iBase = setxor(iPole,iClose); % Remove the pole region from close in points for interpolation
+                    iPole0 = find(yi == 0 & xi == 0);
+%                     % Mirror across pole, and include the actual pole
+%                     xiBase = [xi(iBase);wrap2pi(xi(iBase) + pi);xi(iPole0)]; 
+%                     yiBase = [yi(iBase);-yi(iBase);yi(iPole0)];
+%                     ZiBase = [Zi(iBase);Zi(iBase);Zi(iPole0)];
+                    xiBase = [xi(iBase);xi(iPole0)];
+                    yiBase = [yi(iBase);yi(iPole0)];
+                    ZiBase = [Zi(iBase);Zi(iPole0)];
+                    Zf2 = scatteredInterpolant(xiBase,yiBase,ZiBase,'linear');
+                    Zi(iPole) = Zf2(xi(iPole),yi(iPole));
+                end
+                
+            end
+            
         end
 
         %% Phase centre/shifts/rotations of the field
@@ -2651,6 +2683,7 @@ classdef FarField
             obj = obj1;
             obj.E1 = conj(obj1.E1);
             obj.E2 = conj(obj1.E2);
+            obj = setBase(obj);
         end
         
         function obj = abs(obj1)
@@ -2659,6 +2692,7 @@ classdef FarField
             obj = obj1;
             obj.E1 = abs(obj1.E1);
             obj.E2 = abs(obj1.E2);
+            obj = setBase(obj);
         end
         
         function obj = scale(obj1,scaleFactor)
@@ -2673,6 +2707,7 @@ classdef FarField
                 obj.E2 = obj1.E2;
             end
             obj.Prad = obj1.Prad.*(abs(scaleFactor).^2);
+            obj = setBase(obj);
         end
         
         function [normE] = norm(obj,Ntype)
@@ -2716,7 +2751,6 @@ classdef FarField
             
             if isGridEqual(obj1,obj2)
                 P = obj1.getU.*obj2.getU;
-%                 FF_T = FarField.farFieldFromPowerPattern(obj1.phBase,obj1.thBase,P,obj1.freq);
                 FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType,'fieldPol','power');
                 T = FF_T.pradInt;
             else
@@ -3459,6 +3493,178 @@ classdef FarField
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
 
+        function FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin)
+            % READGRASPCUT Create a FarFiled object from a GRASP .cut file.
+            
+            % [FF] = readGRASPcut(pathName)
+            % Loads a GRASP generated farfield source file pathName.cut.
+            %
+            %
+            % Inputs:
+            % path_name - Full path and filename string
+            % nr_freq - number of frequency points
+            % nr_cuts - number of cuts taken
+            % Outputs:
+            % FF - standard farfield object
+            %
+            % Dirk de Villiers
+            % Created: 2019-04-22
+            
+            % Parsing through the inputs
+            parseobj = inputParser;
+            parseobj.FunctionName = 'readGRASPcut';
+            
+            typeValidator_pathName = @(x) isa(x,'char');
+            parseobj.addRequired('pathname',typeValidator_pathName);
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+            parseobj.addRequired('nr_freq',typeValidation_scalar);
+            parseobj.addRequired('nr_cuts',typeValidation_scalar);
+            
+            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
+            parseobj.addOptional('freq',1,typeValidation_freq);
+            
+            expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
+            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
+            
+            expected_symPlane = {'none','electric','magnetic'};
+            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
+            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
+            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
+            
+            expected_symBOR = {'none','BOR0','BOR1'};
+            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+            parseobj.addParameter('r',1,typeValidation_scalar);
+            
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+            
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+            
+            typeValidation_time = @(x) isa(x,'datetime');
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+            
+            parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
+            
+            pathName = parseobj.Results.pathname;
+            nr_freq = parseobj.Results.nr_freq;
+            nr_cuts = parseobj.Results.nr_cuts;
+            freq = parseobj.Results.freq;
+            freqUnit = parseobj.Results.freqUnit;
+            symmetryXZ = parseobj.Results.symmetryXZ;
+            symmetryYZ = parseobj.Results.symmetryYZ;
+            symmetryXY = parseobj.Results.symmetryXY;
+            symmetryBOR = parseobj.Results.symmetryBOR;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            %Open the data file
+            if ~strcmp(pathName(end-3:end),'.cut')
+                pathName = [pathName,'.cut'];
+            end
+%             global fid;
+            fid = fopen(pathName,'rt');
+%             global fid;
+%             [fid, message] = fopen([pathName,'.cut'], 'rt');
+            if (fid==-1)
+                error(['Unable to open data file ' fileName '!']);
+            end
+            
+            eta0 = 3.767303134749689e+02;
+            
+            %===================================================================
+            % Load data for pre-allocation
+            %===================================================================
+            % Skip over text line
+            dummy = fgetl(fid);
+%             form= '%*s %*s %*s %*s';
+%             dummy = textscan(fid, form, 1);
+            
+            % Read info line
+            form= '%f %f %f %f %f %f %f';
+            cut_info = textscan(fid, form, 1);
+            V_INI = cut_info{1};
+            V_INC = cut_info{2};
+            V_NUM = cut_info{3};
+            C = cut_info{4};
+            ICOMP = cut_info{5};
+            ICUT = cut_info{6};
+            % NCOMP = cut_info{7};
+            
+            % Preallocate
+            [th_deg,ph_deg] = deal(zeros(V_NUM*nr_cuts,1));
+            [E1,E2] = deal(zeros(V_NUM*nr_cuts,nr_freq));
+            
+            for ff = 1:nr_freq
+                for cc = 1:nr_cuts
+                    if ff == 1 % Only do once
+                        x_1cut = ones(V_NUM,1).*C;
+                        y_1cut = (V_INI:V_INC:(V_INC*(V_NUM - 1) + V_INI)).';
+                        
+                        if ICUT == 1
+                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
+                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
+                        elseif ICUT == 2
+                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
+                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
+                        end
+                    end
+                    % Read cut data
+                    form= '%f %f %f %f';
+                    cut_data = textscan(fid, form, V_NUM);
+                    E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
+                    E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
+                    
+                    dummy = fgetl(fid); % step off previous line
+                    dummy = fgetl(fid); % step over header line
+                    form= '%f %f %f %f %f %f %f';
+                    cut_info = textscan(fid, form, 1);
+                    C = cut_info{4};
+                end
+            end
+            fclose(fid);
+            
+            switch abs(ICOMP)
+                case 1
+                    polType = 'linear';
+                    coorType = 'spherical';
+                    E1ff = E1;
+                    E2ff = E2;
+                case 2
+                    polType = 'circular';
+                    coorType = 'spherical';
+                    E1ff = E2;
+                    E2ff = E1;
+                case 3
+                    polType = 'linear';
+                    coorType = 'Ludwig3';
+                    E1ff = E2;
+                    E2ff = E1;
+                otherwise
+                    error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
+            end
+            gridType = 'PhTh';
+            
+            % Build the FF obj
+            x = deg2rad(ph_deg);
+            y = deg2rad(th_deg);
+            Prad = ones(1,nr_freq).*4*pi/(2*eta0);
+            radEff = ones(1,nr_freq);
+            if isscalar(freq)
+                freq = repmat(freq,1,nr_freq);
+            end
+            
+            FF = FarField(x,y,E1ff,E2ff,freq,Prad,radEff,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+        end
+        
         function FF = readFEKOffe(pathName,varargin)
             % READFEKOFFE Create a FarFiled object from a FEKO .ffe file.
             
@@ -3749,47 +3955,15 @@ classdef FarField
             
         end
 
-        function FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin)
-            % READGRASPCUT Create a FarFiled object from a GRASP .cut file.
-            
-            % [FF] = readGRASPcut(pathName)
-            % Loads a GRASP generated farfield source file pathName.cut.
-            %
-            %
-            % Inputs:
-            % path_name - Full path and filename string
-            % nr_freq - number of frequency points
-            % nr_cuts - number of cuts taken
-            % Outputs:
-            % FF - standard farfield object
-            %
-            % Dirk de Villiers
-            % Created: 2019-04-22
+        function FF = readNFSscan(pathName,varargin)
+            % READNFSSCAN Create a FarFiled object from a NFS spherical range scan .txt file.
             
             % Parsing through the inputs
             parseobj = inputParser;
-            parseobj.FunctionName = 'readGRASPcut';
+            parseobj.FunctionName = 'readNFSscan';
             
             typeValidator_pathName = @(x) isa(x,'char');
             parseobj.addRequired('pathname',typeValidator_pathName);
-            
-            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
-            parseobj.addRequired('nr_freq',typeValidation_scalar);
-            parseobj.addRequired('nr_cuts',typeValidation_scalar);
-            
-            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
-            parseobj.addOptional('freq',1,typeValidation_freq);
-            
-            expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
-            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
-            
-            expected_symPlane = {'none','electric','magnetic'};
-            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
-            
-            expected_symBOR = {'none','BOR0','BOR1'};
-            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
             
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
             parseobj.addParameter('r',1,typeValidation_scalar);
@@ -3803,124 +3977,140 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
-            parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
+            parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
-            nr_freq = parseobj.Results.nr_freq;
-            nr_cuts = parseobj.Results.nr_cuts;
-            freq = parseobj.Results.freq;
-            freqUnit = parseobj.Results.freqUnit;
-            symmetryXZ = parseobj.Results.symmetryXZ;
-            symmetryYZ = parseobj.Results.symmetryYZ;
-            symmetryXY = parseobj.Results.symmetryXY;
-            symmetryBOR = parseobj.Results.symmetryBOR;
             r = parseobj.Results.r;
             orientation = parseobj.Results.orientation;
             earthLocation = parseobj.Results.earthLocation;
             time = parseobj.Results.time;
             
-            %Open the data file
-            if ~strcmp(pathName(end-3:end),'.cut')
-                pathName = [pathName,'.cut'];
+            % Open the data file
+            if ~strcmp(pathName(end-3:end),'.txt')
+                pathName = [pathName,'.txt'];
             end
-%             global fid;
-            fid = fopen(pathName,'rt');
-%             global fid;
-%             [fid, message] = fopen([pathName,'.cut'], 'rt');
+            fid = fopen(pathName);
             if (fid==-1)
-                error(['Unable to open data file ' fileName '!']);
+                error(['Unable to open data file ', fileName, '!']);
             end
             
-            eta0 = 3.767303134749689e+02;
+            % Set up markers in the text
+            directivityMarker = 'Directivity';
+            farFieldInfoMarker = 'Far-field display setup';
+            freqInfoMarker = 'BeamFrequency';
             
-            %===================================================================
-            % Load data for pre-allocation
-            %===================================================================
-            % Skip over text line
-            dummy = fgetl(fid);
-%             form= '%*s %*s %*s %*s';
-%             dummy = textscan(fid, form, 1);
-            
-            % Read info line
-            form= '%f %f %f %f %f %f %f';
-            cut_info = textscan(fid, form, 1);
-            V_INI = cut_info{1};
-            V_INC = cut_info{2};
-            V_NUM = cut_info{3};
-            C = cut_info{4};
-            ICOMP = cut_info{5};
-            ICUT = cut_info{6};
-            % NCOMP = cut_info{7};
-            
-            % Preallocate
-            [th_deg,ph_deg] = deal(zeros(V_NUM*nr_cuts,1));
-            [E1,E2] = deal(zeros(V_NUM*nr_cuts,nr_freq));
-            
-            for ff = 1:nr_freq
-                for cc = 1:nr_cuts
-                    if ff == 1 % Only do once
-                        x_1cut = ones(V_NUM,1).*C;
-                        y_1cut = (V_INI:V_INC:(V_INC*(V_NUM - 1) + V_INI)).';
-                        
-                        if ICUT == 1
-                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
-                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
-                        elseif ICUT == 2
-                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
-                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
-                        end
-                    end
-                    % Read cut data
-                    form= '%f %f %f %f';
-                    cut_data = textscan(fid, form, V_NUM);
-                    E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
-                    E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
-                    
-                    dummy = fgetl(fid); % step off previous line
-                    dummy = fgetl(fid); % step over header line
-                    form= '%f %f %f %f %f %f %f';
-                    cut_info = textscan(fid, form, 1);
-                    C = cut_info{4};
-                end
+            % Read the field header
+            while 1
+                a = fgetl(fid);
+                if strncmp(a,directivityMarker,11), break; end
             end
-            fclose(fid);
+            D = textscan(a,'%s%s%f%s');
+            directivity_dB = D{3}; 
+            % Skip over a few to the farfield data
+            while 1
+                a = fgetl(fid);
+                if strncmp(a,farFieldInfoMarker,24), break; end
+            end
+            % Get the grid information
+            a = fgetl(fid); % Skip th/az heading line
+            a = fgetl(fid); % Read the first dimension data line1
+            D1 = textscan(a,'%s%s%f%s%s%s%f%s%s%s%f');
+            a = fgetl(fid); % Read the first dimension data line2
+            D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
+            [x1span,x1center,x1N] = deal(D1{3},D1{7},D1{11});
+            [x1start,x1stop,x1delta] = deal(D2{2},D2{6},D2{10});
             
-            switch abs(ICOMP)
-                case 1
-                    polType = 'linear';
-                    coorType = 'spherical';
-                    E1ff = E1;
-                    E2ff = E2;
-                case 2
-                    polType = 'circular';
-                    coorType = 'spherical';
-                    E1ff = E2;
-                    E2ff = E1;
-                case 3
-                    polType = 'linear';
-                    coorType = 'Ludwig3';
-                    E1ff = E2;
-                    E2ff = E1;
+            a = fgetl(fid); % Skip ph/el heading line
+            a = fgetl(fid); % Read the second dimension data line1
+            D1 = textscan(a,'%s%s%f%s%s%s%f%s%s%s%f');
+            a = fgetl(fid); % Read the second dimension data line2
+            D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
+            [x2span,x2center,x2N] = deal(D1{3},D1{7},D1{11});
+            [x2start,x2stop,x2delta] = deal(D2{2},D2{6},D2{10});
+            
+            a = fgetl(fid); % Skip rotation line
+            a = fgetl(fid); % Skip interpolation line
+            a = fgetl(fid); % Get coordinate system line
+            D = textscan(a,'%s%s%s%s%s%s%s%s%s');
+            switch D{3}{1}(1:end-1)
+                case 'Th-Phi'
+                    gridType = 'PhTh';
+                    dataMarker = 'Theta(deg)Phi(deg)';
+                case 'Az/El'
+                    gridType = 'AzEl';
+                    dataMarker = 'Azimuth(deg)Elevation(deg)';
                 otherwise
-                    error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
+                    error(['Unknown grid type found: ',D{3}{1}])
             end
-            gridType = 'PhTh';
+            switch D{5}{1}
+                case 'L2'
+                    switch D{6}{1}(1:end-1)
+                        case 'Az/El'
+                            coorType = 'Ludwig2AE';
+                        case 'Eth-Eph'
+                            coorType = 'spherical';
+                    end
+                otherwise
+                    error(['Unknown coordinate type found: ',D{5}{1}])
+            end
+            % Skip over a few to the frequency info
+            while 1
+                a = fgetl(fid);
+                if strncmp(strrep(a,' ',''),freqInfoMarker,13), break; end
+            end
+            a = fgetl(fid); % Skip underline
+            a = fgetl(fid); % Get frequency line
+            D = textscan(a,'%f%f%s%s%s%s%s');
+            freq = D{2};
+            freqUnit = D{3}{1};
+            % Skip over until the actual data
+            while 1
+                a = fgetl(fid);
+                if strncmp(strrep(a,' ',''),dataMarker,length(dataMarker)), break; end
+            end
+            % Read first pol data
+            DATA1 = fscanf(fid,'%f%f%f%f',[4, x1N*x2N]).';
+            % Skip over until the next data
+            while 1
+                a = fgetl(fid);
+                if strncmp(strrep(a,' ',''),dataMarker,length(dataMarker)), break; end
+            end
+            % Read second pol data
+            DATA2 = fscanf(fid,'%f%f%f%f',[4, x1N*x2N]).';
             
-            % Build the FF obj
-            x = deg2rad(ph_deg);
-            y = deg2rad(th_deg);
-            Prad = ones(1,nr_freq).*4*pi/(2*eta0);
-            radEff = ones(1,nr_freq);
-            if isscalar(freq)
-                freq = repmat(freq,1,nr_freq);
+            % Sort and format the data
+            switch gridType
+                case 'PhTh'
+                    if x1span < 360 && abs(x1start) == abs(x1stop) % Don't have full sphere, but some data repeats
+                        iRemove = find(DATA1(:,1) < 0);
+                        DATA1(iRemove,:) = [];
+                        DATA2(iRemove,:) = [];
+                    end
+                    y = deg2rad(DATA1(:,1));
+                    x = deg2rad(DATA1(:,2));
+                case 'AzEl'
+                    x = deg2rad(DATA1(:,1));
+                    y = deg2rad(DATA1(:,2));
+            end
+            switch coorType
+                case {'spherical','Ludwig2AE'}
+                    E1 = lin20(DATA1(:,3)).*exp(1i.*deg2rad(DATA1(:,4)));
+                    E2 = lin20(DATA2(:,3)).*exp(1i.*deg2rad(DATA2(:,4)));
             end
             
-            FF = FarField(x,y,E1ff,E2ff,freq,Prad,radEff,...
-                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
-                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+            % Calculate the power and scaling
+            D0 = lin10(directivity_dB);
+            Prad = 4*pi*r.^2.*max(abs(E1).^2 + abs(E2).^2)./(2.*376.7303.*D0);
+            
+            % Create the FarField object
+            polType = 'linear'; % Probably always the case?
+            radEff = ones(size(freq)); %replace with manual radiation efficiency calculation
+            
+            FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,'r',1,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
-
+        
         function FF = farFieldFromPowerPattern(x,y,P,freq,varargin)
             % FARFIELDFROMPOWERPATTERN Create a Farfield object from a
             % power pattern.
@@ -4243,7 +4433,8 @@ classdef FarField
         function [Eth, Eph, Er] = getEspherical(obj)
             % GETESPHERICAL Get Espherical coordinates.
             
-            [Ph,Th] = getPhTh(obj);
+            tol = 10^(-obj.nSigDig);
+            [Ph,Th] = getPhTh(obj); % Faster than using the dependent variables - just called once
             TH = repmat(Th(:,1),1,obj.Nf);
             PH = repmat(Ph(:,1),1,obj.Nf);
             % Change to the Base values here....
@@ -4259,6 +4450,10 @@ classdef FarField
                     Del = cos(PH).^2 + cos(TH).^2.*sin(PH).^2;
                     Eth = (cosEl./Del).*(cos(PH).*obj.E1Base + cos(TH).*sin(PH).*obj.E2Base);
                     Eph = (cosEl./Del).*(-cos(TH).*sin(PH).*obj.E1Base + cos(PH).*obj.E2Base);
+                    % Pole at th = +-90; ph = +-90
+                    polePos = ((abs(abs(wrap2pi(TH))-pi/2) < tol) & (abs(abs(wrap2pi(PH))-pi/2) < tol));
+                    Eth(polePos) = obj.E1Base(polePos);
+                    Eph(polePos) = obj.E2Base(polePos);
                 case 'Ludwig2EA'
                     cosAl = sqrt(1 - sin(TH).^2.*cos(PH).^2);
                     Del = cos(TH).^2.*cos(PH).^2 + sin(PH).^2;
