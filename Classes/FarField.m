@@ -815,7 +815,8 @@ classdef FarField
             end
             % tol = 1e-10;
             tol = 10^(-obj.nSigDig);
-            if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
+%             if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
+            if any(strcmp(obj.gridType,obj.localGrids))
                 if t == 'p'
                     %         iout = find(obj.x == -pi);   % Redundant
                     %         iin = find(obj.x == 0);      % Will become redundant after inserting
@@ -873,7 +874,7 @@ classdef FarField
         end
         
         function obj = setYrange(obj,type)
-            % SETXRANGE Set the y-range (th, el, or al) for the angular gridTypes
+            % SETYRANGE Set the y-range (th, el, or al) for the angular gridTypes
             % in the FarField object.
             
             % Attempts to set the y-range (th, el, or al) for the angular
@@ -1161,6 +1162,7 @@ classdef FarField
         function obj = pol2linear(obj)
             % POL2LINEAR Change the FarField object polarization to linear
             % polarization
+            
             assert(~strcmp(obj.coorType,'power'),'Cannot change the polarisation system type of a power only pattern')
             if ~strcmp(obj.polType,'linear')
                 [obj.E1, obj.E2] = getElin(obj);
@@ -1343,7 +1345,6 @@ classdef FarField
             % Update the current form to the base form
             obj = reset2Base(obj);
         end
-        
         
         %% Plotting methods
         function plot(obj,varargin)
@@ -4256,8 +4257,29 @@ classdef FarField
         
     end
     
-    %% Internal helper functions
     methods (Access = private)
+        
+        %% Base representation methods
+        function obj = setBase(obj)
+            % SETBASE Set base grid.
+            
+            obj.xBase = obj.x;
+            obj.yBase = obj.y;
+            obj.NxBase = obj.Nx;
+            obj.NyBase = obj.Ny;
+            obj.E1Base = obj.E1;
+            obj.E2Base = obj.E2;
+            obj.E3Base = obj.E3;
+            obj.gridTypeBase = obj.gridType;
+            obj.coorTypeBase = obj.coorType;
+            obj.polTypeBase = obj.polType;
+            % Set after the gridType hase been set for the check in the
+            % dependent property getter. ph and th not stored for astro
+            % grid bases
+            obj.phBase = obj.ph;
+            obj.thBase = obj.th;
+        end
+        
         %% Grid getters
         % All grid getters operate on current coordinate system.  Use the
         % grid2* functions to change to the base or not - depending on the
@@ -4430,11 +4452,15 @@ classdef FarField
         end
         
         %% Coordinate system getters
+        
         function [Eth, Eph, Er] = getEspherical(obj)
             % GETESPHERICAL Get Espherical coordinates.
             
             tol = 10^(-obj.nSigDig);
-            [Ph,Th] = getPhTh(obj); % Faster than using the dependent variables - just called once
+            % Get the base Ph and Th
+            obj1 = obj.grid2Base;
+            [Ph,Th] = getPhTh(obj1); % Faster than using the dependent variables - just called once
+            clear obj1;
             TH = repmat(Th(:,1),1,obj.Nf);
             PH = repmat(Ph(:,1),1,obj.Nf);
             % Change to the Base values here....
@@ -4443,7 +4469,7 @@ classdef FarField
                     Eth = obj.E1Base;
                     Eph = obj.E2Base;
                 case 'Ludwig1'
-                    Eth = cos(TH).*cos(PH).*obj.E1Base + cos(TH).*sin(PH).*obj.E2Base - sin(TH).*obj.E3Base;
+                    Eth = cos(TH).*cos(PH).*obj.E1Base + cos(TH).*sin(PH).*obj.E2Base - sin(TH).*obj.E3;
                     Eph = -sin(PH).*obj.E1Base + cos(PH).*obj.E2Base;
                 case 'Ludwig2AE'
                     cosEl = sqrt(1 - sin(TH).^2.*sin(PH).^2);
@@ -4474,7 +4500,7 @@ classdef FarField
                 case 'Ludwig1'
                     Ex = obj.E1Base;
                     Ey = obj.E2Base;
-                    Ez = obj.E3Base;
+                    Ez = obj.E3;
                 otherwise
                     [Eth, Eph, ~] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -4493,7 +4519,7 @@ classdef FarField
                 case 'Ludwig2AE'
                     Eaz = obj.E1Base;
                     Eel = obj.E2Base;
-                    E3 = obj.E3Base;
+                    E3 = obj.E3;
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -4519,7 +4545,7 @@ classdef FarField
                 case 'Ludwig2EA'
                     Eal = obj.E1Base;
                     Eep = obj.E2Base;
-                    E3 = obj.E3Base;
+                    E3 = obj.E3;
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -4544,7 +4570,7 @@ classdef FarField
                 case 'Ludwig3'
                     Eh = obj.E1Base;
                     Ev = obj.E2Base;
-                    E3 = obj.E3Base;
+                    E3 = obj.E3;
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     PH = repmat(obj.ph(:,1),1,obj.Nf);
@@ -4554,35 +4580,19 @@ classdef FarField
             end
         end
         
-        function obj = setBase(obj)
-            % SETBASE Set base grid.
-            
-            obj.xBase = obj.x;
-            obj.yBase = obj.y;
-            obj.NxBase = obj.Nx;
-            obj.NyBase = obj.Ny;
-            obj.E1Base = obj.E1;
-            obj.E2Base = obj.E2;
-            obj.E3Base = obj.E3;
-            obj.gridTypeBase = obj.gridType;
-            obj.coorTypeBase = obj.coorType;
-            obj.polTypeBase = obj.polType;
-            % Set after the gridType hase been set for the check in the
-            % dependent property getter. ph and th not stored for astro
-            % grid bases
-            obj.phBase = obj.ph;
-            obj.thBase = obj.th;
-        end
                 
         %% Polarization type getters
         function [E1lin, E2lin, E3lin] = getElin(obj)
             % GETELIN Get linear polarization.
             
-            % Start at the base, transform to correct coordinate system
+            % Start at the base, transform to correct coordinate system and
+            % ranges
             coorTypeIn = obj.coorType;
             coorTypeH = str2func(['coor2',coorTypeIn]);
             obj1 = obj.reset2Base;
             obj1 = coorTypeH(obj1,false);
+%             obj1 = obj1.setXrange(obj.xRangeType);
+%             obj1 = obj1.setYrange(obj.yRangeType);
             switch obj.polTypeBase % Should be the same as the transformed object - can use obj or obj1
                 case 'linear'
                     E1lin = obj1.E1;
@@ -4597,7 +4607,7 @@ classdef FarField
                     E1lin = 1./Del.*(cos(PSI).*obj1.E1 + sin(PSI).*obj1.E2);
                     E2lin = 1./Del.*(-sin(PSI).*obj1.E1 + cos(PSI).*obj1.E2);
             end
-            E3lin = zeros(size(E1lin));
+            E3lin = [];
         end
         
         function [Elh,Erh,E3circ] = getEcircular(obj)
@@ -4612,7 +4622,7 @@ classdef FarField
                     [E1lin, E2lin] = getElin(obj);
                     Elh = 1/sqrt(2).*(E1lin - 1i.*E2lin);
                     Erh = 1/sqrt(2).*(E1lin + 1i.*E2lin);
-                    E3circ = zeros(size(Elh));
+                    E3circ = [];
             end
         end
         
@@ -4629,11 +4639,11 @@ classdef FarField
                     PSI = ones(size(obj.E1)).*obj.slant;
                     Exp = cos(PSI).*E1lin - sin(PSI).*E2lin;
                     Eco = sin(PSI).*E1lin + cos(PSI).*E2lin;
-                    E3slant = zeros(size(Exp));
+                    E3slant = [];
             end
         end
         
-        % Set the names of the 2 grid components
+        %% Name setters
         function [xname,yname] = setXYnames(obj)
             % SETXYNAMES Set x and y names
             
@@ -4671,8 +4681,6 @@ classdef FarField
             end
         end
         
-        % Set the names of the 2 farfield components based on the
-        % polarization type.  Names used for info and plotting.
         function [E1name,E2name] = setEnames(obj)
             % SETENAMES Set E-field component names
             
@@ -4709,6 +4717,7 @@ classdef FarField
             end
         end
         
+        %% Other utilities
         function [xRangeType,yRangeType] = setRangeTypes(obj)
             % SETRANGETYPES Returns current rangeType
             
@@ -4716,7 +4725,7 @@ classdef FarField
             % Not much error checking is done - assume somewhat
             % sensible inputs are provided most of the time.
             xRangeType = 'sym';
-            if (strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz') || strcmp(obj.gridType,'Horiz') || strcmp(obj.gridType,'RAdec') || strcmp(obj.gridType,'GalLongLat') )
+            if any(strcmp(obj.gridType,obj.sphereGrids))
                 if min(obj.x) >= 0 && obj.symXZ == 0
                     xRangeType = 'pos';
                 end
