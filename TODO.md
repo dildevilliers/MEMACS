@@ -6,6 +6,7 @@
 
 # Farfield
 - [ ] Plan help files
+- [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] ReadCSTascii
 - [ ] Multiple frequency concat
@@ -25,7 +26,9 @@
 - [ ] Overlap integral calculator (DdV)
 - [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] writeCSTffs
-- [ ] writeFEKOfft
+- [ ] writeFEKOffe
+- [ ] Refactor setXgrid and setYgrid. Simplify the cases by using the new sortGrid to get rid of redundant points. Add as many cuts as needed to cover all cases, and don't worry about removing any. Use insertMissingCuts.
+- [ ] Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet.
 - [ ] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
 - [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [ ] Array pattern adder

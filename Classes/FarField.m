@@ -734,7 +734,8 @@ classdef FarField
             % in ascending order, according to x then y.
             
             obj = roundGrid(obj);
-            [~,iSort] = sortrows([obj.x,obj.y],[1 2]);
+%             [~,iSort] = sortrows([obj.x,obj.y],[1 2]);
+            [~,iSort] = unique([obj.x,obj.y],'rows');
             obj.x = obj.x(iSort);
             obj.y = obj.y(iSort);
             obj.E1 = obj.E1(iSort,:);
@@ -783,11 +784,15 @@ classdef FarField
             else
                 E3New = [];
             end
-            obj = FarField(xNew,yNew,E1New,E2New,E3New,obj1.freq,...
-                obj1.Prad.*2,obj1.radEff,obj1.coorType,obj1.polType,obj1.gridType,obj1.freqUnit,obj1.slant);
+%             obj = FarField(xNew,yNew,E1New,E2New,E3New,obj1.freq,...
+%                 obj1.Prad.*2,obj1.radEff,obj1.coorType,obj1.polType,obj1.gridType,obj1.freqUnit,obj1.slant);
+            obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
+                'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
+                'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
             obj = obj.sortGrid;
-            obj = FarField(obj.x,obj.y,obj.E1,obj.E2,obj.E3,obj.freq,...
-                obj.Prad.*2,obj.radEff,obj.coorType,obj.polType,obj.gridType,obj.freqUnit,obj.slant);
+            obj = obj.setBase;
+%             obj = FarField(obj.x,obj.y,obj.E1,obj.E2,obj.E3,obj.freq,...
+%                 obj.Prad.*2,obj.radEff,obj.coorType,obj.polType,obj.gridType,obj.freqUnit,obj.slant);
         end
         
         function obj = setXrange(obj,type)
@@ -890,7 +895,8 @@ classdef FarField
             % of field points as the input object.
             
             assert(type == 180 || type == 360,'Unknown type: Should be 180 or 360');
-            
+            % Do nothing if the range is already what is requested
+            if strcmp(obj.yRangeType,num2str(type)), return; end
             % [iout,iin,xAdd,yAdd,E1Add,E2Add,E3Add] = deal([]);
             % Nredun = 0;
             
@@ -902,7 +908,7 @@ classdef FarField
             % where to put in and take out points...  Done now on a case-by-case basis
             % because I can't think of a general algorithm yet
             if strcmp(obj.gridType,'PhTh')
-                if type == 360
+                if type == 360 
                     if strcmp(obj.xRangeType,'pos')
                         iout = find(obj.x  > (pi+eps) & abs(obj.y - pi) < eps);   % Redundant
                         iin = find(abs(obj.x - 0) < eps);                   % Will become redundant after inserting
@@ -913,6 +919,8 @@ classdef FarField
                         outOfRangeInd = find(obj.x > (pi+eps));
                         obj.x(outOfRangeInd) = obj.x(outOfRangeInd) - pi;
                         obj.y(outOfRangeInd) = 2*pi - obj.y(outOfRangeInd);
+                        % Fix pole fields sign change
+                        % TODO
                     elseif strcmp(obj.xRangeType,'sym')
                         iout = [find((obj.x >= (-pi/2-eps) & obj.x <= (pi/2+eps)) & abs(obj.y - 0) < eps); find(abs(obj.x + pi) < eps)];   % Redundant
                         iin = find(abs(obj.x + pi/2) < eps | abs(obj.x - pi/2) < eps);
@@ -925,8 +933,10 @@ classdef FarField
                         signPos(signPos == 0) = 1;
                         obj.x(outOfRangeInd) = obj.x(outOfRangeInd) - signPos.*pi;
                         obj.y(outOfRangeInd) = -obj.y(outOfRangeInd);
+                        % Fix pole fields sign change
+                        % TODO
                     end
-                elseif type == 180
+                elseif type == 180 
                     if strcmp(obj.xRangeType,'pos')
                         iout = find(obj.y <= (pi+eps) & abs(obj.x - pi) < eps);   % Redundant
                         iin = find(obj.x <= (pi+eps) & abs(obj.y - pi) < eps);    % Will become redundant after inserting
@@ -937,8 +947,9 @@ classdef FarField
                         outOfRangeInd = find(obj.y > (pi+eps));
                         obj.y(outOfRangeInd) = 2*pi - obj.y(outOfRangeInd);
                         obj.x(outOfRangeInd) = obj.x(outOfRangeInd) + pi;
+                        % Fix pole fields sign change
+                        % TODO
                     elseif strcmp(obj.xRangeType,'sym')
-                        %             iout = unique(find((abs(obj.x - pi/2) < eps | abs(obj.x + pi/2) < eps) & (obj.y <= eps)));   % Redundant
                         iout = find((abs(obj.x - pi/2) < eps | abs(obj.x + pi/2) < eps) & (obj.y <= eps));   % Redundant
                         iin1 = find(abs(obj.y - 0) < eps);
                         iin2 = find(abs(obj.x - 0) < eps & obj.y <= eps);
@@ -956,10 +967,14 @@ classdef FarField
                         signPos = sign(obj.x(outOfRangeInd));
                         signPos(signPos == 0) = 1;
                         obj.x(outOfRangeInd) = obj.x(outOfRangeInd) - signPos.*pi;
+                        % Fix pole fields sign change
+                        iPole = intersect(find(abs(obj.x) >= pi/2-eps),find(abs(obj.y) < eps));
+                        obj.E1(iPole,:) = -obj.E1(iPole,:);
+                        obj.E2(iPole,:) = -obj.E2(iPole,:);
                     end
                 end
             elseif strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
-                if type == 360
+                if type == 360 
                     if strcmp(obj.xRangeType,'pos')
                         iout = find(obj.x <= pi+eps & (abs(obj.y - pi/2) < eps | abs(obj.y + pi/2) < eps));   % Redundant
                         iin1 = find(abs(obj.x - pi) < eps);                   % Will become redundant after inserting
@@ -1002,7 +1017,7 @@ classdef FarField
                         signPos(signPos == 0) = 1;
                         obj.y(outOfRangeInd) = signPos.*pi - obj.y(outOfRangeInd);
                     end
-                elseif type == 180
+                elseif type == 180 
                     if strcmp(obj.xRangeType,'pos')
                         iout = find(abs(obj.y - 2*pi) < eps | (abs(obj.x - 0) < eps & obj.y > (pi/2+eps) & obj.y <= (3*pi/2+eps)));   % Redundant
                         iin1 = find(abs(obj.y - 3*pi/2) < eps);
@@ -1019,7 +1034,6 @@ classdef FarField
                         obj.x(outOfRangeInd2) = obj.x(outOfRangeInd2) + pi;
                         obj.y(outOfRangeInd2) = pi - obj.y(outOfRangeInd2);
                     elseif strcmp(obj.xRangeType,'sym')
-                        %             iout = unique(find(abs(obj.y - pi) < eps | (abs(abs(obj.x) - pi/2) < eps & abs(obj.y) >= (pi/2-eps))));   % Redundant
                         iout = find(abs(obj.y - pi) < eps | (abs(abs(obj.x) - pi/2) < eps & abs(obj.y) >= (pi/2-eps)));   % Redundant
                         iin1 = find(abs(obj.x - 0) < eps & (obj.y >= (pi/2 - eps) | (obj.y <= -(pi/2 - eps) & obj.y > -(pi-eps))));
                         iin2 = find(abs(abs(obj.y) - pi/2) < eps);
@@ -1032,7 +1046,8 @@ classdef FarField
                         xAdd2 = obj.x(iin2) - signPos2.*pi;
                         xAdd = [xAdd1;xAdd2];
                         yAdd = sign(obj.y(iin)).*pi - obj.y(iin);
-                        obj = shiftRedun(obj,iout,iin,xAdd,yAdd);
+%                         obj = shiftRedun(obj,iout,iin,xAdd,yAdd);
+                        obj = insertMissingCuts(obj,iin,xAdd,yAdd);
                         % Apply shift
                         outOfRangeInd = find(obj.y > (pi/2 + eps) | obj.y < (-pi/2 - eps));
                         signPos = sign(obj.x(outOfRangeInd));
@@ -1045,7 +1060,7 @@ classdef FarField
                 warning(['Cant shift a polar grid like ', obj.gridType, ' on a cartesian grid']);
             end
             % Sort
-            obj = roundGrid(obj,6);
+%             obj = roundGrid(obj);
             obj = obj.sortGrid;
         end
         
@@ -4080,13 +4095,28 @@ classdef FarField
             DATA2 = fscanf(fid,'%f%f%f%f',[4, x1N*x2N]).';
             
             % Sort and format the data
+            iPhaseChange = [];
+            phaseChange = 0;
             switch gridType
                 case 'PhTh'
-                    if x1span < 360 && abs(x1start) == abs(x1stop) % Don't have full sphere, but some data repeats
+                    if x2span > 180 && x1start < 0 && x1stop > 0 % Don't have full sphere, but some data repeats
+                        % Remove the negative part
+                        % TODO: Check if this always works - not sure if
+                        % the negative side is always the continuous part
+                        % Must also still check to only remove the parts
+                        % that repeat
                         iRemove = find(DATA1(:,1) < 0);
                         DATA1(iRemove,:) = [];
                         DATA2(iRemove,:) = [];
+%                         % th=0 is continuous to the negative side, so shift
+%                         % by 180 degrees
+%                         iPhaseChange = find(DATA1(:,1) == 0);
+%                         phaseChange = 180;
                     end
+                    % th=0 is continuous to the negative side, so shift
+                    % by 180 degrees
+                    iPhaseChange = find(DATA1(:,1) == 0);
+                    phaseChange = 180;
                     y = deg2rad(DATA1(:,1));
                     x = deg2rad(DATA1(:,2));
                 case 'AzEl'
@@ -4095,21 +4125,38 @@ classdef FarField
             end
             switch coorType
                 case {'spherical','Ludwig2AE'}
+                    DATA1(iPhaseChange,4) = DATA1(iPhaseChange,4) + phaseChange;
+                    DATA2(iPhaseChange,4) = DATA2(iPhaseChange,4) + phaseChange;
                     E1 = lin20(DATA1(:,3)).*exp(1i.*deg2rad(DATA1(:,4)));
                     E2 = lin20(DATA2(:,3)).*exp(1i.*deg2rad(DATA2(:,4)));
             end
             
             % Calculate the power and scaling
             D0 = lin10(directivity_dB);
-            Prad = 4*pi*r.^2.*max(abs(E1).^2 + abs(E2).^2)./(2.*376.7303.*D0);
+            directivityDir = [0,0];     % Assume this thing gives directivity at broadside
+            iDir = intersect(find(x == directivityDir(1)),find(y == directivityDir(2)));
+            if ~isempty(iDir)
+                Prad = 4*pi*r.^2.*(abs(E1(iDir(1))).^2 + abs(E2(iDir(1))).^2)./(2.*376.7303.*D0);
+            else
+                % Just use the maximum for directivity
+                Prad = 4*pi*r.^2.*max(abs(E1).^2 + abs(E2).^2)./(2.*376.7303.*D0);
+            end
             
             % Create the FarField object
             polType = 'linear'; % Probably always the case?
             radEff = ones(size(freq)); %replace with manual radiation efficiency calculation
             
             FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
-                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,'r',1,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            
+            % Set to a standard grid - try to get positive x range and 180
+            % y range
+            FF = FF.setYrange(180);
+            % Insert the missing cut if required
+            FF = FF.copyAndInsertXcut(-pi,pi);
+            FF = FF.setXrange('pos');
+            FF = FF.setBase;
         end
         
         function FF = farFieldFromPowerPattern(x,y,P,freq,varargin)
@@ -4760,6 +4807,19 @@ classdef FarField
             objNew.y = [objNew.y;yAdd(1:Nredun)];
             objNew.E1 = [objNew.E1;E1Add(1:Nredun,:)];
             objNew.E2 = [objNew.E2;E2Add(1:Nredun,:)];
+        end
+        
+        function objNew = insertMissingCuts(obj,iin,xAdd,yAdd)
+            % INSERTMISSINGCUTS Inserts missing cuts. Used by
+            % set{X|Y}range.
+            
+            objNew = obj;
+            E1Add = obj.E1(iin,:);
+            E2Add = obj.E2(iin,:);
+            objNew.x = [objNew.x;xAdd];
+            objNew.y = [objNew.y;yAdd];
+            objNew.E1 = [objNew.E1;E1Add];
+            objNew.E2 = [objNew.E2;E2Add];
         end
         
         
