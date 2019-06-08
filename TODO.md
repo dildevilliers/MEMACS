@@ -5,6 +5,11 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] Refactor setXgrid and setYgrid. Simplify the cases by using the new sortGrid to get rid of redundant points. Add as many cuts as needed to cover all cases, and don't worry about removing any. Use insertMissingCuts.
+- [ ] include the elevation type angles for setXgrid and setYgrid
+- [ ] readMeasurements
+- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
+- [ ] writeFEKOffe
 - [ ] Plan help files
 - [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
@@ -14,8 +19,6 @@
 - [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
-- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
-- [ ] readMeasurements
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] Fix FarField.rotate field components pole at th = 180 (DdV)
@@ -26,8 +29,6 @@
 - [ ] Overlap integral calculator (DdV)
 - [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] writeCSTffs
-- [ ] writeFEKOffe
-- [ ] Refactor setXgrid and setYgrid. Simplify the cases by using the new sortGrid to get rid of redundant points. Add as many cuts as needed to cover all cases, and don't worry about removing any. Use insertMissingCuts.
 - [ ] Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet.
 - [ ] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
 - [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
