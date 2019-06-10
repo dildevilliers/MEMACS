@@ -58,6 +58,8 @@ classdef FarField
     end
     
     properties (Dependent = true, Hidden = true)
+        xRange  % [1x2] vector of the xRange
+        yRange  % [1x2] vector of the yRange
         symXZ   % XZ plane symmetry
         symYZ   % YZ plane symmetry
         symXY   % XY plane symmetry
@@ -143,8 +145,8 @@ classdef FarField
             % Updated: 2019-05-09, Dirk de Villiers
             %
             % Tested : Matlab R2018b
-            %  Level : 0
-            %   File : 
+            %  Level : 2
+            %   File : testScript_FarField.m
             %
             % Example
             %   F = FarField;
@@ -155,6 +157,9 @@ classdef FarField
             f0 = 1e9;
             Eth0 = sqrt(3*obj.eta0).*sin(th0);
             Eph0 = zeros(size(Eth0));
+            % Limit the zeros to a finitw number
+            Eth0(Eth0 == 0) = lin20(-200);
+            Eph0(Eph0 == 0) = lin20(-200);
             Prad0 = [];
             
             % Parsing through the inputs
@@ -263,7 +268,7 @@ classdef FarField
             end
             % Pol type meaningless for real, power only patterns
             if strcmp(obj.coorType,'power')
-                assert(isreal(obj.E1),'Real values expected for E1 for power only pattern');
+%                 assert(isreal(obj.E1),'Real values expected for E1 for power only pattern');
                 obj.E2 = [];
                 obj.polType = 'none'; 
             end
@@ -378,6 +383,16 @@ classdef FarField
         
         function yRangeType = get.yRangeType(obj)
             [~,yRangeType] = setRangeTypes(obj);
+        end
+        
+        function xRange = get.xRange(obj)
+            xVect = unique(obj.x);
+            xRange = [min(xVect),max(xVect)];
+        end
+        
+        function yRange = get.yRange(obj)
+            yVect = unique(obj.y);
+            yRange = [min(yVect),max(yVect)];
         end
         
         function symXZ = get.symXZ(obj)
@@ -1486,6 +1501,63 @@ classdef FarField
             end
             % Sort
             obj = obj.sortGrid;
+        end
+        
+        function obj = getRange(obj,xRangeNew,yRangeNew)
+            % GETRANGE returns a FarField over a reduced angular range
+            %
+            % obj = getRange(obj,xRangeNew,yRangeNew) reduces the range of
+            % the object to that specified in xRangeNew and yRangeNew.
+            % Operates on the current grid, and will return strange results
+            % if ranges are specified as projections or angles if they
+            % should not be.  The output object base is changed to the new
+            % range specified.
+            % 
+            % Inputs
+            % - obj: FarField object
+            % - xRangeNew: 2 element vector with [xmin,xmax] in rad
+            % - yRangeNew: 2 element vector with [xmin,xmax] in rad (if empty: obj.yRange)
+            %
+            % Outputs
+            % - obj:    Farfield object with new base
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-06-10, Dirk de Villiers
+            % Updated: 2019-06-10, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   [xR,yR] = deal([pi/2,3*pi/2],[0,pi/2])
+            %   Fn = F.getRange(xR,yR);
+            %   Fn.plot('plotType','2D','step',5,'showGrid',true)
+            
+            if nargin < 3
+                yRangeNew = obj.yRange;
+            end
+            assert(numel(xRangeNew)==2,'Expecting a 2 element vector for xRangeNew')
+            assert(numel(yRangeNew)==2,'Expecting a 2 element vector for yRangeNew')
+            
+            tolX = diff(obj.xRange)./obj.Nx/10;
+            tolY = diff(obj.yRange)./obj.Ny/10;
+            iX = find(obj.x >= xRangeNew(1)-tolX & obj.x <= xRangeNew(2)+tolX);
+            iY = find(obj.y >= yRangeNew(1)-tolY & obj.y <= yRangeNew(2)+tolY);
+            iKeep = intersect(iX,iY);
+            obj.x = obj.x(iKeep);
+            obj.y = obj.y(iKeep);
+            obj.E1 = obj.E1(iKeep,:);
+            if numel(obj.E2) > 0
+                obj.E2 = obj.E2(iKeep,:);
+            end
+            if numel(obj.E3) > 0
+                obj.E3 = obj.E3(iKeep,:);
+            end
+            obj = obj.setBase;
         end
         
         %% Coordinate system transformation methods
@@ -3043,77 +3115,67 @@ classdef FarField
         function obj = plus(obj1,obj2)
             % PLUS Add two FarFields
             
-            obj1base = reset2Base(obj1);
-            obj2base = reset2Base(obj2);
+            [obj1base,obj2base] = mathSetup(obj1,obj2);
             
-            if isGridEqual(obj1base,obj2base) && typesAreEqual(obj1base,obj2base)
-                obj = obj1base;
-                obj.E1 = obj1base.E1 + obj2base.E1;
-                if ~isempty(obj1.E2) && ~isempty(obj1.E2)
-                    obj.E2 = obj1base.E2 + obj2base.E2;
-                else
-                    obj.E2 = [];
-                end
-                obj.Prad = obj1base.Prad + obj2base.Prad;
-                Pt = obj1base.Prad./obj1base.radEff + obj2base.Prad./obj2base.radEff;
-                obj.radEff = obj.Prad./Pt;
-                obj = setBase(obj);
+            obj = obj1base;
+            obj.E1 = obj1base.E1 + obj2base.E1;
+            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+                obj.E2 = obj1base.E2 + obj2base.E2;
             else
-                error('Can only add FarFields with equal base grids')
+                obj.E2 = [];
             end
-            
-            if typesAreEqual(obj1,obj2)
-                obj = transformTypes(obj, obj1);
+            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+                obj.E3 = obj1base.E3 + obj2base.E3;
+            else
+                obj.E3 = [];
             end
+            obj.Prad = obj.pradInt;
+            obj.radEff = ones(size(obj.freqHz));
+            obj = setBase(obj);
         end
         
         function obj = minus(obj1,obj2)
             % MINUS Subtract two FarFields
             
-            obj1base = reset2Base(obj1);
-            obj2base = reset2Base(obj2);
+            [obj1base,obj2base] = mathSetup(obj1,obj2);
             
-            if isGridEqual(obj1base,obj2base) && typesAreEqual(obj1base,obj2base)
-                obj = obj1base;
-                obj.E1 = obj1base.E1 - obj2base.E1;
-                if ~isempty(obj1.E2) && ~isempty(obj1.E2)
-                    obj.E2 = obj1base.E2 - obj2base.E2;
-                else
-                    obj.E2 = [];
-                end
-                obj.Prad = obj1base.Prad + obj2base.Prad;
-                Pt = obj1base.Prad./obj1base.radEff + obj2base.Prad./obj2base.radEff;
-                obj.radEff = obj.Prad./Pt;
-                obj = setBase(obj);
+            obj = obj1base;
+            obj.E1 = obj1base.E1 - obj2base.E1;
+            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+                obj.E2 = obj1base.E2 - obj2base.E2;
             else
-                error('Can only subtract FarFields with equal base grids')
+                obj.E2 = [];
             end
-            
-            if typesAreEqual(obj1,obj2)
-                obj = transformTypes(obj, obj1);
+            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+                obj.E3 = obj1base.E3 - obj2base.E3;
+            else
+                obj.E3 = [];
             end
+            obj.Prad = obj.pradInt;
+            obj.radEff = ones(size(obj.freqHz));
+            obj = setBase(obj);
         end
         
         function obj = times(obj1,obj2)
             % TIMES Multiply two FarFields
             
-            % Don't operate in BaseGrid - straight on the actual values.
-            % This is often used with conj, which operates in the current
-            % grid.
-            if isGridEqual(obj1,obj2) && typesAreEqual(obj1,obj2)
-                obj = obj1;
-                obj.E1 = obj1.E1.*obj2.E1;
-                if ~isempty(obj1.E2) && ~isempty(obj2.E2)
-                    obj.E2 = obj1.E2.*obj2.E2;
-                else
-                    obj.E2 = [];
-                end
-                obj.Prad = obj.pradInt;
-                obj.radEff = ones(size(obj.Prad));
-                obj = setBase(obj);
+            [obj1base,obj2base] = mathSetup(obj1,obj2);
+            
+            obj = obj1base;
+            obj.E1 = obj1base.E1 .* obj2base.E1;
+            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+                obj.E2 = obj1base.E2 .* obj2base.E2;
             else
-                error('Can only multiply FarFields with equal grids')
+                obj.E2 = [];
             end
+            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+                obj.E3 = obj1base.E3 .* obj2base.E3;
+            else
+                obj.E3 = [];
+            end
+            obj.Prad = obj.pradInt;
+            obj.radEff = ones(size(obj.freqHz));
+            obj = setBase(obj);
         end
         
         function obj = conj(obj1)
@@ -3185,16 +3247,11 @@ classdef FarField
             % Convolve the power patterns, over the full sphere, of two
             % FarField objects. Typically used for antenna temperature
             % calculations
-            obj1 = reset2Base(obj1);
-            obj2 = reset2Base(obj2);
+            [obj1,obj2] = mathSetup(obj1,obj2);
             
-            if isGridEqual(obj1,obj2)
-                P = obj1.getU.*obj2.getU;
-                FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType,'fieldPol','power');
-                T = FF_T.pradInt;
-            else
-                error('Can only convolve FarFields with equal base grids')
-            end
+            P = obj1.getU.*obj2.getU;
+            FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType,'fieldPol','power');
+            T = FF_T.pradInt;
         end
         
         %% Field normalization
@@ -3370,8 +3427,6 @@ classdef FarField
                     if ~isempty(E2In), E2In = [E2In;obj1.symYZ.*E2In]; end % Mirror according to symmetry
                 end
                 % Object for grid/coor transformation
-%                 objD = FarField(XIn,YIn,E1In,E2In,[],...
-%                     obj1.freq,obj1.Prad.*2,obj1.radEff,obj1.coorType,obj1.polType,obj1.gridType,obj1.freqUnit,obj1.slant);
                 objD = FarField(XIn,YIn,E1In,E2In,obj1.freq,obj1.Prad.*2,obj1.radEff,...
                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,...
                 'E3',obj1.E3,'r',obj1.r,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
@@ -3568,9 +3623,9 @@ classdef FarField
             % Very quick check - necessary but not always sufficient
             phRange = max(obj.phBase) - min(obj.phBase);
             thRange = max(obj.thBase) - min(obj.thBase);
-            eps = 1e-4;
-            y = ((abs(round(rad2deg(phRange)) - (360/2^(sum(abs([obj.symXZ,obj.symYZ]))))) < eps) & (abs(round(rad2deg(thRange)) - 180/2^abs(obj.symXY)) < eps)) |...
-                ((abs(round(rad2deg(phRange)) - 180) < eps) & (abs(round(rad2deg(thRange)) - 360) < eps));
+            tol = 10^(-obj.nSigDig);
+            y = ((abs(round(rad2deg(phRange)) - (360/2^(sum(abs([obj.symXZ,obj.symYZ]))))) < tol) & (abs(round(rad2deg(thRange)) - 180/2^abs(obj.symXY)) < tol)) |...
+                ((abs(round(rad2deg(phRange)) - 180) < tol) & (abs(round(rad2deg(thRange)) - 360) < tol));
         end
         
         function y = isGridUniform(obj)
@@ -3770,6 +3825,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            if nargin == 0
+                [name,path] = uigetfile('*.grd');
+                pathName = [path,name];
+            end
             parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
@@ -3930,7 +3989,8 @@ classdef FarField
                 end
             end
             % keyboard;
-            Prad = ones(size(freq)).*4*pi./(2*obj.eta0);
+            eta0 = 3.767303134749689e+02;
+            Prad = ones(size(freq)).*4*pi./(2*eta0);
             radEff = ones(size(freq));
             FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
@@ -3992,6 +4052,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            if nargin == 0
+                [name,path] = uigetfile('*.cut');
+                pathName = [path,name];
+            end
             parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
             
             pathName = parseobj.Results.pathname;
@@ -4151,6 +4215,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            if nargin == 0
+                [name,path] = uigetfile('*.ffe');
+                pathName = [path,name];
+            end
             parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
@@ -4267,20 +4335,38 @@ classdef FarField
         end
 
         function FF = readCSTffs(pathName,varargin)
-            % READCSTFFS Create a FarFiled object from a CST .ffs file.
-            
-            % function [FF] = readCSTffs(pathName)
-            % Loads a CST generated farfield source file pathName.ffs.
+            % READCSTFFS Create a FarField object from a CST .ffs file.
             %
+            % FF = readCSTffs(pathName,varargin) loads a FarField object
+            % from the CST .ffs file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an ffs file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are  
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
             %
-            % Inputs:
-            % path_name - Full path and filename (no extension) string
-            % Outputs:
-            % FF - standard farfield object
+            % Outputs
+            % - obj:    Farfield object
             %
-            % Dirk de Villiers
-            % Created: 2015-02-03
-            % Last edit: 2019-18-02
+            % Dependencies
+            % -
+            %
+            % Created: 2019-06-10, Dirk de Villiers
+            % Updated: 2019-06-10, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readCSTffs;
+            %   F.plot
             
             % Parsing through the inputs
             parseobj = inputParser;
@@ -4301,6 +4387,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            if nargin == 0
+                [name,path] = uigetfile('*.ffs');
+                pathName = [path,name];
+            end
             parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
@@ -4422,6 +4512,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            if nargin == 0
+                [name,path] = uigetfile('*.txt');
+                pathName = [path,name];
+            end
             parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
@@ -4754,6 +4848,51 @@ classdef FarField
             obj.thBase = obj.th;
         end
         
+        function [FF1,FF2,level] = mathSetup(obj1,obj2)
+            % MATHSETUP returns 2 equal sampled FarFields for math
+            % operations
+            
+            % level = 0: current grids used
+            %         1: base grids used
+            %         2: resampled onto new grid
+            
+            % Check if current grids and types are equal
+            currentEqual = [isGridEqual(obj1,obj2),typesAreEqual(obj1,obj2)];
+            level = 0;  
+            if ~all(currentEqual)   % Try the bases
+                obj1 = obj1.reset2Base;
+                obj2 = obj2.reset2Base;
+                level = level + 1;
+                baseEqual = [isGridEqual(obj1,obj2),typesAreEqual(obj1,obj2)];
+                if ~all(baseEqual)  % Need to resample
+                    % TODO - check for cases where the grid ranges are not
+                    % compatible
+                    obj2 = transformTypes(obj2, obj1); % Make sure the types are equal
+                    level = level + 1;
+                    if obj1.freqHz == obj2.freqHz
+                        E1i = interpolateGrid(obj2,'E1',obj1.x,obj1.y);
+                        if numel(obj2.E2) > 0 && numel(obj1.E1) > 0
+                            E2i = interpolateGrid(obj2,'E2',obj1.x,obj1.y);
+                        else
+                            E2i = [];
+                        end
+                        if numel(obj2.E3) > 0 && numel(obj1.E3) > 0
+                            E3i = interpolateGrid(obj2,'E3',obj1.x,obj1.y);
+                        else
+                            E3i = [];
+                        end
+                        obj2 = FarField(obj1.x,obj1.y,E1i,E2i,obj2.freq,obj2.Prad,obj2.radEff,...
+                            'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,...
+                            'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,'E3',E3i,...
+                            'r',obj1.r,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+                    else
+                        % TODO - obj2 frequency resample on obj1.freqHz
+                        error('mathSetup not implemented for unequal base frequencies yet')
+                    end
+                end
+            end
+            [FF1,FF2] = deal(obj1,obj2);
+        end
         %% Grid getters
         % All grid getters operate on current coordinate system.  Use the
         % grid2* functions to change to the base or not - depending on the
@@ -5242,7 +5381,11 @@ classdef FarField
             
             objNew = obj;
             E1Add = obj.E1(iin,:);
-            E2Add = obj.E2(iin,:);
+            if numel(obj.E2) > 0
+                E2Add = obj.E2(iin,:);
+            else
+                E2Add = [];
+            end
             objNew.x = [objNew.x;xAdd];
             objNew.y = [objNew.y;yAdd];
             objNew.E1 = [objNew.E1;E1Add];

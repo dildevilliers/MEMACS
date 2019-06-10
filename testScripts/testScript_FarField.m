@@ -12,8 +12,26 @@ p = mfilename('fullpath');
 [filepath] = fileparts(p);
 dataPath = [filepath,'\..\data\'];
 
+%% Constructors - just run them through
+try
+    FF = FarField;
+    disp('Pass: constructor')
+    constructorPass = true;
+    clear FF
+catch constructor_errInfo
+    disp('FAIL: constructors')
+    constructorPass = false;
+end
 
-%% Constructors 
+try
+    FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+    disp('Pass: readCSTffs')
+    readCSTffsPass = true;
+    clear FF
+catch readCSTffs_errInfo
+    disp('FAIL: readCSTffs')
+    readCSTffsPass = false;
+end
 
 % % ReadNFSscan
 % output = 'E1';
@@ -39,7 +57,21 @@ dataPath = [filepath,'\..\data\'];
 % FFdelta = FFphth - FFazel;
 % figure, FFdelta.plot('plotType','2D','step',1,'showGrid',false,'output',output,'outputType','mag','scaleMag','dB')
 
-%% Spherical range setters
+%% Grid range
+% getRange
+FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+yRangeNew = [0,pi/2];
+xRangeNew = [0,deg2rad(355)];
+FFn = FF.getRange(xRangeNew,yRangeNew);
+if all(FFn.xRange == xRangeNew) && all(FFn.yRange == yRangeNew)
+    disp('Pass: getRange')
+    getRangePass = true;
+else
+    disp('FAIL: getRange')
+    getRangePass = false;
+end
+
+
 FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
 figure, FF.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
 
@@ -65,7 +97,7 @@ figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outpu
 FF1 = FF.setRangeSph('sym','180');
 FF0 = FF1.setRangeSph('pos','180');
 FFd0 = FF0 - FF;
-err1 = FFd0.norm;
+err1 = FFd0.norm
 
 FF2 = FF.setRangeSph('pos','180');
 FFb = FF2.setRangeSph;
@@ -95,7 +127,14 @@ errb = norm(FFdb)
 
 
 %% Final test
-
+FarFieldPass = all([constructorPass,readCSTffsPass,...
+    getRangePass,...
+    ]);
+if FarFieldPass
+    disp('Pass: FarField');
+else
+    disp('FAIL: FarField');
+end
 
 disp('-------------------------------------------------------------------')
 
