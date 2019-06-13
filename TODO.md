@@ -9,14 +9,14 @@
 - [ ] include the elevation type angles for setXgrid and setYgrid
 - [ ] readMeasurements
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
+- [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
+- [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
 - [ ] Plan help files
 - [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] ReadCSTascii
 - [ ] Multiple frequency concat
-- [ ] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
-- [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
@@ -27,7 +27,6 @@
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] readFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
-- [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] writeCSTffs
 - [ ] Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet.
 - [ ] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
@@ -47,6 +46,8 @@
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
 - [x] Set coorType = power for astrogrids by default
+- [x] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
+- [x] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
 
 
 # Arrays

@@ -1769,23 +1769,18 @@ classdef FarField
             assert(~isequal(obj1.yRangeType,'360'),'yRangeType cannot be 360 for the base representation')
             
             % Set defaults
-            if strcmp(obj1.gridTypeBase,'DirCos') || strcmp(obj1.gridType,'ArcSin')
-                stepX = asin(min(abs(diff(unique(obj1.xBase)))));
-                stepY = asin(min(abs(diff(unique(obj1.yBase)))));
-                xmin = min(asin(obj1.x));
-                xmax = max(asin(obj1.x));
-                ymin = min(asin(obj1.y));
-                ymax = max(asin(obj1.y));
-            else
-                % Sort out rounding errors for degrees
-                stepX = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.xBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
-                stepY = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.yBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
-                xmin = deg2rad(round(rad2deg(min(obj1.x))*10^obj1.nSigDig)./10^obj1.nSigDig);
-                xmax = deg2rad(round(rad2deg(max(obj1.x))*10^obj1.nSigDig)./10^obj1.nSigDig);
-                ymin = deg2rad(round(rad2deg(min(obj1.y))*10^obj1.nSigDig)./10^obj1.nSigDig);
-                ymax = deg2rad(round(rad2deg(max(obj1.y))*10^obj1.nSigDig)./10^obj1.nSigDig);
+            xR = obj1.xRange;
+            yR = obj1.yRange;
+            [stepX,stepY] = obj1.gridStep;
+            if any(strcmp(obj1.gridType,{'DirCos','ArcSin'}))
+                stepX = asin(stepX);
+                stepY = asin(stepY);
+                xR = asin(xR);
+                yR = asin(yR);
             end
-            
+            [xmin,xmax] = deal(xR(1),xR(2));
+            [ymin,ymax] = deal(yR(1),yR(2));
+
             hem = 'top';
             
             % Overwrite defaults
@@ -1808,7 +1803,7 @@ classdef FarField
                 end
             end
             
-            if strcmp(obj1.gridType,'DirCos') || strcmp(obj1.gridType,'ArcSin')
+            if any(strcmp(obj1.gridType,{'DirCos','ArcSin'}))
                 stepX = sin(stepX);
                 stepY = sin(stepY);
                 xmin = sin(xmin);
@@ -1881,7 +1876,9 @@ classdef FarField
             %   -- step:        Plot step size in deg. Can be empty - then the available data will
             %                   be used and no surface will be plotted.  If
             %                   not, a griddata interpolant will be made.
-            %                   ([])
+            %                   Can be a 2 element vector, [xStep,yStep],
+            %                   and if step == 0 an automatic step size
+            %                   will be selected (0).
             %   -- plotProperties: can be a variety of name, value pairs
             %                      including LineWidth, LineStyle, Color (like '-.')
             %   -- showGrid:   Boolean (false) to show the 2D grid where the data is
@@ -1950,7 +1947,7 @@ classdef FarField
             addParameter(parseobj,'cutValue',0,typeValidationcutValue);
             
             typeValidationstep = @(x) validateattributes(x,{'numeric'},{'real'},'plot','step');
-            addParameter(parseobj,'step',[],typeValidationstep);     % In degrees
+            addParameter(parseobj,'step',0,typeValidationstep);     % In degrees
             
             typeValidationLineWidth = @(x) validateattributes(x,{'numeric'},{'real'},'plot','LineWidth');
             addParameter(parseobj,'LineWidth',1,typeValidationLineWidth);
@@ -1989,8 +1986,9 @@ classdef FarField
             
             %% Sort out the plot grid and names
             
+            
             % Get valid positions for the plot
-            if strcmp(obj.gridType,'DirCos') || strcmp(obj.gridType,'ArcSin')
+            if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
                 % Try to get the direction cosines from the base grid definition - if the
                 % base definition is not a direction cosine type it can contain
                 % information over the full sphere.
@@ -2022,7 +2020,7 @@ classdef FarField
             Z = Z(:,freqIndex);
             
             if isempty(step)
-                if strcmp(plotType,'cartesian') || strcmp(plotType,'cartesian')
+                if any(strcmp(plotType,{'cartesian','polar'}))
                     error('Cant do 1D plot with empty step size - this is reserved for making 2D grids etc.')
                 else
                     Xi = X;
@@ -2034,18 +2032,27 @@ classdef FarField
                     Zi = Z;
                 end
             else
-                % Get the interpolated plot points from the step information
-                if strcmp(obj.gridType,'DirCos') || strcmp(obj.gridType,'ArcSin')
+                if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
                     step = sind(step);
                 else
                     step = deg2rad(step);
                 end
+                if isscalar(step) == 1
+                    if step ~= 0
+                        step = ones(1,2).*step;
+                    else
+                        % Check current and base grids - numbers become huge
+                        % when not on proper grid after grid transformation
+                        [step(1),step(2)] = obj.gridStep;
+                    end
+                end
+                % Get the interpolated plot points from the step information
                 ximin = min(obj.x);
                 ximax = max(obj.x);
                 yimin = min(obj.y);
                 yimax = max(obj.y);
-                NxPlot = round((ximax - ximin)/step) + 1;
-                NyPlot = round((yimax - yimin)/step) + 1;
+                NxPlot = round((ximax - ximin)/step(1)) + 1;
+                NyPlot = round((yimax - yimin)/step(2)) + 1;
                 xivect = linspace(ximin,ximax,NxPlot);
                 yivect = linspace(yimin,yimax,NyPlot);
                 %     xivect = min(obj.x):step:max(obj.x);
@@ -2075,8 +2082,8 @@ classdef FarField
                 case 'DirCos'
                     xiplot = xi;
                     yiplot = yi;
-                    xname = [obj.xname, ' = sin(\theta)cos(\phi)'];
-                    yname = [obj.yname, ' = sin(\theta)sin(\phi)'];
+                    xnamePlot = [obj.xname, ' = sin(\theta)cos(\phi)'];
+                    ynamePlot = [obj.yname, ' = sin(\theta)sin(\phi)'];
                     axisUnit = '';
                 otherwise
                     X = rad2deg(X);
@@ -2086,8 +2093,8 @@ classdef FarField
                     xiplot = rad2deg(xi);
                     yiplot = rad2deg(yi);
                     axisUnit = '(deg)';
-                    xname = [obj.xname, ' ' ,axisUnit];
-                    yname = [obj.yname, ' ' ,axisUnit];
+                    xnamePlot = [obj.xname, ' ' ,axisUnit];
+                    ynamePlot = [obj.yname, ' ' ,axisUnit];
             end
             
             %% Condition outputs
@@ -2208,8 +2215,8 @@ classdef FarField
                         plot3(X(:),Y(:),Zplot(:),'k.')
                         hold off
                     end
-                    xlabel(xname)
-                    ylabel(yname)
+                    xlabel(xnamePlot)
+                    ylabel(ynamePlot)
                     view([0,90])
                     axis equal
                     xlim([min(xiplot),max(xiplot)])
@@ -2262,11 +2269,11 @@ classdef FarField
                     switch cutConstant
                         case 'x'
                             plotHandle(yiplot.*xscale,Ziplot,'LineStyle',LineStyle,'LineWidth',LineWidth,'Color',Color), grid on
-                            xlab = yname;
+                            xlab = ynamePlot;
                             cutName = obj.xname;
                         case 'y'
                             plotHandle(xiplot.*xscale,Ziplot,'LineStyle',LineStyle,'LineWidth',LineWidth,'Color',Color), grid on
-                            xlab = xname;
+                            xlab = xnamePlot;
                             cutName = obj.yname;
                     end
                     % Handle dynamic range here
@@ -2983,6 +2990,7 @@ classdef FarField
             thOut = sphAngRot(2,:).';
             FFsph.x = phOut;
             FFsph.y = thOut;
+            FFsph = FFsph.roundGrid;  % Found some rare, strange behaviour in the interpolant if this is not done
             
             % Coordinate systems
             C0 = CoordinateSystem;
@@ -3393,13 +3401,16 @@ classdef FarField
             else
                 gridTypeIn = obj1.gridType;
                 coorTypeIn = obj1.coorType;
-                if strcmp(obj1.gridTypeBase,'DirCos') || strcmp(obj1.gridType,'ArcSin')
-                    stepX = asin(min(abs(diff(unique(obj1.xBase)))));
-                    stepY = asin(min(abs(diff(unique(obj1.yBase)))));
-                else
-                    % Sort out rounding errors for degrees
-                    stepX = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.xBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
-                    stepY = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.yBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
+                [stepX,stepY] = obj1.gridStep;
+                if any(strcmp(obj1.gridTypeBase,{'DirCos','ArcSin'}))
+%                     stepX = asin(min(abs(diff(unique(obj1.xBase)))));
+%                     stepY = asin(min(abs(diff(unique(obj1.yBase)))));
+                    stepX = asin(stepX);
+                    stepY = asin(stepY);
+%                 else
+%                     % Sort out rounding errors for degrees
+%                     stepX = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.xBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
+%                     stepY = deg2rad(round(rad2deg(min(abs(diff(unique(obj1.yBase)))))*10^obj1.nSigDig)/10^obj1.nSigDig);
                 end
                 
                 gridHandle = str2func(['grid2',gridTypeIn]);
@@ -5429,6 +5440,11 @@ classdef FarField
 %             obj = obj.sortGrid(obj.nSigDig-1);
         end
         
+        function [stepx,stepy] = gridStep(obj)
+            obj = obj.roundGrid;
+            stepx = diff(obj.xRange)/(min(obj.Nx,obj.NxBase)-1);
+            stepy = diff(obj.xRange)/(min(obj.Ny,obj.NyBase)-1);
+        end
     end
     
 end
