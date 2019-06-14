@@ -1285,6 +1285,8 @@ classdef FarField
         function obj = setRangeSph(obj,xType,yType)
             % SETRANGESPH sets the x and y ranges of spherical grids
             
+            % Strategy is to have functions to go to and from the standard
+            % sym|180 case
             if nargin < 3 
                 yType = '180';
             end
@@ -1308,71 +1310,85 @@ classdef FarField
             % Bookkeeping on the original object
             xSpanOrig = max(obj.x) - min(obj.x);
             ySpanOrig = max(obj.y) - min(obj.y);
+            NangOrig = obj.Nang;
             
             tol = 10^(-obj.nSigDig);
-            switch obj.gridType
-                case 'PhTh'
-                    if strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'180')
-                        obj.x = wrap2pi(obj.x);
-                        [val1,val2] = deal(-pi,pi);
-                        % Insert possible missing cuts
-                        if abs(xSpanOrig - 2*pi) < tol
-                            i1 = find(abs(obj.x - val1) < tol);
-                            i2 = find(abs(obj.x - val2) < tol);
-                            iin = [i1;i2];
-                            if numel(iin) > 0
-                                xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
-                                yAdd = obj.y(iin);
-                                obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-                            end
-                        end
-                    elseif strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'360')
-                        %TODO
-                        iShift = find(obj.y > pi + tol);
-                        xshift = @(x) -pi + x;
-                        yshift = @(y) 2*pi - y;
-                        obj.x(iShift) = xshift(obj.x(iShift));
-                        obj.y(iShift) = yshift(obj.y(iShift));
-                        if abs(ySpanOrig - 2*pi) < tol
-                            iin = find(abs(obj.y - pi) < tol);
-                            poleSign = -1;
-                            xAdd = xshift(obj.x(iin));
-                            yAdd = yshift(obj.y(iin));
-                            % Try to fix the inserted field sign
-                            obj = obj.insertDirs(xAdd,yAdd,poleSign.*obj.E1(iin,:),poleSign.*obj.E2(iin,:));
-                        end
-                        
-                    elseif strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'360')
-                        iShift = find(obj.y < -tol);
-                        xshift = @(x) x - (sign(x) + ~sign(x)).*pi; % Make the sign(x) = 0 -> 1
-                        yshift = @(y) -y;
-                        obj.x(iShift) = xshift(obj.x(iShift));
-                        obj.y(iShift) = yshift(obj.y(iShift));
-                        if abs(ySpanOrig - 2*pi) < tol
-                            iin = find(abs(abs(obj.y) - 0) < tol);
-                            poleSign = -1;
-                            xAdd = xshift(obj.x(iin));
-                            yAdd = yshift(obj.y(iin));
-                            % Try to fix the inserted field sign
-                            obj = obj.insertDirs(xAdd,yAdd,poleSign.*obj.E1(iin,:),poleSign.*obj.E2(iin,:));
-                        end
-                        % Add the x = 180 cut
-                        if abs(xSpanOrig - pi) < tol
-                            iin = find(abs(obj.x + pi) < tol);
-                            xAdd = obj.x(iin) + 2*pi;
-                            yAdd = obj.y(iin);
-                            obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-                        end
-                    else
-                        % Do nothing - already there
-                        return;
+            if strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'180')
+                % Do nothing - already there
+                return;
+            elseif strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'180')
+                obj.x = wrap2pi(obj.x);
+                [val1,val2] = deal(-pi,pi);
+                % Insert possible missing cuts
+                if abs(xSpanOrig - 2*pi) < tol
+                    i1 = find(abs(obj.x - val1) < tol);
+                    i2 = find(abs(obj.x - val2) < tol);
+                    iin = [i1;i2];
+                    if numel(iin) > 0
+                        xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
+                        yAdd = obj.y(iin);
+                        obj = insertMissingCuts(obj,iin,xAdd,yAdd);
                     end
-                otherwise
+                end
+            elseif strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'360')
+                if strcmp(obj.gridType,'PhTh')
+                    iShift = find(obj.y > pi + tol);
+                    xshift = @(x) -pi + x;
+                    yshift = @(y) 2*pi - y;
+                    obj.x(iShift) = xshift(obj.x(iShift));
+                    obj.y(iShift) = yshift(obj.y(iShift));
+                    if abs(ySpanOrig - 2*pi) < tol
+                        iin = find(abs(obj.y - pi) < tol);
+                        poleSign = -1;
+                        xAdd = xshift(obj.x(iin));
+                        yAdd = yshift(obj.y(iin));
+                        % Try to fix the inserted field sign
+                        obj = obj.insertDirs(xAdd,yAdd,poleSign.*obj.E1(iin,:),poleSign.*obj.E2(iin,:));
+                    end
+                else
                     warning(['range180sym not implemented yet for gridType: ', obj.gridType])
+                end
+            elseif strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'360')
+                xshift = @(x) x - (sign(x) + ~sign(x)).*pi; % Make the sign(x) = 0 -> 1
+                if strcmp(obj.gridType,'PhTh')
+                    iShift = find(obj.y < -tol);
+                    yshift = @(y) -y;
+                else
+                    iShift = find(abs(obj.y) > pi/2+tol);
+                    yshift = @(y) sign(y).*(pi-abs(y));
+                end
+                obj.x(iShift) = xshift(obj.x(iShift));
+                obj.y(iShift) = yshift(obj.y(iShift));
+                if abs(ySpanOrig - 2*pi) < tol
+                    if strcmp(obj.gridType,'PhTh')
+                        iin = find(abs(abs(obj.y) - 0) < tol);
+                        poleSign = -1;
+                    else
+                        iin = find(abs(abs(obj.y) - pi/2) < tol);
+                        poleSign = 1;
+                    end
+                    xAdd = xshift(obj.x(iin));
+                    yAdd = yshift(obj.y(iin));
+                    % Try to fix the inserted field sign
+                    obj = obj.insertDirs(xAdd,yAdd,poleSign.*obj.E1(iin,:),poleSign.*obj.E2(iin,:));
+                end
+                % Add the x = 180 cut
+                if abs(xSpanOrig - pi) < tol
+                    iin = find(abs(obj.x + pi) < tol);
+                    xAdd = obj.x(iin) + 2*pi;
+                    yAdd = obj.y(iin);
+                    obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                end
+%                 else
+%                     warning(['range180sym not implemented yet for gridType: ', obj.gridType])
+%                 end
             end
             % Sort
             obj = obj.sortGrid;
-
+            % Only change the base if we have to...
+            if obj.Nang ~= NangOrig
+                obj = obj.setBase;
+            end
         end
         
         function obj = range180pos(obj)
@@ -1389,25 +1405,19 @@ classdef FarField
                 % Set to standard base
                 obj = obj.range180sym;
             end
-
-            switch obj.gridType
-                case 'PhTh'
-                    obj.x = wrap22pi(obj.x);
-                    [val1,val2] = deal(0,2*pi);
-                    % Insert possible missing cuts
-                    if abs(xSpanOrig - 2*pi) < tol
-                        i1 = find(abs(obj.x - val1) < tol);
-                        i2 = find(abs(obj.x - val2) < tol);
-                        iin = [i1;i2];
-                        if numel(iin) > 0
-                            xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
-                            yAdd = obj.y(iin);
-                            obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-                        end
-                    end
-                    
-                otherwise
-                    warning(['range180pos not implemented yet for gridType: ', obj.gridType])
+            
+            obj.x = wrap22pi(obj.x);
+            [val1,val2] = deal(0,2*pi);
+            % Insert possible missing cuts
+            if abs(xSpanOrig - 2*pi) < tol
+                i1 = find(abs(obj.x - val1) < tol);
+                i2 = find(abs(obj.x - val2) < tol);
+                iin = [i1;i2];
+                if numel(iin) > 0
+                    xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
+                    yAdd = obj.y(iin);
+                    obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                end
             end
             % Sort
             obj = obj.sortGrid;
@@ -1417,7 +1427,9 @@ classdef FarField
             % RANGE360SYM sets the range to 'sym', '360'
             
             % Bookkeeping on the original object
-            xSpanOrig = max(obj.x) - min(obj.x);
+            xSpanOrig = diff(obj.xRange);
+            ySpanOrig = diff(obj.yRange);
+            NangOrig = obj.Nang;
             tol = 10^(-obj.nSigDig);
             
             if strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'360') 
@@ -1427,35 +1439,48 @@ classdef FarField
                 % Set to standard base
                 obj = obj.range180sym;
             end
-
-            % Grab the required y = 0 cut for later insertion to
-            % ensure a smooth pole
-            ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
-            iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
-            [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
             
-            switch obj.gridType
-                case 'PhTh'
-                    iShift = find(abs(obj.x) > pi/2);
-                    xshift = @(x) -sign(x).*(pi - abs(x));
-                    yshift = @(y) -y;
-                    obj.x(iShift) = xshift(obj.x(iShift));
-                    obj.y(iShift) = yshift(obj.y(iShift));
-                    if abs(xSpanOrig - 2*pi) < tol
-                        iin = find(abs(abs(obj.x) - pi/2) < tol);
-                        xAdd = xshift(obj.x(iin));
-                        yAdd = yshift(obj.y(iin));
-                        obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-                    end
-                    % Remove the pole, and insert the original
-                    iout = find(abs(obj.y) < tol);
-                    obj = removeDirs(obj,iout);
-                    obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); % Sorted in this function
-                otherwise
-                    warning(['range360sym not implemented yet for gridType: ', obj.gridType])
+            iShift = find(abs(obj.x) > pi/2);
+            xshift = @(x) -sign(x).*(pi - abs(x));
+            if strcmp(obj.gridType,'PhTh')
+                yshift = @(y) -y;
+                % Grab the required y = 0 cut for later insertion to
+                % ensure a smooth pole
+                ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
+                iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
+                [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+            else
+                yshift = @(y) (sign(y) + ~sign(y)).*pi-y; % Make the sign(y) = 0 -> 1
             end
+            obj.x(iShift) = xshift(obj.x(iShift));
+            obj.y(iShift) = yshift(obj.y(iShift));
+            if abs(xSpanOrig - 2*pi) < tol
+                iin = find(abs(abs(obj.x) - pi/2) < tol);
+                xAdd = xshift(obj.x(iin));
+                yAdd = yshift(obj.y(iin));
+                obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+            end
+            if strcmp(obj.gridType,'PhTh')
+                % Remove the pole, and insert the original
+                iout = find(abs(obj.y) < tol);
+                obj = removeDirs(obj,iout);
+            else
+                if abs(ySpanOrig - pi) < tol
+                    % Copy the pi cut to -pi
+                    iy0 = find(abs(obj.y - pi) < tol);
+                else
+                    iy0 = [];
+                end
+                [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+                yy0 = -yy0;
+            end
+            obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); 
             % Sort
             obj = obj.sortGrid;
+            % Only change the base if we have to...
+            if obj.Nang ~= NangOrig
+                obj = obj.setBase;
+            end
         end
         
         function obj = range360pos(obj)
@@ -3275,13 +3300,11 @@ classdef FarField
             
             
             switch obj.gridType
-                case {'PhTh','Horiz','RAdec','GalLongLat'}
+                case obj.localGrids
                     if strcmp(obj.gridType,'PhTh')
                         JacFunc = @sin;
-                    elseif strcmp(obj.gridType,'Horiz')
+                    else %any(strcmp(obj.gridType,{'AzEl','ElAz'}))
                         JacFunc = @cos;
-                    else
-                        JacFunc = @sin;
                     end
                     PH = reshape(obj.x,obj.Ny,obj.Nx);
                     TH = reshape(obj.y,obj.Ny,obj.Nx);
@@ -3304,7 +3327,7 @@ classdef FarField
                         end
                     end
                 otherwise
-                    error(['pradInt not implemented for gridType = ',obj.gridType,', only for PhTh and astronomical grids'])
+                    error(['pradInt not implemented for gridType = ',obj.gridType])
             end
             P = P.*symFact;
         end
@@ -4680,15 +4703,15 @@ classdef FarField
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
             
-            % Set to a standard grid - try to get positive x range and 180
-            % y range
-            FF = FF.setYrange(180);
-            % Insert the missing cut if required
-            % TODO: Remove after setYrange and setXrange have been fixed to
-            % be more general
-            FF = FF.copyAndInsertXcut(-pi,pi);
-            FF = FF.setXrange('pos');
-            FF = FF.setBase;
+%             % Set to a standard grid - try to get positive x range and 180
+%             % y range
+%             FF = FF.setYrange(180);
+%             % Insert the missing cut if required
+%             % TODO: Remove after setYrange and setXrange have been fixed to
+%             % be more general
+%             FF = FF.copyAndInsertXcut(-pi,pi);
+%             FF = FF.setXrange('pos');
+%             FF = FF.setBase;
         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
@@ -4881,16 +4904,19 @@ classdef FarField
                     obj2 = transformTypes(obj2, obj1); % Make sure the types are equal
                     level = level + 1;
                     if obj1.freqHz == obj2.freqHz
-                        E1i = interpolateGrid(obj2,'E1',obj1.x,obj1.y);
-                        if numel(obj2.E2) > 0 && numel(obj1.E1) > 0
-                            E2i = interpolateGrid(obj2,'E2',obj1.x,obj1.y);
-                        else
-                            E2i = [];
-                        end
-                        if numel(obj2.E3) > 0 && numel(obj1.E3) > 0
-                            E3i = interpolateGrid(obj2,'E3',obj1.x,obj1.y);
-                        else
-                            E3i = [];
+                        [E1i,E2i,E3i] = deal(zeros(obj1.Nang,obj2.Nf));
+                        for ff = 1:obj2.Nf
+                            E1i(:,ff) = interpolateGrid(obj2,'E1',obj1.x,obj1.y);
+                            if numel(obj2.E2) > 0 && numel(obj1.E1) > 0
+                                E2i(:,ff) = interpolateGrid(obj2,'E2',obj1.x,obj1.y);
+                            else
+                                E2i = [];
+                            end
+                            if numel(obj2.E3) > 0 && numel(obj1.E3) > 0
+                                E3i(:,ff) = interpolateGrid(obj2,'E3',obj1.x,obj1.y);
+                            else
+                                E3i = [];
+                            end
                         end
                         obj2 = FarField(obj1.x,obj1.y,E1i,E2i,obj2.freq,obj2.Prad,obj2.radEff,...
                             'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,...
