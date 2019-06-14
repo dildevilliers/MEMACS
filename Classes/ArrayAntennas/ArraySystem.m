@@ -8,7 +8,7 @@ classdef ArraySystem
     
     properties (SetAccess = private)
         % Elements
-        antPos(1,:) pnt3D = pnt3D([0,1],0,0)   % Antenna positions in 3D points - internal vector
+        antPos(1,:) Pnt3D = Pnt3D([0,1],0,0)   % Antenna positions in 3D points - internal vector
         channelPhasors(1,:) double {mustBeFinite} = 1 % Vector of complex channel phasors for scaling/calibration
         couplingMatrix(:,:) double {mustBeFinite} = 1 % Mutual coupling matrix between channels
         % Receiver

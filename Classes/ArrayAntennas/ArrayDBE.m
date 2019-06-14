@@ -3,6 +3,7 @@ classdef ArrayDBE
     
     properties
         arraySystem(1,1) ArraySystem
+        calVect = 1
     end
     
     methods
@@ -35,16 +36,13 @@ classdef ArrayDBE
             freq = obj.arraySystem.freqSamp*(0:(Lfft/2))/Lfft;
         end
         
-        function [P] = scanBeam(obj,freqRF,th,ph,x,calVect)
+        function [P] = scanBeam(obj,freqRF,th,ph,x)
             % freqRF is the nominal RF frequency of the system
             % th and ph are the scanning directions in spherical
             % coordinates from the origin. one can be scalar.
             % x is a typical output from ArraySystem.getPortSignal
             % A signal matrix of size [Nant, Nsamp]
             % calVect is a vecotr of calibration phasors of size [1, Nant]
-            if nargin < 6
-                calVect = 1;
-            end
             
             % stretch ph and th if required
             th = (ph+eps(realmin))./(ph+eps(realmin)).*th;
@@ -53,7 +51,7 @@ classdef ArrayDBE
             [u,v,w] = PhTh2DirCos(ph,th);
             k_scan = 2*pi.*freqRF./physconst('lightspeed').*[u;v;w]; % [3 x Nscan]
             A_scan = exp(1i*obj.arraySystem.antPos.pointMatrix.'*k_scan); % [Nant x Nscan]
-            AC_scan = bsxfun(@times,A_scan,calVect(:));
+            AC_scan = bsxfun(@times,A_scan,obj.calVect(:));
             y = AC_scan.'*x;  % [Nscan x Nsamp]
             P = portPower(y); % [Nscan x 1]
         end
@@ -80,7 +78,25 @@ classdef ArrayDBE
             plot(rad2deg(th),P), grid on
             xlabel('\theta^\circ')
         end
-
+        
+        function obj = calLinScan(obj,x)
+            % Run this to calculate the calibration vector
+            for aa = 1:size(x,1)
+                obj.calVect(aa) = mean(x(1,:)./x(aa,:));
+            end
+            obj.arraySys = obj.arraySys.setChannelPhasors(obj.calVect);
+        end
+        
+        function plotCalVect(obj)
+            colorVect = 'krbm';
+            markerVect = '*osd';
+            for pp = 1:4
+                plot(real(obj.calVect(pp)),imag(obj.calVect(pp)),[colorVect(pp),markerVect(pp)]), hold on, grid on
+            end
+            t = linspace(0,2*pi,1000);
+            x = sin(t) + 1i*cos(t);
+            plot(real(x),imag(x));
+        end
     end
 end
 
