@@ -279,12 +279,12 @@ classdef FarField
                 error('Cannot specify a plane- and BOR-symmetry for the same field')
             end
             if ~strcmp(obj.symmetryXZ,'none')
-                obj1 = obj.grid2TrueView;
-                assert(all(sign(obj1.y+tol) > 0) || all(sign(obj1.y-tol) < 0),'Invalid range for XZ symmetry')
+                [~,v] = getDirCos(obj);
+                assert(all(sign(v+tol) > 0) || all(sign(v-tol) < 0),'Invalid range for XZ symmetry')
             end
             if ~strcmp(obj.symmetryYZ,'none')
-                obj1 = obj.grid2TrueView;
-                assert(all(sign(obj1.x+tol) > 0) || all(sign(obj1.x-tol) < 0),'Invalid range for YZ symmetry')
+                [u] = getDirCos(obj);
+                assert(all(sign(u+tol) > 0) || all(sign(u-tol) < 0),'Invalid range for YZ symmetry')
             end
             if ~strcmp(obj.symmetryXY,'none')
                 error('function: setSymmetryXY not implemented yet - please redefine with the full field and symmetryXY = none');
@@ -2689,10 +2689,10 @@ classdef FarField
             DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
             [xi_bGT,yi_bGT] = DirCos2baseHandle(ui,vi,wi);
             % Find the invalid points included by the external meshgrid
-            valAngi = sqrt(ui.^2 + vi.^2) <= 1;
+            valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
             % Sort out the TrueView special case invalid points
             if strcmp(gridTypeIn,'TrueView')
-                valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= 1;
+                valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
             end
             
             % Get the valid angle positions - already in baseGrid here, but shifted to

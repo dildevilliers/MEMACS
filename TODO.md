@@ -8,7 +8,10 @@
 - [ ] Refactor setXgrid and setYgrid. Simplify the cases by using the new sortGrid to get rid of redundant points. Add as many cuts as needed to cover all cases, and don't worry about removing any. Use insertMissingCuts.
 - [ ] include the elevation type angles for setXgrid and setYgrid
 - [ ] readMeasurements
+- [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
+- [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
+- [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
