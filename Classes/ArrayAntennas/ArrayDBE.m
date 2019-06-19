@@ -90,7 +90,7 @@ classdef ArrayDBE
         function plotCalVect(obj)
             colorVect = 'krbm';
             markerVect = '*osd';
-            for pp = 1:4
+            for pp = 1:size(obj.calVect)
                 plot(real(obj.calVect(pp)),imag(obj.calVect(pp)),[colorVect(pp),markerVect(pp)]), hold on, grid on
             end
             t = linspace(0,2*pi,1000);
