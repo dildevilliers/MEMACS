@@ -81,34 +81,28 @@ tol = 1e-6*min(sqrt(lin10(FF.Directivity_dBi)));
 % p180 -> s180 -> p180
 FFsym180 = FF.setRangeSph('sym','180');
 figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFpos180 = FFsym180.setRangeSph('pos');
+% FFpos180 = FFsym180.setRangeSph('pos');
 % figure, FFpos180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFs180 = FFpos180 - FF;
+FFs180 = FFsym180.setRangeSph('pos') - FF;
 err_s180 = norm(norm(FFs180));
 
 % p180 -> s360 -> p180
-FFsym360 = FFpos180.setRangeSph('sym','360');
+FFsym360 = FF.setRangeSph('sym','360');
 figure, FFsym360.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFsym180 = FFsym360.setRangeSph;
+% FFsym180 = FFsym360.setRangeSph;
 % figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFs360 = FFsym180.setRangeSph('pos') - FF;
+FFs360 = FFsym360.setRangeSph('pos') - FF;
 err_s360 = norm(norm(FFs360));
 
 % p180 -> p360 -> p180
-FFpos360 = FFpos180.setRangeSph('pos',360);
+FFpos360 = FF.setRangeSph('pos',360);
 figure, FFpos360.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFsym180 = FFpos360.setRangeSph;
+% FFsym180 = FFpos360.setRangeSph;
 % figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FFp360 = FFsym180.setRangeSph('pos') - FF;
+FFp360 = FFpos360.setRangeSph('pos') - FF;
 err_p360 = norm(norm(FFp360));
 
 % Now the azel/elaz
-% FF1s360 = FarField.readNFSscan([dataPath,'NFSscan_az180el360']);
-% figure, FF1s360.plot('plotType','2D','showGrid',0,'output','E1','outputType','real','scaleMag','lin')
-% FF1s180 = FarField.readNFSscan([dataPath,'NFSscan_az360el180']);
-% figure, FF1s180.plot('plotType','2D','showGrid',0,'output','E1','outputType','real','scaleMag','lin')
-% FFt = FF1s180.setRangeSph('sym','360');
-% figure, FFt.plot('plotType','2D','showGrid',0,'output','E1','outputType','real','scaleMag','lin')
 FF1 = FF.coor2Ludwig2AE;
 FF1 = FF1.currentForm2Base;
 figure, FF1.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
@@ -122,14 +116,22 @@ FF1s180 = FF1pos180.setRangeSph - FF1;
 err1_s180 = norm(norm(FF1s180));
 
 % p180 -> s360 -> s180
-FF1sym360 = FF1pos180.setRangeSph('sym','360');
+FF1sym360 = FF1.setRangeSph('sym','360');
 figure, FF1sym360.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-FF1sym180 = FF1sym360.setRangeSph;
-figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
+% FF1sym180 = FF1sym360.setRangeSph;
+% figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
 FF1s360 = FF1sym360.setRangeSph - FF1;
 err1_s360 = norm(norm(FF1s360));
 
-setTestVect = [err_s180,err_s360,err_p360,err1_s180,err1_s360];
+% s180 -> p360 -> s180
+FF1pos360 = FF1.setRangeSph('pos','360');
+figure, FF1pos360.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
+% FF1sym180 = FF1pos360.setRangeSph;
+% figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
+FF1p360 = FF1pos360.setRangeSph - FF1;
+err1_p360 = norm(norm(FF1p360));
+
+setTestVect = [err_s180,err_s360,err_p360,err1_s180,err1_s360,err1_p360];
 if all(setTestVect < tol)
     disp('Pass: setRange')
     setRangePass = true;
@@ -138,26 +140,6 @@ else
     setRangePass = false;
 end
 
-
-% figure, FF.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-
-% FFx = FF.setXrange('sym');
-% figure, FFx.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-% FFx = FFx.setXrange('pos');
-% figure, FFx.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-
-% FFy1 = FF.setYrangeSph(360);
-% figure, FFy1.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-% FFy2 = FFy1.setXrange('sym');
-% figure, FFy1.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-
-% FF = FF.setXrange('pos');
-% figure, FF.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-% FFy360 = FF.setYrangeSph(360);
-% figure, FFy360.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
-% 
-% FFy180 = FFy360.setYrangeSph(180);
-% figure, FFy180.plot('plotType','2D','step',1,'showGrid',1,'output','E1','outputType','real','scaleMag','lin')
 
 
 %% Final test
