@@ -5,6 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] fix the setRangeSph field signs - copying across the pole should change the sign
 - [ ] readMeasurements
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] make a legacy struct constructor
@@ -27,6 +28,7 @@
 - [ ] Gaussian/cosn pattern fitter
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] readFITS (DdV)
+- [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
 - [ ] writeCSTffs
 - [ ] Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet.

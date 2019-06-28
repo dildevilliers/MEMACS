@@ -30,5 +30,5 @@ addpath(genpath([MEMACSroot,'data']))
 addpath(genpath([MEMACSroot,'developerScratch']))
 addpath(genpath([MEMACSroot,'testScripts']))
 addpath(genpath([MEMACSroot,'utils']))
-
+addpath(genpath([MEMACSroot,'contrib']))
 end

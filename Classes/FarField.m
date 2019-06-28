@@ -454,6 +454,8 @@ classdef FarField
         end
         
         function obj = setFreq(obj,freq,freqUnit)
+            % SETFREQ sets the frequency of the object
+            
             if nargin > 1
                 assert(numel(freq) == size(obj.E1,2),'Error, freq must be the same length as the number of columns in E1')
                 obj.freq = freq;
@@ -463,6 +465,29 @@ classdef FarField
             end
         end
         
+        function obj = setEfield(obj,iSet,E1,E2,E3)
+            % SETEFIELD sets the E-fields of the object
+            
+            % Sets the E-fields after creation of the object at the
+            % positions iSet.  The size of iSet must correspond the the
+            % size of obj.E1 = [Nang x Nf], or be a single column of length
+            % Nang (changes will be applied to all frequencies then).  Use
+            % with caution as it can change the power in the pattern and 
+            % the associated directivities.
+            % It changes the base and tries to calculate a new power if the
+            % pattern exists over a full sphere
+            
+            assert(size(iSet,1) == obj.Nang,'iSet must have Nang rows')
+            assert(size(iSet,2) == obj.Nf || size(iSet,2) == 1,'iSet must have Nf or 1 columns')
+            
+            if size(iSet,2) == 1, iSet = repmat(iSet,1,obj.Nf); end
+            if nargin > 2, obj.E1(iSet) = E1; end
+            if nargin > 3, obj.E2(iSet) = E2; end
+            if nargin > 4, obj.E3(iSet) = E3; end
+            
+            if obj.isGrid4pi, obj.Prad = obj.PradInt; end
+            obj = obj.setBase;
+        end
         %% Pattern getters
         function FFpattern = getFarFieldStruct(obj)
             % GETFARFIELDSTRUCT Returns the legacy FarField struct data format.
@@ -1972,7 +1997,7 @@ classdef FarField
             addParameter(parseobj,'dynamicRange_dB',40,typeValidationDR );
             
             typeValidationstep = @(x) validateattributes(x,{'numeric'},{'real'},'plot','step');
-            addParameter(parseobj,'step',[],typeValidationstep);     % In degrees
+            addParameter(parseobj,'step',0,typeValidationstep);     % In degrees
             
             parse(parseobj, FF1, FF2, varargin{:});
             
@@ -1983,22 +2008,51 @@ classdef FarField
             
             
             %% Plot the result
-            
+            [w,h] = deal(0.4);
+            botTop = 0.55;
+            botBot = 0.08;
+            leftLeft = 0.1;
+            leftRight = 0.52;
+%             ax(1:4) = axis;
             if ~isGridEqual(FF1,FF2)
                 error('Base grids should be identical for the two input fields');
             else
-                subplot(2,2,1)
+                figure
+                ax(1) = subplot('position',[leftLeft botTop w h]);
+%                 ax(1) = subplot(2,2,1,'align');
                 plot(FF1,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
                 title('J_{11}')
-                subplot(2,2,2)
+                xlabel('')
+                ax(1).XLabel.Visible = 'off';
+                ax(1).XTickLabel = [];
+
+                ax(2) = subplot('position',[leftRight botTop w h]);
+%                 ax(2) = subplot(2,2,2,'align');
                 plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
                 title('J_{12}')
-                subplot(2,2,3)
+                ax(2).XLabel.Visible = 'off';
+                ax(2).XTickLabel = [];
+                ax(2).YLabel.Visible = 'off';
+                ax(2).YTickLabel = [];
+
+                ax(3) = subplot('position',[leftLeft botBot w h]);
+%                 ax(3) = subplot(2,2,3,'align');
                 plot(FF2,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
                 title('J_{21}')
-                subplot(2,2,4)
+                
+                ax(4) = subplot('position',[leftRight botBot w h]);
+%                 ax(4) = subplot(2,2,4,'align');
                 plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
                 title('J_{22}')
+                ax(4).YLabel.Visible = 'off';
+                ax(4).YTickLabel = [];
+                
+                for aa = 1:4
+                    ax(aa).ActivePositionProperty = 'position';
+                    ax(aa).XMinorTick = 'on';
+                    ax(aa).YMinorTick = 'on';
+                    ax(aa).Box = 'on';
+                end
             end
         end
         
@@ -4312,12 +4366,12 @@ classdef FarField
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
             % READFITS Create a FarField object from a FITS image file.
             
-            % Expect the data format as: data([Nx,Ny,Nf,Nc,Ne,Np])
+            % Expect the data format as: data([Nx,Ny,Nf,Ne,Nc,Np])
             %   Nx - number of x values
             %   Ny - number of y values
             %   Nf - number of frequencies
-            %   Nc - number of field components [1 | 2]
             %   Ne - number of patterns in the data
+            %   Nc - number of field components [1 | 2]
             %   Np - number of complex data parts [1 | 2] (if this is just
             %   1, the other complex component is expected from another
             %   fits file - see inputStruct.type)
@@ -4329,7 +4383,9 @@ classdef FarField
             %   .type2 - the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
             %   .scale1 - the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
             %   .scale2 - the scale of the second component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
-            %   .scaleFuncGrid - can be a function handle or scaling factor for the grid
+            %   .scaleFuncGrid - can be a function handle or scaling factor
+            %   for the grid. if it is an array with 2 elements, the first
+            %   is used for x, and the second for y
             
             % ToDo: This is very hard to generalise - learn as we go and
             % get more variations I guess
@@ -4403,7 +4459,8 @@ classdef FarField
             
             % Set some defaults
             [type1,scale1] = deal('real','lin');
-            [pathName2,info2,type2] = deal([]);
+            [type2,scale2] = deal('imag','lin');
+            [pathName2] = deal([]);
             if isfield(inputStruct,'type1') && ~isempty(inputStruct.type1)
                 type1 = inputStruct.type1;
             end
@@ -4470,18 +4527,18 @@ classdef FarField
             if isa(scaleFuncGrid,'function_handle')
                 [X,Y] = meshgrid(scaleFuncGrid(xvect1),scaleFuncGrid(yvect1));
             else
-                [X,Y] = meshgrid(xvect1.*scaleFuncGrid,yvect1.*scaleFuncGrid);
+                [X,Y] = meshgrid(scaleFuncGrid.*xvect1,scaleFuncGrid.*yvect1);
             end
             [Nx,Ny,Nf] = deal(numel(xvect1),numel(yvect1),numel(fvect1));
             data1 = fitsread(pathName1);
             
             % Ne = number of fields; Nc = number of components; Np = number
             % of complex parts
-            [~,~,~,Nc,Ne,Np] = size(data1(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+            [~,~,~,Ne,Nc,Np] = size(data1(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
             % E-field naming: EXy; X = component, y = complex part
-            E1a = (data1(:,:,:,1,:,:));
+            E1a = (data1(:,:,:,:,1,:));
             [E1b,E2a,E2b] = deal([]);
-            if Nc > 1, E2a = (data1(:,:,:,2,:,:)); end
+            if Nc > 1, E2a = (data1(:,:,:,:,2,:)); end
             % Sort out type and scale
             switch scale1
                 case 'dB10'
@@ -4497,14 +4554,14 @@ classdef FarField
                 [xvect2,yvect2,fvect2] = fitsGrid(info2,xRange,yRange,fRange);
                 data2 = fitsread(pathName2);
                 assert(all(xvect1 == xvect2)&&all(yvect1 == yvect2)&&all(fvect1 == fvect2)&&all(size(data1)==size(data2)),'The two patterns must have identical grids and number of fields')
-                E1b = (data2(:,:,:,1,:));
-                if Nc > 1, E2b = (data2(:,:,:,2,:)); end
+                E1b = (data2(:,:,:,:,1));
+                if Nc > 1, E2b = (data2(:,:,:,:,2)); end
             elseif Np == 2
-                E1b = data1(:,:,:,1,:,1);
-                if Nc > 1, E2b = data1(:,:,:,2,:,2); end
+                E1b = data1(:,:,:,:,1,2);
+                if Nc > 1, E2b = data1(:,:,:,:,2,2); end
             end
-            E1 = E1a(:,:,:,1,:,1);
-            if Nc > 1, E2 = E2a(:,:,:,1,:,1); end
+            E1 = E1a(:,:,:,:,1,1);
+            if Nc > 1, E2 = E2a(:,:,:,:,1,1); end
             
             % Handle the complex number types
             switch type2
@@ -4533,7 +4590,7 @@ classdef FarField
             radEff = 1;
             FF(1:Ne) = FarField;
             for ee = 1:Ne
-                FF(ee) = FarField(X(:),Y(:),reshape(E1(:,:,:,1,ee),Nx*Ny,Nf),reshape(E2(:,:,:,1,ee),Nx*Ny,Nf),freq,Prad,radEff,...
+                FF(ee) = FarField(X(:),Y(:),reshape(E1(:,:,:,ee,1),Nx*Ny,Nf),reshape(E2(:,:,:,ee,1),Nx*Ny,Nf),freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
@@ -4571,8 +4628,6 @@ classdef FarField
                     fvect = linspace(fRange(1),fRange(2),Nf);
                 end
             end
-            
-            
         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
