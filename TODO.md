@@ -5,6 +5,8 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] readFITS (DdV)
+- [ ] harden up E-field setters
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign
 - [ ] readMeasurements
 - [ ] Make a compression function for saving the data of large fields.  Typically only keep the base, and when opening the object restore the current values of the fields
@@ -28,7 +30,6 @@
 - [ ] Field symmetries: XY plane (DdV)
 - [ ] Gaussian/cosn pattern fitter
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
-- [ ] readFITS (DdV)
 - [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
 - [ ] writeCSTffs
