@@ -3,18 +3,21 @@ classdef ArrayADC
     %   Detailed explanation goes here
     
     properties
-        Nbits(1,1) double {mustBeInteger, mustBeFinite} = 1 
+        Nbits(1,1) double {mustBeInteger, mustBeFinite} = 1
         maxV(1,1) double {mustBeReal, mustBeFinite} = 1
         minV(1,1) double {mustBeReal, mustBeFinite} = -1
         ADCtype(1,:) char {mustBeMember(ADCtype,{'binary','sign_mag','2scomp'})} = 'binary' % Default of unsigned binary
     end
     
     properties (SetAccess = private)
-        delV
         Nthresholds
         thresholdLevels
         outLevels
         outBinary  % Binary output
+    end
+    
+    properties (Dependent = true, Hidden = true)
+        delV
     end
     
     methods
@@ -22,7 +25,7 @@ classdef ArrayADC
             if nargin >= 1
                 obj.Nbits = Nbits;
             end
-            if nargin >=2 
+            if nargin >=2
                 obj.maxV = maxV;
                 obj.minV = -maxV;
             end
@@ -33,7 +36,21 @@ classdef ArrayADC
                 obj.ADCtype = ADCtype;
             end
             assert(obj.maxV > obj.minV, 'Error: maxV must be larger than minV');
-            obj.delV = obj.maxV - obj.minV;
+            obj.Nthresholds = 2^obj.Nbits-1;
+            delThNorm = 1/(obj.Nthresholds+1);
+            obj.thresholdLevels = ((delThNorm:delThNorm:obj.Nthresholds*delThNorm)*obj.delV + obj.minV).';
+            obj.outLevels = linspace(obj.minV,obj.maxV,obj.Nthresholds+1).';
+            switch obj.ADCtype
+                case 'binary'
+                    obj.outBinary = dec2logical(0:(2^obj.Nbits - 1),obj.Nbits);
+                otherwise
+                    error(['ADCtype: ', obj.ADCtype, ' not implemented yet']);
+            end   
+        end
+        
+        %% Parameter setters
+        function obj = setNbits(obj,Nbits)
+            obj.Nbits = Nbits;
             obj.Nthresholds = 2^obj.Nbits-1;
             delThNorm = 1/(obj.Nthresholds+1);
             obj.thresholdLevels = ((delThNorm:delThNorm:obj.Nthresholds*delThNorm)*obj.delV + obj.minV).';
@@ -44,9 +61,13 @@ classdef ArrayADC
                 otherwise
                     error(['ADCtype: ', obj.ADCtype, ' not implemented yet']);
             end
-            
+        end
+        %% Dependency-based setters
+        function delV = get.delV(obj)
+            delV = obj.maxV - obj.minV;
         end
         
+        %% Signal getters
         function b = getBinarySignal(obj,s)
             % Returns the binary samples of the analog signals in s as b.
             % The size of b is [size(s)xNbits].  s has size [Nant x Nsamples]
@@ -62,7 +83,7 @@ classdef ArrayADC
         
         function x = getDigitalSignal(obj,b)
             % Returns the digital signal of the binary samples b in x.
-            % x is of size [Nsig x Nsamp]. The size of b is [size(s) x Nbits].  
+            % x is of size [Nsig x Nsamp]. The size of b is [size(s) x Nbits].
             [Nsig,Nsamp,Nbit] = size(b);
             assert(Nbit == obj.Nbits,'Error: Last dimension of b should be of size obj.Nbits');
             bV = reshape(b,Nsig*Nsamp,obj.Nbits);
@@ -75,9 +96,9 @@ classdef ArrayADC
         end
         
         function x = ADC(obj,s)
-           % Full sampling of signal s into digital signal x
-           b = getBinarySignal(obj,s);
-           x = getDigitalSignal(obj,b);
+            % Full sampling of signal s into digital signal x
+            b = getBinarySignal(obj,s);
+            x = getDigitalSignal(obj,b);
         end
         
         function plot(obj,showBin)

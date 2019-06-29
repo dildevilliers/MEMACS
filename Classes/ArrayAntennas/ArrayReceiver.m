@@ -10,7 +10,7 @@ classdef ArrayReceiver
         couplingMatrix(:,:) double {mustBeFinite} = 1 % Mutual coupling matrix between channels
     end
     
-    properties (SetAccess = private)
+    properties (Dependent = true, Hidden = true)
         P     % Noise power in Watt
     end
     
@@ -31,9 +31,14 @@ classdef ArrayReceiver
             if nargin >= 5
                 obj.couplingMatrix = couplingMatrix;
             end
-            obj.P = lin10(obj.noisePower-30);      % Noise power in W
         end
         
+        %% Dependency-based setters
+        function P = get.P(obj)
+            P = lin10(obj.noisePower-30);      % Noise power in W
+        end
+        
+        %% Signal getters
         function Nt = getNoise(obj,Nsamp,Nchan)
             % Return complex noise matrix with [NsampxNchan] elements at
             % input of LNA

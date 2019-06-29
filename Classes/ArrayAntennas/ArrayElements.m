@@ -3,7 +3,7 @@ classdef ArrayElements
     %   Detailed explanation goes here
     
     properties
-        antPos(1,:) pnt3D = pnt3D([0,1],0,0)   % Antenna positions in 3D points - internal vector
+        antPos(1,:) Pnt3D = Pnt3D([0,1],0,0)   % Antenna positions in 3D points - internal vector
         channelPhasors(1,:) double {mustBeFinite} = 1 % Vector of complex channel errors for calibration testing
         couplingMatrix(:,:) double {mustBeFinite} = 1 % Mutual coupling matrix between channels
     end
@@ -54,7 +54,7 @@ classdef ArrayElements
             end
             % Get the element phase shifts
             r = obj.antPos.pointMatrix.';  % [Nant x 3]
-            A = exp(-1i*r*k);              % [Nant x Nsig]
+            A = exp(1i*r*k);              % [Nant x Nsig]
             
             % Add the systematic errors in the channels
             AC = bsxfun(@times,A,obj.channelPhasors(:));
