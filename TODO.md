@@ -7,6 +7,7 @@
 # Farfield
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign
 - [ ] readMeasurements
+- [ ] Make a compression function for saving the data of large fields.  Typically only keep the base, and when opening the object restore the current values of the fields
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!

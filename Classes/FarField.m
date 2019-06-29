@@ -176,7 +176,7 @@ classdef FarField
             parseobj.addOptional('E1',Eth0,typeValidation_fields);
             parseobj.addOptional('E2',Eph0,typeValidation_fields);
             
-            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'FarField');
+            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','nondecreasing','nrows',1},'FarField');
             parseobj.addOptional('freq',f0,typeValidation_freq);
             
 %             typeValidation_power = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','nrows',1},'FarField');
@@ -1469,8 +1469,11 @@ classdef FarField
             E1grid = zeros(Nxi*Nyi,obj1.Nf);
             if ~isempty(obj1.E2), E2grid = E1grid; end
             for ff = 1:obj1.Nf
-                E1grid(:,ff) = interpolateGrid(obj1,'E1',xi,yi,ff,hem);
-                if ~isempty(obj1.E2), E2grid(:,ff) = interpolateGrid(obj1,'E2',xi,yi,ff,hem); end
+                FFtemp = obj1.getFi(ff); % Much faster than letting interpolateGrid handle the frequency selection
+                E1grid(:,ff) = interpolateGrid(FFtemp,'E1',xi,yi,1,hem);
+                if ~isempty(obj1.E2), E2grid(:,ff) = interpolateGrid(FFtemp,'E2',xi,yi,1,hem); end
+%                 E1grid(:,ff) = interpolateGrid(obj1,'E1',xi,yi,ff,hem);
+%                 if ~isempty(obj1.E2), E2grid(:,ff) = interpolateGrid(obj1,'E2',xi,yi,ff,hem); end
             end
             % Remove the extra phase introduced by the interpolateGrid
             % function - this just keeps the real/imag and phase field
@@ -1496,7 +1499,7 @@ classdef FarField
         end
         
         %% Plotting methods
-        function plot(obj,varargin)
+        function [ax] = plot(obj,varargin)
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -1531,7 +1534,7 @@ classdef FarField
             %                  | 'bot'}
             %
             % Outputs
-            % - []
+            % - ax:             Axis handle
             %
             % Dependencies
             % - MATLAB Antennas Toolbox for 3D plot
@@ -1961,13 +1964,13 @@ classdef FarField
                         ax.ThetaDir = 'clockwise';
                     end
             end
-            
+            ax = gca;
         end
         
-        function plotJones(FF1,FF2,varargin)
+        function [ax] = plotJones(FF1,FF2,varargin)
             % PLOTJONES Plots the Jones matrix type representation FarFields
             
-            % function [] = plotJones(FF1,FF2,varargin)
+            % function [ax] = plotJones(FF1,FF2,varargin)
             % plots the Jones matrix type representation of the farfields specified in
             % FF1 and FF2, where it is assumed they are calculated in the same basis
             % and represent the 2 polarizations
@@ -1980,6 +1983,8 @@ classdef FarField
             %
             % step is the plot step size.  Can be empty - then the available data will
             % be used and no surface will be plotted.  If not, a griddata interpolant will be made.
+            %
+            % Returns a vector of axis handles
             
             
             %% Parse input
@@ -2005,8 +2010,6 @@ classdef FarField
             dynamicRange_dB = parseobj.Results.dynamicRange_dB;
             step = parseobj.Results.step;
             
-            
-            
             %% Plot the result
             [w,h] = deal(0.4);
             botTop = 0.55;
@@ -2017,10 +2020,10 @@ classdef FarField
             if ~isGridEqual(FF1,FF2)
                 error('Base grids should be identical for the two input fields');
             else
-                figure
+%                 figure
                 ax(1) = subplot('position',[leftLeft botTop w h]);
 %                 ax(1) = subplot(2,2,1,'align');
-                plot(FF1,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
+                plot(FF1,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{11}')
                 xlabel('')
                 ax(1).XLabel.Visible = 'off';
@@ -2028,7 +2031,7 @@ classdef FarField
 
                 ax(2) = subplot('position',[leftRight botTop w h]);
 %                 ax(2) = subplot(2,2,2,'align');
-                plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
+                plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{12}')
                 ax(2).XLabel.Visible = 'off';
                 ax(2).XTickLabel = [];
@@ -2037,12 +2040,12 @@ classdef FarField
 
                 ax(3) = subplot('position',[leftLeft botBot w h]);
 %                 ax(3) = subplot(2,2,3,'align');
-                plot(FF2,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
+                plot(FF2,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{21}')
                 
                 ax(4) = subplot('position',[leftRight botBot w h]);
 %                 ax(4) = subplot(2,2,4,'align');
-                plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex)
+                plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{22}')
                 ax(4).YLabel.Visible = 'off';
                 ax(4).YTickLabel = [];
@@ -2807,7 +2810,11 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            obj.Prad = obj.pradInt;
+            try
+                obj.Prad = obj.pradInt;
+            catch ME
+                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+            end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -2829,7 +2836,11 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            obj.Prad = obj.pradInt;
+            try
+                obj.Prad = obj.pradInt;
+            catch ME
+                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+            end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -4858,7 +4869,7 @@ classdef FarField
                 case 'DirCos'
                     u = obj.x;
                     v = obj.y;
-                    w = zeros(size(u));
+                    w = sqrt(1 - u.^2 - v.^2);
                 otherwise
                     handle2DirCos = str2func([obj.gridType,'2DirCos']);
                     [u,v,w] = handle2DirCos(obj.x,obj.y);
@@ -4871,7 +4882,7 @@ classdef FarField
             switch obj.gridType
                 case 'TrueView'
                     Xg = obj.x;
-                    Yg = obj.x;
+                    Yg = obj.y;
                 otherwise
                     [u,v,w] = getDirCos(obj);
                     [Xg,Yg] = DirCos2TrueView(u,v,w);
