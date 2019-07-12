@@ -1499,7 +1499,7 @@ classdef FarField
         end
         
         %% Plotting methods
-        function [ax] = plot(obj,varargin)
+        function [] = plot(obj,varargin)
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -1964,7 +1964,7 @@ classdef FarField
                         ax.ThetaDir = 'clockwise';
                     end
             end
-            ax = gca;
+            
         end
         
         function [ax] = plotJones(FF1,FF2,varargin)
@@ -2012,10 +2012,11 @@ classdef FarField
             
             %% Plot the result
             [w,h] = deal(0.4);
-            botTop = 0.55;
+            botTop = 0.56;
             botBot = 0.08;
             leftLeft = 0.1;
             leftRight = 0.52;
+            figPos = [300,110,[4,3].*220];
 %             ax(1:4) = axis;
             if ~isGridEqual(FF1,FF2)
                 error('Base grids should be identical for the two input fields');
@@ -2027,16 +2028,16 @@ classdef FarField
                 title('J_{11}')
                 xlabel('')
                 ax(1).XLabel.Visible = 'off';
-                ax(1).XTickLabel = [];
+%                 ax(1).XTickLabel = [];
 
                 ax(2) = subplot('position',[leftRight botTop w h]);
 %                 ax(2) = subplot(2,2,2,'align');
                 plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{12}')
                 ax(2).XLabel.Visible = 'off';
-                ax(2).XTickLabel = [];
+%                 ax(2).XTickLabel = [];
                 ax(2).YLabel.Visible = 'off';
-                ax(2).YTickLabel = [];
+%                 ax(2).YTickLabel = [];
 
                 ax(3) = subplot('position',[leftLeft botBot w h]);
 %                 ax(3) = subplot(2,2,3,'align');
@@ -2048,14 +2049,16 @@ classdef FarField
                 plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
                 title('J_{22}')
                 ax(4).YLabel.Visible = 'off';
-                ax(4).YTickLabel = [];
+%                 ax(4).YTickLabel = [];
                 
                 for aa = 1:4
                     ax(aa).ActivePositionProperty = 'position';
                     ax(aa).XMinorTick = 'on';
                     ax(aa).YMinorTick = 'on';
                     ax(aa).Box = 'on';
+                    set(ax(aa),'fontsize',11);
                 end
+                set(gcf,'Position',figPos)
             end
         end
         
@@ -2612,7 +2615,8 @@ classdef FarField
             end
             % Transform to sensible grid and coordinate system for rotation
             FFsph = obj1.grid2PhTh;  % Always work in the PhTh coordinate system
-            FFsph = FFsph.setXrange('sym'); % Always work in symmetrical xRange
+%             FFsph = FFsph.setXrange('sym'); % Always work in symmetrical xRange
+            FFsph = FFsph.setRangeSph('sym');
             if ~strcmp(obj1.coorType,'power'), FFsph = coorHandle(FFsph,false); end % No coordinate transform required for power only
             
             %             % Force all the th = 0|180 fields to be identical - fixes pole
@@ -2758,7 +2762,8 @@ classdef FarField
             if YZsym, obj = obj.setSymmetryYZ(obj1.symmetryYZ); end
             if XZsym, obj = obj.setSymmetryXZ(obj1.symmetryXZ); end
             if XYsym, obj = obj.setSymmetryXY(obj1.symmetryXY); end
-            obj = obj.setXrange(obj1.xRangeType);
+%             obj = obj.setXrange(obj1.xRangeType);
+            obj = obj.setRangeSph(obj1.xRangeType);
             obj = obj.currentForm2Base();
         end
         
@@ -2924,8 +2929,17 @@ classdef FarField
             if nargin < 2
                 DIM = 1;
             end
+            % Set possible NaN's to 0
+            iNaN1 = isnan(obj.E1);
+            obj.E1(iNaN1) = 0;
             rmsE1 = rms(obj.E1,DIM);
+            
+            iNaN2 = isnan(obj.E2);
+            obj.E2(iNaN2) = 0;
             rmsE2 = rms(obj.E2,DIM);
+            
+            iNaN3 = isnan(obj.E3);
+            obj.E3(iNaN3) = 0;
             rmsE3 = rms(obj.E3,DIM);
         end
         
@@ -2940,7 +2954,8 @@ classdef FarField
             
             P = obj1.getU.*obj2.getU;
             FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType,'fieldPol','power');
-            T = FF_T.pradInt;
+%             T = FF_T.pradInt; % Done by farFieldFromPowerPattern
+            T = FF_T.Prad;
         end
         
         %% Field normalization
@@ -2952,8 +2967,11 @@ classdef FarField
             % full available grid
             obj = reset2Base(obj);
             symFact = 2^(sum(abs([obj.symXY,obj.symXZ,obj.symYZ])));
-            assert(obj.isGridUniform,'Must have a plaid, monotonic, uniform grid for power calculation through integration');
+%             assert(obj.isGridUniform,'Must have a plaid, monotonic, uniform grid for power calculation through integration');
             
+            % Can be slow for huge objects
+            ny = obj.Ny;
+            nx = obj.Nx;
             
             switch obj.gridType
                 case obj.localGrids
@@ -2962,16 +2980,16 @@ classdef FarField
                     else %any(strcmp(obj.gridType,{'AzEl','ElAz'}))
                         JacFunc = @cos;
                     end
-                    PH = reshape(obj.x,obj.Ny,obj.Nx);
-                    TH = reshape(obj.y,obj.Ny,obj.Nx);
+                    PH = reshape(obj.x,ny,nx);
+                    TH = reshape(obj.y,ny,nx);
                     U = obj.getU;
                     P = zeros(1,obj.Nf);
                     for ff = 1:obj.Nf
                         if strcmp(obj.symmetryBOR,'none')
-                            integrand = reshape(U(:,ff),obj.Ny,obj.Nx).*JacFunc(TH);
+                            integrand = reshape(U(:,ff),ny,nx).*JacFunc(TH);
                             P(ff) = integral2D(PH,TH,integrand);
                         else
-                            Nth = obj.Ny;
+                            Nth = ny;
                             th_vect = obj.y(1:Nth);
                             if strcmp(obj.symmetryBOR,'BOR0')
                                 integrand = 2*U(:,ff).*sin(th_vect);
@@ -3323,9 +3341,13 @@ classdef FarField
             
             % Test for a plaid, monotonic, uniform grid format
             
-            if obj.Nx*obj.Ny == obj.Nang
-                X = reshape(obj.x,obj.Ny,obj.Nx);
-                Y = reshape(obj.y,obj.Ny,obj.Nx);
+            % Can be slow for huge objects
+            ny = obj.Ny;
+            nx = obj.Nx;
+            
+            if nx*ny == obj.Nang
+                X = reshape(obj.x,ny,nx);
+                Y = reshape(obj.y,ny,nx);
                 % Test for equal rows in X, and equal columns in Y (plaid)
                 rowEq = all(all(bsxfun(@eq,X,X(1,:))));
                 colEq = all(all(bsxfun(@eq,Y,Y(:,1))));
@@ -5576,15 +5598,18 @@ classdef FarField
         function obj = rangeChangeCoorTrans(obj)
             % RANGECHANGECOORTRANS transforms to the appropriate coordinate
             % type for a given gridType for a range change operation
-            switch obj.gridType
-                case 'PhTh'
-                    obj = obj.coor2spherical(false);
-                case 'AzEl'
-                    obj = obj.coor2Ludwig2AE(false);
-                case 'ElAz'
-                    obj = obj.coor2Ludwig2EA(false);
-                otherwise % Astrogrids
-                    obj = obj.coor2power; % Not really sure when this will be used, so play safe
+            
+            if ~strcmp(obj.coorType,'power')    % If power, do nothing
+                switch obj.gridType
+                    case 'PhTh'
+                        obj = obj.coor2spherical(false);
+                    case 'AzEl'
+                        obj = obj.coor2Ludwig2AE(false);
+                    case 'ElAz'
+                        obj = obj.coor2Ludwig2EA(false);
+                    otherwise % Astrogrids
+                        obj = obj.coor2power; % Not really sure when this will be used, so play safe
+                end
             end
         end
         

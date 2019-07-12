@@ -1,5 +1,8 @@
 # Changelog for the MEMACS public repository
 
+# 2019-06-29, v0.3
+## Arrays cleanup and adding some calibration functionality
+
 # 2019-05-14, v0.2
 ## Astrogrids, coorType = 'power'
 - Updated the astronomical grid functionality 

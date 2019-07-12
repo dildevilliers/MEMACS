@@ -9,9 +9,13 @@ function [Xd,M] = rotx(X,th)
 M = [1,0,0,0;0,cos(th),-sin(th),0;0,sin(th),cos(th),0;0,0,0,1];
 
 Np = length(X(1,:));
-Xd = zeros(size(X));
-for pp = 1:Np
-    Xp = reshape(X(:,pp),3,1);
-    [Xf] = M*[Xp;1];
-    Xd(:,pp) = Xf(1:3);
-end
+Xp = [X;ones(1,Np)];
+Xf = M*Xp;
+Xd = Xf(1:3,:);
+
+% Xd = zeros(size(X));
+% for pp = 1:Np
+%     Xp = reshape(X(:,pp),3,1);
+%     [Xf] = M*[Xp;1];
+%     Xd(:,pp) = Xf(1:3);
+% end
