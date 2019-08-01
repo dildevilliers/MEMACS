@@ -93,7 +93,7 @@ classdef FarField
     end
     
     properties (Constant = true, Hidden = true)
-        c0 = physconst('Lightspeed');
+        c0 = 299792458;
         eps0 = 8.854187817000001e-12;
         mu0 = 1.256637061435917e-06;
         eta0 = 3.767303134749689e+02;
@@ -2421,7 +2421,7 @@ classdef FarField
             % First find duplicate domain values
             [~,iUnique] = unique([xVal,yVal],'rows');
             removePoints = [];
-            if length(iUnique) < length(xVal)
+            if length(iUnique) < length(xVal) && 0
                 iRepeated = setdiff((1:length(xVal)).',iUnique);
                 repeatedSet = [xVal(iRepeated),yVal(iRepeated),zVal(iRepeated)];
                 % Find the repeated values
@@ -2953,9 +2953,19 @@ classdef FarField
             [obj1,obj2] = mathSetup(obj1,obj2);
             
             P = obj1.getU.*obj2.getU;
-            FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freq,'gridType',obj1.gridType,'fieldPol','power');
-%             T = FF_T.pradInt; % Done by farFieldFromPowerPattern
-            T = FF_T.Prad;
+            E1U = sqrt(P./obj1.r^2.*2.*obj1.eta0);
+%             PradDummy = 1; % Dummy so the constructor does not integrate
+%             FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freqHz,PradDummy,'gridType',obj1.gridType,'fieldPol','power',...
+%                 'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+%             FF_T = FarField.farFieldFromPowerPattern(obj1.x,obj1.y,P,obj1.freqHz,'gridType',obj1.gridType,'fieldPol','power');
+            % Make dummy Prad and radEff to formally calculate with
+            % intergal - this way the constructor does not integrate
+            FF_T = FarField(obj1.x,obj1.y,E1U,[],obj1.freq,1,1,...
+                'coorType','power','polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',obj1.r,...
+                'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+            
+            T = FF_T.pradInt; 
+%             T = FF_T.Prad;
         end
         
         %% Field normalization

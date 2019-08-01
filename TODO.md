@@ -5,6 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] Fix CST power reading input
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign

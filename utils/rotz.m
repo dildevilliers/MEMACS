@@ -6,12 +6,15 @@ function [Xd,M] = rotz(X,th)
 % Vectors can be rows of equal length
 % The affine transformation matrix is returned in M
 
-M = [cos(th),-sin(th),0,0;sin(th),cos(th),0,0;0,0,1,0;0,0,0,1];
+M = [cos(th),-sin(th),0;sin(th),cos(th),0;0,0,1];
+Xd = M*X;
 
-Np = length(X(1,:));
-Xp = [X;ones(1,Np)];
-Xf = M*Xp;
-Xd = Xf(1:3,:);
+% M = [cos(th),-sin(th),0,0;sin(th),cos(th),0,0;0,0,1,0;0,0,0,1];
+% 
+% Np = length(X(1,:));
+% Xp = [X;ones(1,Np)];
+% Xf = M*Xp;
+% Xd = Xf(1:3,:);
 
 % Xd = zeros(size(X));
 % for pp = 1:Np
