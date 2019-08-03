@@ -55,6 +55,8 @@ classdef FarField
         radEff_dB       % Radiation efficiency in dB    
         xRangeType      % Type of x-range: 'sym' or 'pos'
         yRangeType      % Type of y-range: 180 or 360
+        NxBase      % Number of unique x points in the base grid
+        NyBase      % Number of unique y points in the base grid
     end
     
     properties (Dependent = true, Hidden = true)
@@ -82,8 +84,6 @@ classdef FarField
         yBase
         phBase
         thBase
-        NxBase
-        NyBase
         gridTypeBase
         E1Base
         E2Base
@@ -331,6 +331,14 @@ classdef FarField
             Ny = length(unique(obj.y));
         end
         
+        function NxBase = get.NxBase(obj)
+            NxBase = length(unique(obj.xBase));
+        end
+        
+        function NyBase = get.NyBase(obj)
+            NyBase = length(unique(obj.yBase));
+        end
+
         function Nang = get.Nang(obj)
             Nang = size(obj.x,1);
         end
@@ -4826,8 +4834,6 @@ classdef FarField
             
             obj.xBase = obj.x;
             obj.yBase = obj.y;
-            obj.NxBase = obj.Nx;
-            obj.NyBase = obj.Ny;
             obj.E1Base = obj.E1;
             obj.E2Base = obj.E2;
             obj.E3Base = obj.E3;
