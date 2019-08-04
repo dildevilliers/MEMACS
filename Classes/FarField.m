@@ -473,7 +473,7 @@ classdef FarField
             end
         end
         
-        function obj = setEfield(obj,iSet,E1,E2,E3)
+        function obj = setEfield(obj,iSet,E1in,E2in,E3in,calcP)
             % SETEFIELD sets the E-fields of the object
             
             % Sets the E-fields after creation of the object at the
@@ -488,13 +488,20 @@ classdef FarField
             assert(size(iSet,1) == obj.Nang,'iSet must have Nang rows')
             assert(size(iSet,2) == obj.Nf || size(iSet,2) == 1,'iSet must have Nf or 1 columns')
             
+            if nargin < 6, calcP = true; end
             if size(iSet,2) == 1, iSet = repmat(iSet,1,obj.Nf); end
-            if nargin > 2, obj.E1(iSet) = E1; end
-            if nargin > 3, obj.E2(iSet) = E2; end
-            if nargin > 4, obj.E3(iSet) = E3; end
+            if nargin > 2, obj.E1(iSet) = E1in; end
+            if nargin > 3 && ~isempty(E2in)
+                obj.E2(iSet) = E2in; 
+            end
+            if nargin > 4 && ~isempty(E3in)
+                obj.E3(iSet) = E3in; 
+            end
             
-            if obj.isGrid4pi, obj.Prad = obj.PradInt; end
             obj = obj.setBase;
+            if obj.isGrid4pi && calcP
+                obj.Prad = obj.pradInt; 
+            end
         end
         %% Pattern getters
         function FFpattern = getFarFieldStruct(obj)
