@@ -5,12 +5,13 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Fix CST power reading input
+- [ ] Make a compression function for handling the data of large fields - only initialise the base when required  
+- [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
+- [ ] fix the setRangeSph field signs - copying across the pole should change the sign (Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet)
+- [ ] Fix rotate - used to work at some stage?  Only works for power coorType
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
-- [ ] fix the setRangeSph field signs - copying across the pole should change the sign
 - [ ] readMeasurements
-- [ ] Make a compression function for saving the data of large fields.  Typically only keep the base, and when opening the object restore the current values of the fields
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
@@ -34,9 +35,6 @@
 - [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
 - [ ] writeCSTffs
-- [ ] Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet.
-- [ ] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
-- [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
 - [ ] Fix 3D plot for negative y-(th)axis cases
@@ -56,6 +54,8 @@
 - [x] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
 - [x] Refactor setXgrid and setYgrid. 
 - [x] include the elevation type angles for setXgrid and setYgrid
+- [x] Sped up the constructor and rotation utilities for very large fields
+- [x] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
 
 # Arrays
 ## General

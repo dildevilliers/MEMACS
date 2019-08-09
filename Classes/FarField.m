@@ -503,6 +503,7 @@ classdef FarField
                 obj.Prad = obj.pradInt; 
             end
         end
+        
         %% Pattern getters
         function FFpattern = getFarFieldStruct(obj)
             % GETFARFIELDSTRUCT Returns the legacy FarField struct data format.
@@ -1798,6 +1799,8 @@ classdef FarField
                         dBscale = 20;
                         unit = 'V/m';
                         compName = strrep(obj.([output,'name']),'_','\');
+                    otherwise
+                        error(['output: ' output,' not implemented in plot function'])
                 end
                 if norm
                     Zplot = Zplot./max(Zplot);
@@ -2364,7 +2367,7 @@ classdef FarField
             % Get the valid angle positions - already in baseGrid here, but shifted to
             % +- 180 degrees
             % Get the indexes only, no later reshaping done, different from the grids
-            % required for plotting in plot.m
+            % required for plotting in FarField.plot
             if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')
                 grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
                 [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
@@ -4937,10 +4940,10 @@ classdef FarField
         function [asinu, asinv] = getArcSin(obj)
             % GETARCSIN Get ArcSin grid.
             
-            switch obj.gridTypeBase
+            switch obj.gridType
                 case 'ArcSin'
-                    asinu = obj.xBase;
-                    asinv = obj.yBase;
+                    asinu = obj.x;
+                    asinv = obj.y;
                 otherwise
                     [u,v,w] = getDirCos(obj);
                     [asinu,asinv] = DirCos2ArcSin(u,v,w);
@@ -5150,13 +5153,13 @@ classdef FarField
                     Eaz = (1./cosEl).*(cos(PH).*Eth - cos(TH).*sin(PH).*Eph);
                     Eel = (1./cosEl).*(cos(TH).*sin(PH).*Eth + cos(PH).*Eph);
                     E3 = zeros(size(Eaz));
-                    % Sort out singularities poles - ToDo
+                    % TODO: Sort out singularities at poles (|el| = [90,270]) - Interpolate
+                    % along constant azimuth?
                     phPoles = deg2rad([-270,-90,90,270].');
                     poleMat = [ones(4,1).*deg2rad(90),phPoles]; % [th=90,ph]
                     [~,iPole] = ismember(poleMat,[obj.th,obj.ph],'rows');
                     iPole = iPole(iPole>0);
                     [Eaz(iPole,:),Eel(iPole,:),E3(iPole,:)] = deal(0);
-                    %                     Eaz(iPole,:) = Eth(iPole,:) + Eph(iPole,:);
             end
         end
         
@@ -5176,7 +5179,8 @@ classdef FarField
                     Eal = (1./cosAl).*(cos(TH).*cos(PH).*Eth - sin(PH).*Eph);
                     Eep = (1./cosAl).*(sin(PH).*Eth + cos(TH).*cos(PH).*Eph);
                     E3 = zeros(size(Eal));
-                    % Sort out singularities poles - ToDo
+                    % TODO: Sort out singularities at poles (|al| = [90,270]) - Interpolate
+                    % along constant ep?
                     phPoles = deg2rad([-360,-180,0,180,360].');
                     poleMat = [ones(5,1).*deg2rad(90),phPoles]; % [th=90,ph]
                     [~,iPole] = ismember(poleMat,[obj.th,obj.ph],'rows');
@@ -5401,6 +5405,12 @@ classdef FarField
                 if strcmp(obj.gridType,'PhTh')
                     iShift = find(obj.y < -tol);
                     yshift = @(y) -y;
+%                     % Fix E-field signs
+%                     iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+%                     obj.E1(iE) = -obj.E1(iE);
+%                     obj.E2(iE) = -obj.E2(iE);
+%                     obj.E1Base(iE) = -obj.E1Base(iE);
+%                     obj.E2Base(iE) = -obj.E2Base(iE);
                 else
                     iShift = find(abs(obj.y) > pi/2+tol);
                     yshift = @(y) sign(y).*(pi-abs(y));
@@ -5439,6 +5449,7 @@ classdef FarField
             if obj.Nang ~= NangOrig
                 obj = obj.setBase;
             end
+%             obj = obj.setBase;
         end
         
         function obj = range180pos(obj)
@@ -5504,6 +5515,12 @@ classdef FarField
             xshift = @(x) -sign(x).*(pi - abs(x));
             if strcmp(obj.gridType,'PhTh')
                 yshift = @(y) -y;
+%                 % Fix E-field signs 
+%                 iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+%                 obj.E1(iE) = -obj.E1(iE);
+%                 obj.E2(iE) = -obj.E2(iE);
+%                 obj.E1Base(~iE) = -obj.E1Base(~iE);
+%                 obj.E2Base(~iE) = -obj.E2Base(~iE);
                 % Grab the required y = 0 cut for later insertion to
                 % ensure a smooth pole
                 ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
@@ -5546,6 +5563,7 @@ classdef FarField
             if obj.Nang ~= NangOrig
                 obj = obj.setBase;
             end
+            obj = obj.setBase;
         end
         
         function obj = range360pos(obj)
