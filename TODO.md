@@ -6,9 +6,11 @@
 
 # Farfield
 - [ ] Make a compression function for handling the data of large fields - only initialise the base when required  
+- [ ] Include a struct optional argument in the constructor containing all the nam-value pairs information (including getter function for the struct)
 - [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign (Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet)
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
+- [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
 - [ ] readMeasurements
@@ -56,6 +58,7 @@
 - [x] include the elevation type angles for setXgrid and setYgrid
 - [x] Sped up the constructor and rotation utilities for very large fields
 - [x] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
+- [x] Sped up 2D plotting when the provided grid is not changed
 
 # Arrays
 ## General

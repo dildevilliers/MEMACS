@@ -55,11 +55,11 @@ classdef FarField
         radEff_dB       % Radiation efficiency in dB    
         xRangeType      % Type of x-range: 'sym' or 'pos'
         yRangeType      % Type of y-range: 180 or 360
-        NxBase      % Number of unique x points in the base grid
-        NyBase      % Number of unique y points in the base grid
     end
     
     properties (Dependent = true, Hidden = true)
+        NxBase      % Number of unique x points in the base grid
+        NyBase      % Number of unique y points in the base grid
         xRange  % [1x2] vector of the xRange
         yRange  % [1x2] vector of the yRange
         symXZ   % XZ plane symmetry
@@ -244,9 +244,6 @@ classdef FarField
             obj.earthLocation = parseobj.Results.earthLocation;
             obj.time = parseobj.Results.time;
             
-            % Set the base for power integration and symmetry checks
-            obj = setBase(obj);
-                
             % Check input sizes
             Nang = size(obj.x,1);
             Nf = numel(obj.freq);
@@ -299,7 +296,6 @@ classdef FarField
                 assert(all(abs(unique(obj.ph) - [0;pi/2]) < tol),'Invalid range for BOR1 symmetry (E-plane and H-plane required)')
             end
             
-            obj = setBase(obj);
         end
         
         %% Dependency-based Setters
@@ -665,6 +661,118 @@ classdef FarField
             Xpol = (abs(obj.E1)./abs(obj.E2)).^2;
         end
         
+        %% Field normalization
+        function P = pradInt(obj)
+            % PRADINT  Calculates the total power in the field
+            %
+            % P = pradInt(obj) calculates the total power in the field over
+            % the full available grid.  Will not return the actual radiated
+            % power if the grid does not cover the full sphere.
+            % 
+            % Inputs
+            % - obj: FarField object
+            %
+            % Outputs
+            % - P:  Radiated power in Watt
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2019-08-09, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   P = F.pradInt
+            
+            symFact = 2^(sum(abs([obj.symXY,obj.symXZ,obj.symYZ])));
+            
+            % Can be slow for huge objects
+            ny = obj.Ny;
+            nx = obj.Nx;
+            assert(ny*nx == obj.Nang,'Can only integrate power on regular, plaid, monotonic grids. Please provide the power with the constructor when making this object.')
+            
+            switch obj.gridType
+                case 'PhTh'
+                        JacFuncTh = @sin;
+                case 'AzEl' 
+                        JacFuncTh = @cos;
+                otherwise
+                    error(['pradInt not implemented for gridType = ',obj.gridType])
+            end
+            PH = reshape(obj.x,ny,nx);
+            TH = reshape(obj.y,ny,nx);
+            U = obj.getU;
+            P = zeros(1,obj.Nf);
+            for ff = 1:obj.Nf
+                if strcmp(obj.symmetryBOR,'none')
+                    integrand = reshape(U(:,ff),ny,nx).*JacFuncTh(TH);
+                    P(ff) = integral2D(PH,TH,integrand);
+                else
+                    Nth = ny;
+                    th_vect = obj.y(1:Nth);
+                    if strcmp(obj.symmetryBOR,'BOR0')
+                        integrand = 2*U(:,ff).*sin(th_vect);
+                    elseif strcmp(obj.symmetryBOR,'BOR1')
+                        integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*JacFuncTh(th_vect);
+                    end
+                    P(ff) = pi*integral1D(th_vect,integrand);
+                    symFact = 1;    % Just to be sure...
+                end
+            end
+            P = P.*symFact;
+        end
+        
+        function obj = setPower(obj,powerWatt)
+            % SETPOWER Normalizes the FarField object to power level
+            %
+            % obj = setPower(obj,powerWatt) Normalizes the FarField object 
+            % to have the a total radiated power specified in powerWatt
+            % The field need not be specified over the full sphere - the
+            % total intercepted power in the specified sector will be set
+            % to powerWatt.  
+            % 
+            % Inputs
+            % - obj: FarField object
+            % - powerWatt: desired radiated power in Watt scalar or 
+            %              [1 x obj.Nf] (default = 4*pi/(2*377) W)
+            %
+            % Outputs
+            % - obj: FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2019-08-09, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   F = F.setPower(1);
+            %   P = F.pradInt
+            
+            if nargin == 1
+                powerWatt = 4*pi/(2.*obj.eta0);
+            end
+            if length(powerWatt) == 1
+                powerWatt = repmat(powerWatt,1,obj.Nf);
+            elseif length(powerWatt) ~= obj.Nf
+                error('powerWatt should be scalar or of length obj1.Nf');
+            end
+            P = obj.Prad;
+            Cn = powerWatt./(P);
+            obj.Prad = P;
+            obj = scale(obj,sqrt(Cn));
+        end
+        
         %% Grid transformation setters
         function obj = changeGrid(obj,gridTypeString)
             % CHANGEGRID Change the current FarField object grid.  
@@ -674,12 +782,17 @@ classdef FarField
             obj = handleGridType(obj);  
         end
         
+        % Local grids
         function obj = grid2PhTh(obj)
-            % GRID2PHTH Change the current FarField object grid to a PhTh grid.
+            % GRID2PHTH Change the current grid to a PhTh grid.
             
-            obj = obj.grid2Base;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
             if ~strcmp(obj.gridType,'PhTh')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
                 [obj.x,obj.y] = getPhTh(obj);
                 obj.gridType = 'PhTh';
                 % Rotate to sort out orientation
@@ -687,18 +800,8 @@ classdef FarField
             end
         end
         
-        function obj = grid2DirCos(obj)
-            % GRID2DIRCOS Change the current FarField object grid to a DirCos grid.
-            
-            obj = obj.grid2Base;
-            if ~strcmp(obj.gridType,'DirCos')
-                [obj.x,obj.y] = getDirCos(obj);
-                obj.gridType = 'DirCos';
-            end
-        end
-        
         function obj = grid2AzEl(obj)
-            % GRID2AZEL Change the current FarField object grid to a AzEl grid.
+            % GRID2AZEL Change the current grid to a AzEl grid.
             
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
@@ -713,7 +816,7 @@ classdef FarField
         end
         
         function obj = grid2ElAz(obj)
-            % GRID2ELAZ Change the current FarField object grid to a ElAz grid.
+            % GRID2ELAZ Change the current grid to a ElAz grid.
             
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
@@ -727,26 +830,50 @@ classdef FarField
             end
         end
         
-        function obj = grid2TrueView(obj)
-            % GRID2TRUEVIEW Change the current FarField object grid to a TrueView grid.
+        % Projections
+        function obj = grid2DirCos(obj)
+            % GRID2DIRCOS Change the current grid to a DirCos grid.
             
-            obj = obj.grid2Base;
+            if ~strcmp(obj.gridType,'DirCos')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                [obj.x,obj.y] = getDirCos(obj);
+                obj.gridType = 'DirCos';
+            end
+        end
+        
+        function obj = grid2TrueView(obj)
+            % GRID2TRUEVIEW Change the current grid to a TrueView grid.
+            
             if ~strcmp(obj.gridType,'TrueView')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
                 [obj.x,obj.y] = getTrueView(obj);
                 obj.gridType = 'TrueView';
             end
         end
         
         function obj = grid2ArcSin(obj)
-            % GRID2ARCSIN Change the current FarField object grid to an ArcSin grid.
+            % GRID2ARCSIN Change the current grid to an ArcSin grid.
             
-            obj = obj.grid2Base;
             if ~strcmp(obj.gridType,'ArcSin')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
                 [obj.x,obj.y] = getArcSin(obj);
                 obj.gridType = 'ArcSin';
             end
         end
         
+        % Astro grids
         function obj = grid2Horiz(obj)
             % GRID2Horiz Change the current FarField object grid to an Horiz grid.
             
@@ -1382,18 +1509,20 @@ classdef FarField
         
         %% Base grid functions
         function obj = reset2Base(obj)
-            % RESET2BASE Hard reset the FarField object to its initial format
-            % when it was first initiated.
+            % RESET2BASE Hard reset the FarField object to the base format
             
-            % Hard reset to the base format
-            obj.x = obj.xBase;
-            obj.y = obj.yBase;
-            obj.gridType = obj.gridTypeBase;
-            obj.E1 = obj.E1Base;
-            obj.E2 = obj.E2Base;
-            obj.E3 = obj.E3Base;
-            obj.coorType = obj.coorTypeBase;
-            obj.polType = obj.polTypeBase;
+            if ~isempty(obj.xBase)
+                obj.x = obj.xBase;
+                obj.y = obj.yBase;
+                obj.gridType = obj.gridTypeBase;
+            end
+            if ~isempty(obj.E1Base)
+                obj.E1 = obj.E1Base;
+                obj.E2 = obj.E2Base;
+                obj.E3 = obj.E3Base;
+                obj.coorType = obj.coorTypeBase;
+                obj.polType = obj.polTypeBase;
+            end
         end
         
         function obj = grid2Base(obj)
@@ -1655,21 +1784,27 @@ classdef FarField
                 % Try to get the direction cosines from the base grid definition - if the
                 % base definition is not a direction cosine type it can contain
                 % information over the full sphere.
-                objBase = obj.grid2Base;
-                grid2DirCoshandle = str2func([objBase.gridType,'2DirCos']);
-                [~,~,w] = grid2DirCoshandle(objBase.x,objBase.y);
-                if strcmp(hemisphere,'top')
-                    valAng = w >= 0;
-                elseif strcmp(hemisphere,'bot')
-                    valAng = w <= 0;
+                if ~isempty(obj.xBase)
+                    objBase = obj.grid2Base;
+                    grid2DirCoshandle = str2func([objBase.gridType,'2DirCos']);
+                    [~,~,w] = grid2DirCoshandle(objBase.x,objBase.y);
+                    if strcmp(hemisphere,'top')
+                        valAng = w >= 0;
+                    elseif strcmp(hemisphere,'bot')
+                        valAng = w <= 0;
+                    end
+                else
+                    valAng = ones(obj.Nang,1);
                 end
+%             elseif strcmp(obj.gridType,'TrueView')
+%                 valAng = sqrt((obj.x./pi).^2 + (obj.y./pi).^2) <= max(obj.th)./pi;
             else
                 valAng = ones(obj.Nang,1);
             end
             
             % Get the original grid and output
-            X = reshape(obj.x,obj.NyBase,obj.NxBase);
-            Y = reshape(obj.y,obj.NyBase,obj.NxBase);
+            X = obj.x;
+            Y = obj.y;
             if strcmp(output,'E1')
                 [Z,~,~] = getEfield(obj);
             elseif strcmp(output,'E2')
@@ -1682,17 +1817,19 @@ classdef FarField
             end
             Z = Z(:,freqIndex);
             
+            % Interpolate or not? Use the supplied step to decide. Empty
+            % will use what we have on the grid - may crash.  Zero will see
+            % if the grid is uniform and then not interpolate, if not, it
+            % will.
+            interpOut = true;
             if isempty(step)
                 if any(strcmp(plotType,{'cartesian','polar'}))
                     error('Cant do 1D plot with empty step size - this is reserved for making 2D grids etc.')
                 else
-                    Xi = X;
-                    Yi = Y;
-                    xi = obj.x;
-                    yi = obj.y;
                     NxPlot = obj.Nx;
                     NyPlot = obj.Ny;
-                    Zi = Z;
+                    assert(NxPlot*NyPlot == obj.Nang,'Cannot pass empty step when the grid is not uniform')
+                    interpOut = false;
                 end
             else
                 if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
@@ -1704,24 +1841,24 @@ classdef FarField
                     if step ~= 0
                         step = ones(1,2).*step;
                     else
-                        % Check current and base grids - numbers become huge
-                        % when not on proper grid after grid transformation
-                        [step(1),step(2)] = obj.gridStep;
+                        NxPlot = obj.Nx;
+                        NyPlot = obj.Ny;
+                        if NxPlot*NyPlot == obj.Nang
+                            interpOut = false;
+                        else
+                            [step(1),step(2)] = obj.gridStep;
+                        end
                     end
                 end
-                % Get the interpolated plot points from the step information
-                ximin = min(obj.x);
-                ximax = max(obj.x);
-                yimin = min(obj.y);
-                yimax = max(obj.y);
+            end
+                
+            if interpOut
+                [ximin,ximax] = deal(obj.xRange(1),obj.xRange(2));
+                [yimin,yimax] = deal(obj.yRange(1),obj.yRange(2));
                 NxPlot = round((ximax - ximin)/step(1)) + 1;
                 NyPlot = round((yimax - yimin)/step(2)) + 1;
                 xivect = linspace(ximin,ximax,NxPlot);
                 yivect = linspace(yimin,yimax,NyPlot);
-                %     xivect = min(obj.x):step:max(obj.x);
-                %     yivect = min(obj.y):step:max(obj.y);
-                %     NxPlot = numel(xivect);
-                %     NyPlot = numel(yivect);
                 [Xi,Yi] = meshgrid(xivect,yivect);
                 switch plotType
                     case {'3D','2D'}
@@ -1738,6 +1875,13 @@ classdef FarField
                         end
                 end
                 [Zi] = interpolateGrid(obj,output,xi,yi,freqIndex,hemisphere);
+            else
+                Xi = reshape(obj.x,NyPlot,NxPlot);
+                Yi = reshape(obj.y,NyPlot,NxPlot);
+                xi = obj.x;
+                yi = obj.y;
+                Zi = Z;
+                Zi(~valAng) = NaN;
             end
             
             % Assign axis names
@@ -2339,11 +2483,14 @@ classdef FarField
             % Evaluate the field on the base grid - this is where the output function
             % should be best suited for interpolation.  Can't do this for
             % astroGrids, or cases where we have transformed from local to
-            % astro or vice versa
-            if ~obj.baseTypeDifferent, obj = obj.grid2Base; end
+            % astro or vice versa, or when the base is not defined yet
+            if ~obj.baseTypeDifferent && ~isempty(obj.xBase)
+                obj = obj.grid2Base; 
+            end
             
             % Shift to x = sym and y = 180 range (if applicable) - this is where the DirCos spits
-            % everything out after transforming
+            % everything out after transforming, and it is standard for
+            % extending the range for smooth interpolants
             if any(strcmp(obj.gridType,obj.localGrids))
                 obj = obj.setRangeSph('sym','180');
             end
@@ -2986,83 +3133,6 @@ classdef FarField
 %             T = FF_T.Prad;
         end
         
-        %% Field normalization
-        function P = pradInt(obj)
-            % PRADINT  Calculates the total power in the field integrated
-            % over the full available grid.
-            
-            % Returns the total power in the field integrated over the
-            % full available grid
-            obj = reset2Base(obj);
-            symFact = 2^(sum(abs([obj.symXY,obj.symXZ,obj.symYZ])));
-%             assert(obj.isGridUniform,'Must have a plaid, monotonic, uniform grid for power calculation through integration');
-            
-            % Can be slow for huge objects
-            ny = obj.Ny;
-            nx = obj.Nx;
-            
-            switch obj.gridType
-                case obj.localGrids
-                    if strcmp(obj.gridType,'PhTh')
-                        JacFunc = @sin;
-                    else %any(strcmp(obj.gridType,{'AzEl','ElAz'}))
-                        JacFunc = @cos;
-                    end
-                    PH = reshape(obj.x,ny,nx);
-                    TH = reshape(obj.y,ny,nx);
-                    U = obj.getU;
-                    P = zeros(1,obj.Nf);
-                    for ff = 1:obj.Nf
-                        if strcmp(obj.symmetryBOR,'none')
-                            integrand = reshape(U(:,ff),ny,nx).*JacFunc(TH);
-                            P(ff) = integral2D(PH,TH,integrand);
-                        else
-                            Nth = ny;
-                            th_vect = obj.y(1:Nth);
-                            if strcmp(obj.symmetryBOR,'BOR0')
-                                integrand = 2*U(:,ff).*sin(th_vect);
-                            elseif strcmp(obj.symmetryBOR,'BOR1')
-                                integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*JacFunc(th_vect);
-                            end
-                            P(ff) = pi*integral1D(th_vect,integrand);
-                            symFact = 1;    % Just to be sure...
-                        end
-                    end
-                otherwise
-                    error(['pradInt not implemented for gridType = ',obj.gridType])
-            end
-            P = P.*symFact;
-        end
-        
-        function obj = setPower(obj1,powerWatt)
-            % SETPOWER Normalizes the FarField object to have the total
-            % radiated power specified in powerWatt (in Watts)
-            
-            % Normalizes the FarField object obj1 to have the a total
-            % radiated power specified in powerWatt (in Watts, of course)
-            % powerWatt can be a vector of length obj.Nf or scalar.
-            % The field need not be specified over the full sphere - the
-            % total intercepted power in the specified sector will be set
-            % to powerWatt.  Default value of 4*pi W will be used for one
-            % argument.
-            % The grid should be the standard plaid, montonic, uniform grid.
-            obj1 = reset2Base(obj1);
-            if nargin == 1
-                powerWatt = 4*pi;
-            end
-            if length(powerWatt) == 1
-                powerWatt = repmat(powerWatt,1,obj1.Nf);
-            elseif length(powerWatt) ~= obj1.Nf
-                error('powerWatt should be scalar or of length obj1.Nf');
-            end
-            P = obj1.pradInt;
-            Cn = powerWatt./(P);
-            obj = obj1;
-            obj.Prad = P;
-            obj = scale(obj,sqrt(Cn));
-            obj = obj.setBase;
-        end
-        
         %% Frequency modifications
         function obj = getFi(obj1,freqIndex)
             % GETFI Returns an object only containing the results in
@@ -3357,8 +3427,8 @@ classdef FarField
             % Set to the PhTh coordinate system - this is how most data
             % will be generated anyway.
             % Very quick check - necessary but not always sufficient
-            phRange = max(obj.phBase) - min(obj.phBase);
-            thRange = max(obj.thBase) - min(obj.thBase);
+            phRange = max(obj.ph) - min(obj.ph);
+            thRange = max(obj.th) - min(obj.th);
             tol = 10^(-obj.nSigDig);
             y = ((abs(round(rad2deg(phRange)) - (360/2^(sum(abs([obj.symXZ,obj.symYZ]))))) < tol) & (abs(round(rad2deg(thRange)) - 180/2^abs(obj.symXY)) < tol)) |...
                 ((abs(round(rad2deg(phRange)) - 180) < tol) & (abs(round(rad2deg(thRange)) - 360) < tol));
@@ -3533,10 +3603,43 @@ classdef FarField
         %% Farfield reading methods
         function FF = readGRASPgrd(pathName,varargin)
             % READGRASPGRD Create a FarField object from a GRASP .grd file. 
-            
-            % function FF = readGRASPgrd(filePathName)
-            % Reads a GRASP .grd file and returns the FarField object.
+            %
+            % FF = readGRASPgrd(pathName,varargin) loads a FarField object
+            % from the GRASP .grd file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs.
             % Not all GRASP functionality supported yet...
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an grd file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are  
+            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-06-10, Dirk de Villiers
+            % Updated: 2019-08-09, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   F.plot
+            
             
             % Parsing through the inputs
             parseobj = inputParser;
@@ -3701,13 +3804,14 @@ classdef FarField
                 case 1
                     gridType = 'DirCos';
                     [xScale,yScale] = deal(1);
-                case 4
+                case 9
                     gridType = 'AzEl';
                     [xScale,yScale] = deal(pi/180);
                 case 5
                     gridType = 'TrueView';
-                    [xScale,yScale] = deal(1);
-                case 6
+                    xScale = -pi/180;
+                    yScale = -xScale;
+                case 10
                     gridType = 'ElAz';
                     [xScale,yScale] = deal(pi/180);
                 case 7
@@ -3728,6 +3832,13 @@ classdef FarField
                     E3(:,ff) = e3(:);
                 end
             end
+            if strcmp(polType,'circular')
+                % Swop definitions to be consistent with GRASP
+                Et = E1;
+                E1 = E2;
+                E2 = Et;
+            end
+                
             % keyboard;
             eta0 = 3.767303134749689e+02;
             Prad = ones(size(freq)).*4*pi./(2*eta0);
@@ -3740,20 +3851,48 @@ classdef FarField
 
         function FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin)
             % READGRASPCUT Create a FarField object from a GRASP .cut file.
+            %
+            % FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin) loads a FarField object
+            % from the GRASP .cut file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs.
+            % Not all GRASP functionality supported yet - can only handle
+            % polar ph-th grids (most often used anyway)
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request a cut file
+            % - nr_freq:  Number of frequencies in the file
+            % - nr_cuts:  Number of ph cuts in the file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are  
+            %   -- freq:        See FarField constructor help for details
+            %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
+            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-04-22, Dirk de Villiers
+            % Updated: 2019-08-09, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readGRASPcut;
+            %   F.plot
             
-            % [FF] = readGRASPcut(pathName)
-            % Loads a GRASP generated farfield source file pathName.cut.
-            %
-            %
-            % Inputs:
-            % path_name - Full path and filename string
-            % nr_freq - number of frequency points
-            % nr_cuts - number of cuts taken
-            % Outputs:
-            % FF - standard farfield object
-            %
-            % Dirk de Villiers
-            % Created: 2019-04-22
             
             % Parsing through the inputs
             parseobj = inputParser;
@@ -3795,6 +3934,8 @@ classdef FarField
             if nargin == 0
                 [name,path] = uigetfile('*.cut');
                 pathName = [path,name];
+                nr_freq = input('Enter number of frequencies:');
+                nr_cuts = input('Enter number of cuts:');
             end
             parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
             
@@ -3816,10 +3957,7 @@ classdef FarField
             if ~strcmp(pathName(end-3:end),'.cut')
                 pathName = [pathName,'.cut'];
             end
-%             global fid;
             fid = fopen(pathName,'rt');
-%             global fid;
-%             [fid, message] = fopen([pathName,'.cut'], 'rt');
             if (fid==-1)
                 error(['Unable to open data file ' fileName '!']);
             end
@@ -4092,7 +4230,7 @@ classdef FarField
             %   -- time:        See FarField constructor help for details
             %
             % Outputs
-            % - obj:    Farfield object
+            % - FF:    Farfield object
             %
             % Dependencies
             % -
@@ -4840,21 +4978,33 @@ classdef FarField
         
         %% Base representation methods
         function obj = setBase(obj)
-            % SETBASE Set base grid.
+            % SETBASE Set base grid and fields
+            
+            obj = obj.setBaseGrid;
+            obj = obj.setBaseFields;
+        end
+        
+        function obj = setBaseGrid(obj)
+            % SETBASEGRID Set base grid
             
             obj.xBase = obj.x;
             obj.yBase = obj.y;
-            obj.E1Base = obj.E1;
-            obj.E2Base = obj.E2;
-            obj.E3Base = obj.E3;
             obj.gridTypeBase = obj.gridType;
-            obj.coorTypeBase = obj.coorType;
-            obj.polTypeBase = obj.polType;
             % Set after the gridType hase been set for the check in the
             % dependent property getter. ph and th not stored for astro
             % grid bases
             obj.phBase = obj.ph;
             obj.thBase = obj.th;
+        end
+        
+        function obj = setBaseFields(obj)
+            % SETBASEFIELDS Set base fields
+            
+            obj.E1Base = obj.E1;
+            obj.E2Base = obj.E2;
+            obj.E3Base = obj.E3;
+            obj.coorTypeBase = obj.coorType;
+            obj.polTypeBase = obj.polType;
         end
         
         function [FF1,FF2,level] = mathSetup(obj1,obj2)
@@ -5755,8 +5905,16 @@ classdef FarField
         
         function [stepx,stepy] = gridStep(obj)
             obj = obj.roundGrid;
-            stepx = diff(obj.xRange)/(min(obj.Nx,obj.NxBase)-1);
-            stepy = diff(obj.xRange)/(min(obj.Ny,obj.NyBase)-1);
+            NxPlot = obj.Nx;
+            NyPlot = obj.Ny;
+            if NxPlot*NyPlot == obj.Nang
+                stepx = diff(obj.xRange)/(NxPlot-1);
+                stepy = diff(obj.yRange)/(NyPlot-1);
+            else
+                N = round(sqrt(obj.Nang)/2)*2+1;
+                stepx = diff(obj.xRange)/(N-1);
+                stepy = diff(obj.yRange)/(N-1);
+            end
         end
     end
     
