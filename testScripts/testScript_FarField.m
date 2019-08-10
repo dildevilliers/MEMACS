@@ -122,14 +122,56 @@ else
 end
 
 %% Grid transformations
+showGridPlots = true;
+
+gridLocal = {'PhTh','AzEl','ElAz'};
+gridProj = {'DirCos','TrueView','ArcSin'}; 
+gridAstro = {'Horiz','RADec','GalLongLat'};
+
+% Test PhTh input to all local and projections
 FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
+gridPhThTest = [gridLocal(2:end),gridProj];
+for ii = 1:length(gridPhThTest)
+    FF2 = FF1.changeGrid(gridPhThTest{ii});
+    if showGridPlots && 0
+        figure, FF2.plot('plotType','2D','showGrid',1)
+    end
+    FF3 = FF2.grid2PhTh;
+    gridTransPhThTestVect(ii) = isGridEqual(FF3,FF1);
+end
 
-% Loop through the combos, and build up the TestVect
-% Also read in other base grids from GRASP and loop those
-FF2 = FF1.grid2DirCos;
-FF3 = FF2.grid2PhTh;
+% Test AzEl input to all local and projections
+FF1 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_sym180']);
+gridAzElTest = [gridLocal([1,3]),gridProj];
+for ii = 1:length(gridAzElTest)
+    FF2 = FF1.changeGrid(gridAzElTest{ii});
+    if showGridPlots && 0
+        figure, FF2.plot('plotType','2D','showGrid',1)
+    end
+    FF3 = FF2.grid2AzEl;
+    gridTransAzElTestVect(ii) = isGridEqual(FF3,FF1);
+end
 
-gridTransTestVect = isGridEqual(FF3,FF1)
+% Test ElAz input to all local and projections
+FF1 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_sym180']);
+gridElAzTest = [gridLocal([1,2]),gridProj];
+for ii = 1:length(gridElAzTest)
+    FF2 = FF1.changeGrid(gridElAzTest{ii});
+    if showGridPlots
+        figure, FF2.plot('plotType','2D','showGrid',1)
+    end
+    FF3 = FF2.grid2ElAz;
+    gridTransElAzTestVect(ii) = isGridEqual(FF3,FF1);
+end
+
+gridTransTestVect = [gridTransPhThTestVect,gridTransAzElTestVect,gridTransElAzTestVect]
+
+% % Loop through the combos, and build up the TestVect
+% % Also read in other base grids from GRASP and loop those
+% FF2 = FF1.grid2DirCos;
+% FF3 = FF2.grid2PhTh;
+% 
+% gridTransTestVect = isGridEqual(FF3,FF1)
 
 keyboard
 

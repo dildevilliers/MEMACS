@@ -806,10 +806,15 @@ classdef FarField
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
             % grid only...
-            obj = obj.grid2Base;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
-            if mustRotate, obj = obj.grid2PhTh; end
+            
             if ~strcmp(obj.gridType,'AzEl')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
+                if mustRotate, obj = obj.grid2PhTh; end
                 [obj.x,obj.y] = getAzEl(obj);
                 obj.gridType = 'AzEl';
             end
@@ -821,10 +826,15 @@ classdef FarField
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
             % grid only...
-            obj = obj.grid2Base;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
-            if mustRotate, obj = obj.grid2PhTh; end
+            
             if ~strcmp(obj.gridType,'ElAz')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.astroGrids));
+                if mustRotate, obj = obj.grid2PhTh; end
                 [obj.x,obj.y] = getElAz(obj);
                 obj.gridType = 'ElAz';
             end
@@ -3787,11 +3797,13 @@ classdef FarField
             [Xmat,Ymat] = meshgrid(X,Y);
             x = Xmat(:);
             y = Ymat(:);
+            swopE1E2 = false;
             switch ICOMP
                 case 1
                     polType = 'linear';
                     coorType = 'spherical';
                 case 2
+                    swopE1E2 = true;
                     polType = 'circular';
                     coorType = 'spherical';
                 case 3
@@ -3800,6 +3812,7 @@ classdef FarField
                 otherwise
                     error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
             end
+            swopXY = false;
             switch IGRID
                 case 1
                     gridType = 'DirCos';
@@ -3812,6 +3825,7 @@ classdef FarField
                     xScale = -pi/180;
                     yScale = -xScale;
                 case 10
+                    swopXY = true;
                     gridType = 'ElAz';
                     [xScale,yScale] = deal(pi/180);
                 case 7
@@ -3819,6 +3833,13 @@ classdef FarField
                     [xScale,yScale] = deal(pi/180);
                 otherwise
                     error(['IGRID ',num2str(IGRID),' case not implemented yet'])
+            end
+            
+            if swopXY
+                % Swop definitions to be consistent with GRASP
+                xt = x;
+                x = y;
+                y = xt;
             end
             
             % Fix the shapes of the field data
@@ -3832,7 +3853,7 @@ classdef FarField
                     E3(:,ff) = e3(:);
                 end
             end
-            if strcmp(polType,'circular')
+            if swopE1E2
                 % Swop definitions to be consistent with GRASP
                 Et = E1;
                 E1 = E2;
@@ -5149,25 +5170,48 @@ classdef FarField
         function [ep, al] = getElAz(obj)
             % GETELAZ Get ElAz grid.
             
-            if strcmp(obj.gridType,'AzEl')
+            if strcmp(obj.gridType,'ElAz')
                 ep = obj.x;
                 al = obj.y;
             else
                 if any(strcmp(obj.gridType,obj.astroGrids))
                     if strcmp(obj.gridType,'Horiz')
-                        az = obj.x;
+                        azH = obj.x;
                         alt = obj.y;
                     else
                         handle2Horiz = str2func([obj.gridType,'2Horiz']);
-                        [az,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+                        [azH,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
                     end
-                    [u,v,w] = Horiz2DirCos(az,alt);
+                    [u,v,w] = Horiz2DirCos(azH,alt);
                 else
                     [u,v,w] = getDirCos(obj);
                 end
                 [ep,al] = DirCos2ElAz(u,v,w);
             end
         end
+        
+%         function [az, el] = getElAz(obj)
+%             % GETELAZ Get ElAz grid.
+%             
+%             if strcmp(obj.gridType,'ElAz')
+%                 az = obj.x;
+%                 el = obj.y;
+%             else
+%                 if any(strcmp(obj.gridType,obj.astroGrids))
+%                     if strcmp(obj.gridType,'Horiz')
+%                         azH = obj.x;
+%                         alt = obj.y;
+%                     else
+%                         handle2Horiz = str2func([obj.gridType,'2Horiz']);
+%                         [azH,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
+%                     end
+%                     [u,v,w] = Horiz2DirCos(azH,alt);
+%                 else
+%                     [u,v,w] = getDirCos(obj);
+%                 end
+%                 [az,el] = DirCos2ElAz(u,v,w);
+%             end
+%         end
         
         function [az,alt] = getHoriz(obj)
             % GETHoriz Get Horiz grid.
@@ -5499,20 +5543,20 @@ classdef FarField
             
             assert(any(strcmp(obj.gridType,obj.sphereGrids)),['Can only do range transformations on spherical grids, not on a ',obj.gridType,' grid.'])
             
-            % Get original coordinate system 
-            coorTypeHandle = str2func(['coor2',obj.coorType]);
-            obj = obj.rangeChangeCoorTrans;
-                    
-            % Bookkeeping on the original object
-            xSpanOrig = max(obj.x) - min(obj.x);
-            ySpanOrig = max(obj.y) - min(obj.y);
-            NangOrig = obj.Nang;
-            
             tol = 10^(-obj.nSigDig);
             if strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'180')
                 % Do nothing - already there
                 return;
             elseif strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'180')
+                % Get original coordinate system
+                coorTypeHandle = str2func(['coor2',obj.coorType]);
+                obj = obj.rangeChangeCoorTrans;
+                
+                % Bookkeeping on the original object
+                xSpanOrig = max(obj.x) - min(obj.x);
+                ySpanOrig = max(obj.y) - min(obj.y);
+                NangOrig = obj.Nang;
+                
                 obj.x = wrap2pi(obj.x);
                 [val1,val2] = deal(-pi,pi);
                 % Insert possible missing cuts
@@ -5587,30 +5631,27 @@ classdef FarField
                     yAdd = obj.y(iin);
                     obj = insertMissingCuts(obj,iin,xAdd,yAdd);
                 end
+                
+                % Sort
+                obj = obj.sortGrid;
+                % Reset coordinate Type
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
+                obj = coorTypeHandle(obj,false);
+                % Only change the base if we have to...
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
+                %             obj = obj.setBase;
             end
-            % Sort
-            obj = obj.sortGrid;
-            % Reset coordinate Type
-            if obj.Nang ~= NangOrig
-                obj = obj.setBase;
-            end
-            obj = coorTypeHandle(obj,false);
-            % Only change the base if we have to...
-            if obj.Nang ~= NangOrig
-                obj = obj.setBase;
-            end
-%             obj = obj.setBase;
         end
         
         function obj = range180pos(obj)
             % RANGE180POS sets the range to 'pos', '180'
             
             assert(any(strcmp(obj.gridType,obj.sphereGrids)),['Can only do range transformations on spherical grids, not on a ',obj.gridType,' grid.'])
-
-            obj = obj.rangeChangeCoorTrans;
-
-            % Bookkeeping on the original object
-            xSpanOrig = max(obj.x) - min(obj.x);
+            
             tol = 10^(-obj.nSigDig);
             
             if strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'180') 
@@ -5618,24 +5659,29 @@ classdef FarField
                 return;
             else
                 % Set to standard base
+                obj = obj.rangeChangeCoorTrans;
+                
+                % Bookkeeping on the original object
+                xSpanOrig = max(obj.x) - min(obj.x);
+                
                 obj = obj.range180sym;
-            end
-            
-            obj.x = wrap22pi(obj.x);
-            [val1,val2] = deal(0,2*pi);
-            % Insert possible missing cuts
-            if abs(xSpanOrig - 2*pi) < tol
-                i1 = find(abs(obj.x - val1) < tol);
-                i2 = find(abs(obj.x - val2) < tol);
-                iin = [i1;i2];
-                if numel(iin) > 0
-                    xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
-                    yAdd = obj.y(iin);
-                    obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                
+                obj.x = wrap22pi(obj.x);
+                [val1,val2] = deal(0,2*pi);
+                % Insert possible missing cuts
+                if abs(xSpanOrig - 2*pi) < tol
+                    i1 = find(abs(obj.x - val1) < tol);
+                    i2 = find(abs(obj.x - val2) < tol);
+                    iin = [i1;i2];
+                    if numel(iin) > 0
+                        xAdd = [ones(size(i1)).*val2;ones(size(i2)).*val1];
+                        yAdd = obj.y(iin);
+                        obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                    end
                 end
+                % Sort
+                obj = obj.sortGrid;
             end
-            % Sort
-            obj = obj.sortGrid;
         end
         
         function obj = range360sym(obj)
@@ -5643,77 +5689,79 @@ classdef FarField
             
             assert(any(strcmp(obj.gridType,obj.sphereGrids)),['Can only do range transformations on spherical grids, not on a ',obj.gridType,' grid.'])
 
-            % Get original coordinate system
-            coorTypeHandle = str2func(['coor2',obj.coorType]);
-            obj = obj.rangeChangeCoorTrans;
-
-            % Bookkeeping on the original object
-            xSpanOrig = diff(obj.xRange);
-            ySpanOrig = diff(obj.yRange);
-            NangOrig = obj.Nang;
+            
             tol = 10^(-obj.nSigDig);
             
-            if strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'360') 
+            if strcmp(obj.xRangeType,'sym') && strcmp(obj.yRangeType,'360')
                 % Do nothing - already there
                 return;
             else
+                % Get original coordinate system
+                coorTypeHandle = str2func(['coor2',obj.coorType]);
+                obj = obj.rangeChangeCoorTrans;
+                
+                % Bookkeeping on the original object
+                xSpanOrig = diff(obj.xRange);
+                ySpanOrig = diff(obj.yRange);
+                NangOrig = obj.Nang;
                 % Set to standard base
                 obj = obj.range180sym;
-            end
-            
-            iShift = find(abs(obj.x) > pi/2);
-            xshift = @(x) -sign(x).*(pi - abs(x));
-            if strcmp(obj.gridType,'PhTh')
-                yshift = @(y) -y;
-%                 % Fix E-field signs 
-%                 iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
-%                 obj.E1(iE) = -obj.E1(iE);
-%                 obj.E2(iE) = -obj.E2(iE);
-%                 obj.E1Base(~iE) = -obj.E1Base(~iE);
-%                 obj.E2Base(~iE) = -obj.E2Base(~iE);
-                % Grab the required y = 0 cut for later insertion to
-                % ensure a smooth pole
-                ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
-                iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
-                [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
-            else
-                yshift = @(y) (sign(y) + ~sign(y)).*pi-y; % Make the sign(y) = 0 -> 1
-            end
-            obj.x(iShift) = xshift(obj.x(iShift));
-            obj.y(iShift) = yshift(obj.y(iShift));
-            if abs(xSpanOrig - 2*pi) < tol
-                iin = find(abs(abs(obj.x) - pi/2) < tol);
-                xAdd = xshift(obj.x(iin));
-                yAdd = yshift(obj.y(iin));
-                obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-            end
-            if strcmp(obj.gridType,'PhTh')
-                % Remove the pole, and insert the original
-                iout = find(abs(obj.y) < tol);
-                obj = removeDirs(obj,iout);
-            else
-                if abs(ySpanOrig - pi) < tol
-                    % Copy the pi cut to -pi
-                    iy0 = find(abs(obj.y - pi) < tol);
+                
+                
+                iShift = find(abs(obj.x) > pi/2);
+                xshift = @(x) -sign(x).*(pi - abs(x));
+                if strcmp(obj.gridType,'PhTh')
+                    yshift = @(y) -y;
+                    %                 % Fix E-field signs
+                    %                 iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+                    %                 obj.E1(iE) = -obj.E1(iE);
+                    %                 obj.E2(iE) = -obj.E2(iE);
+                    %                 obj.E1Base(~iE) = -obj.E1Base(~iE);
+                    %                 obj.E2Base(~iE) = -obj.E2Base(~iE);
+                    % Grab the required y = 0 cut for later insertion to
+                    % ensure a smooth pole
+                    ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
+                    iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
+                    [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
                 else
-                    iy0 = [];
+                    yshift = @(y) (sign(y) + ~sign(y)).*pi-y; % Make the sign(y) = 0 -> 1
                 end
-                [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
-                yy0 = -yy0;
-            end
-            obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); 
-            % Sort
-            obj = obj.sortGrid;
-            % Reset coordinate Type
-            if obj.Nang ~= NangOrig
+                obj.x(iShift) = xshift(obj.x(iShift));
+                obj.y(iShift) = yshift(obj.y(iShift));
+                if abs(xSpanOrig - 2*pi) < tol
+                    iin = find(abs(abs(obj.x) - pi/2) < tol);
+                    xAdd = xshift(obj.x(iin));
+                    yAdd = yshift(obj.y(iin));
+                    obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                end
+                if strcmp(obj.gridType,'PhTh')
+                    % Remove the pole, and insert the original
+                    iout = find(abs(obj.y) < tol);
+                    obj = removeDirs(obj,iout);
+                else
+                    if abs(ySpanOrig - pi) < tol
+                        % Copy the pi cut to -pi
+                        iy0 = find(abs(obj.y - pi) < tol);
+                    else
+                        iy0 = [];
+                    end
+                    [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+                    yy0 = -yy0;
+                end
+                obj = insertDirs(obj,xy0,yy0,E1y0,E2y0);
+                % Sort
+                obj = obj.sortGrid;
+                % Reset coordinate Type
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
+                obj = coorTypeHandle(obj,false);
+                % Only change the base if we have to...
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
                 obj = obj.setBase;
             end
-            obj = coorTypeHandle(obj,false);
-            % Only change the base if we have to...
-            if obj.Nang ~= NangOrig
-                obj = obj.setBase;
-            end
-            obj = obj.setBase;
         end
         
         function obj = range360pos(obj)
@@ -5721,68 +5769,70 @@ classdef FarField
 
             assert(any(strcmp(obj.gridType,obj.sphereGrids)),['Can only do range transformations on spherical grids, not on a ',obj.gridType,' grid.'])
 
-            % Get original coordinate system
-            coorTypeHandle = str2func(['coor2',obj.coorType]);
-            obj = obj.rangeChangeCoorTrans;
-
-            % Bookkeeping on the original object
-            xSpanOrig = max(obj.x) - min(obj.x);
-            ySpanOrig = diff(obj.yRange);
-            NangOrig = obj.Nang;
+            
             tol = 10^(-obj.nSigDig);
             
             if strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'360') 
                 % Do nothing - already there
                 return;
-            else
+            else% Get original coordinate system
+                coorTypeHandle = str2func(['coor2',obj.coorType]);
+                obj = obj.rangeChangeCoorTrans;
+                
+                % Bookkeeping on the original object
+                xSpanOrig = max(obj.x) - min(obj.x);
+                ySpanOrig = diff(obj.yRange);
+                NangOrig = obj.Nang;
+                
                 % Set to standard base
                 obj = obj.range180sym;
-            end
-
-            iShift = find(obj.x < -tol);
-            xshift = @(x) pi + x;
-            ixPoleCuts = find(obj.x >= -tol);
-            if strcmp(obj.gridType,'PhTh')
-                yshift = @(y) 2*pi - y;
-                % Grab the required y = pi cut for later insertion to
-                % ensure a smooth pole
-                iy0 = intersect(find(abs(obj.y - pi) < tol),ixPoleCuts);
-            else
-                yshift = @(y) pi - (sign(y) + ~sign(y)).*abs(y); % Make the sign(y) = 0 -> 1
-                % Grab the required y = 0 cut for later insertion to
-                % ensure a smooth pole
-                iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
-            end
-            [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
-            obj.x(iShift) = xshift(obj.x(iShift));
-            obj.y(iShift) = yshift(obj.y(iShift));
-            obj.y = wrap22pi(obj.y);    % Works for all cases, but not needed for PhTh since already positive from the base...
-            if abs(xSpanOrig - 2*pi) < tol
-                iin = find(abs(obj.x) < tol);
-                xAdd = xshift(obj.x(iin));
-                yAdd = wrap22pi(yshift(obj.y(iin)));
-                obj = insertMissingCuts(obj,iin,xAdd,yAdd);
-            end
-            % Remove the 180 pole, and insert the original
-            if strcmp(obj.gridType,'PhTh')
-                iout = find(abs(obj.y - pi) < tol);
-                obj = removeDirs(obj,iout);
-            else
-                yy0 = yy0 + 2*pi; % Not overwriting a pole, but inserting a new one somewhere else
-            end
-            if abs(ySpanOrig - pi) < tol
-                obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); % Sorted in this function
-            end
-            % Sort
-            obj = obj.sortGrid;
-            % Reset coordinate Type
-            if obj.Nang ~= NangOrig
-                obj = obj.setBase;
-            end
-            obj = coorTypeHandle(obj,false);
-            % Only change the base if we have to...
-            if obj.Nang ~= NangOrig
-                obj = obj.setBase;
+                
+                
+                iShift = find(obj.x < -tol);
+                xshift = @(x) pi + x;
+                ixPoleCuts = find(obj.x >= -tol);
+                if strcmp(obj.gridType,'PhTh')
+                    yshift = @(y) 2*pi - y;
+                    % Grab the required y = pi cut for later insertion to
+                    % ensure a smooth pole
+                    iy0 = intersect(find(abs(obj.y - pi) < tol),ixPoleCuts);
+                else
+                    yshift = @(y) pi - (sign(y) + ~sign(y)).*abs(y); % Make the sign(y) = 0 -> 1
+                    % Grab the required y = 0 cut for later insertion to
+                    % ensure a smooth pole
+                    iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
+                end
+                [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+                obj.x(iShift) = xshift(obj.x(iShift));
+                obj.y(iShift) = yshift(obj.y(iShift));
+                obj.y = wrap22pi(obj.y);    % Works for all cases, but not needed for PhTh since already positive from the base...
+                if abs(xSpanOrig - 2*pi) < tol
+                    iin = find(abs(obj.x) < tol);
+                    xAdd = xshift(obj.x(iin));
+                    yAdd = wrap22pi(yshift(obj.y(iin)));
+                    obj = insertMissingCuts(obj,iin,xAdd,yAdd);
+                end
+                % Remove the 180 pole, and insert the original
+                if strcmp(obj.gridType,'PhTh')
+                    iout = find(abs(obj.y - pi) < tol);
+                    obj = removeDirs(obj,iout);
+                else
+                    yy0 = yy0 + 2*pi; % Not overwriting a pole, but inserting a new one somewhere else
+                end
+                if abs(ySpanOrig - pi) < tol
+                    obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); % Sorted in this function
+                end
+                % Sort
+                obj = obj.sortGrid;
+                % Reset coordinate Type
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
+                obj = coorTypeHandle(obj,false);
+                % Only change the base if we have to...
+                if obj.Nang ~= NangOrig
+                    obj = obj.setBase;
+                end
             end
         end
 
