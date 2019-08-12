@@ -699,7 +699,7 @@ classdef FarField
             switch obj.gridType
                 case 'PhTh'
                         JacFuncTh = @sin;
-                case 'AzEl' 
+                case {'AzEl','ElAz'} 
                         JacFuncTh = @cos;
                 otherwise
                     error(['pradInt not implemented for gridType = ',obj.gridType])
@@ -887,11 +887,15 @@ classdef FarField
         function obj = grid2Horiz(obj)
             % GRID2Horiz Change the current FarField object grid to an Horiz grid.
             
-            obj = obj.grid2Base;
-            obj = obj.coor2power;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
-            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'Horiz')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                obj = obj.coor2power(false);
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+                if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
                 [obj.x,obj.y] = getHoriz(obj);
                 obj.gridType = 'Horiz';
             end
@@ -900,11 +904,15 @@ classdef FarField
         function obj = grid2RAdec(obj)
             % GRID2RAdec Change the current FarField object grid to a RAdec grid.
             
-            obj = obj.grid2Base;
-            obj = obj.coor2power;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
-            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'RAdec')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                obj = obj.coor2power(false);
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+                if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
                 [obj.x,obj.y] = getRAdec(obj);
                 obj.gridType = 'RAdec';
             end
@@ -913,11 +921,15 @@ classdef FarField
         function obj = grid2GalLongLat(obj)
             % GRID2GALLONGLAT Change the current FarField object grid to a GalLongLat grid.
             
-            obj = obj.grid2Base;
-            obj = obj.coor2power;
-            mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
-            if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
             if ~strcmp(obj.gridType,'GalLongLat')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                obj = obj.coor2power(false);
+                mustRotate = ~all(obj.orientation == [0,0,0]) && any(strcmp(obj.gridType,obj.localGrids));
+                if mustRotate, obj = obj.rotate(@rotEulersph,obj.orientation); end
                 [obj.x,obj.y] = getGalLongLat(obj);
                 obj.gridType = 'GalLongLat';
             end
@@ -2494,7 +2506,7 @@ classdef FarField
             % should be best suited for interpolation.  Can't do this for
             % astroGrids, or cases where we have transformed from local to
             % astro or vice versa, or when the base is not defined yet
-            if ~obj.baseTypeDifferent && ~isempty(obj.xBase)
+            if ~obj.baseTypeDifferent && ~isempty(obj.xBase) 
                 obj = obj.grid2Base; 
             end
             
@@ -2508,18 +2520,20 @@ classdef FarField
             % angular grids
             grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
             [ui,vi,wi] = grid2DirCoshandle(xi,yi);
-            % Check for bottom hemisphere plot - fix the w to be the negative root
-            if (strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')) && strcmp(hemisphere,'bot')
-                wi = -wi;
+            valAngi = true(size(ui));
+            if any(strcmp(gridTypeIn,{'DirCos','ArcSin'}))
+                % Find the invalid points included by the external meshgrid
+                valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
+                % Check for bottom hemisphere plot - fix the w to be the negative root
+                if strcmp(hemisphere,'bot')
+                    wi = -wi;
+                end
+            elseif strcmp(gridTypeIn,'TrueView')
+                % Sort out the TrueView special case invalid points
+                valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
             end
             DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
             [xi_bGT,yi_bGT] = DirCos2baseHandle(ui,vi,wi);
-            % Find the invalid points included by the external meshgrid
-            valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
-            % Sort out the TrueView special case invalid points
-            if strcmp(gridTypeIn,'TrueView')
-                valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
-            end
             
             % Get the valid angle positions - already in baseGrid here, but shifted to
             % +- 180 degrees
@@ -3868,6 +3882,9 @@ classdef FarField
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,'E3',E3,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            if swopXY
+                FF = FF.sortGrid;
+            end
         end
 
         function FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin)
@@ -5189,29 +5206,6 @@ classdef FarField
                 [ep,al] = DirCos2ElAz(u,v,w);
             end
         end
-        
-%         function [az, el] = getElAz(obj)
-%             % GETELAZ Get ElAz grid.
-%             
-%             if strcmp(obj.gridType,'ElAz')
-%                 az = obj.x;
-%                 el = obj.y;
-%             else
-%                 if any(strcmp(obj.gridType,obj.astroGrids))
-%                     if strcmp(obj.gridType,'Horiz')
-%                         azH = obj.x;
-%                         alt = obj.y;
-%                     else
-%                         handle2Horiz = str2func([obj.gridType,'2Horiz']);
-%                         [azH,alt] = handle2Horiz(obj.x,obj.y,obj.julDate,obj.earthLocation(1:2));
-%                     end
-%                     [u,v,w] = Horiz2DirCos(azH,alt);
-%                 else
-%                     [u,v,w] = getDirCos(obj);
-%                 end
-%                 [az,el] = DirCos2ElAz(u,v,w);
-%             end
-%         end
         
         function [az,alt] = getHoriz(obj)
             % GETHoriz Get Horiz grid.

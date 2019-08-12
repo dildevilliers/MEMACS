@@ -96,6 +96,8 @@ FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
 errIntPhTh = abs(FF1.Prad - FF1.pradInt)./FF1.Prad;
 FF2 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_sym180']);
 errIntAzEl = abs(FF2.Prad - FF2.pradInt)./FF2.Prad;
+FF3 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_sym180']);
+errIntElAz = abs(FF3.Prad - FF3.pradInt)./FF3.Prad;
 
 pradIntTestVect = [errIntPhTh,errIntAzEl];
 if all(pradIntTestVect < tol)
@@ -126,52 +128,85 @@ showGridPlots = true;
 
 gridLocal = {'PhTh','AzEl','ElAz'};
 gridProj = {'DirCos','TrueView','ArcSin'}; 
-gridAstro = {'Horiz','RADec','GalLongLat'};
+gridAstro = {'Horiz','RAdec','GalLongLat'};
 
-% Test PhTh input to all local and projections
-FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
-gridPhThTest = [gridLocal(2:end),gridProj];
+% Test PhTh input 
+FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_sym180']);
+gridPhThTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridPhThTest)
     FF2 = FF1.changeGrid(gridPhThTest{ii});
-    if showGridPlots && 0
+    if showGridPlots && 1
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
     FF3 = FF2.grid2PhTh;
     gridTransPhThTestVect(ii) = isGridEqual(FF3,FF1);
 end
+clear FF1 FF2 FF3
 
-% Test AzEl input to all local and projections
+% Test AzEl input
 FF1 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_sym180']);
-gridAzElTest = [gridLocal([1,3]),gridProj];
+gridAzElTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridAzElTest)
     FF2 = FF1.changeGrid(gridAzElTest{ii});
-    if showGridPlots && 0
+    if showGridPlots  && 0
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
     FF3 = FF2.grid2AzEl;
     gridTransAzElTestVect(ii) = isGridEqual(FF3,FF1);
 end
+clear FF1 FF2 FF3
 
-% Test ElAz input to all local and projections
+% Test ElAz input
 FF1 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_sym180']);
-gridElAzTest = [gridLocal([1,2]),gridProj];
+gridElAzTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridElAzTest)
     FF2 = FF1.changeGrid(gridElAzTest{ii});
-    if showGridPlots
+    if showGridPlots && 0
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
     FF3 = FF2.grid2ElAz;
     gridTransElAzTestVect(ii) = isGridEqual(FF3,FF1);
 end
+clear FF1 FF2 FF3
 
-gridTransTestVect = [gridTransPhThTestVect,gridTransAzElTestVect,gridTransElAzTestVect]
+% Test DirCos input
+FF1 = FarField.readGRASPgrd([dataPath,'FF_uv_spherical']);
+gridDirCosTest = [gridLocal,gridProj,gridAstro];
+for ii = 1:length(gridDirCosTest)
+    FF2 = FF1.changeGrid(gridDirCosTest{ii});
+    if showGridPlots && 0
+        figure, FF2.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
+    end
+    FF3 = FF2.grid2DirCos;
+    gridTransDirCosTestVect(ii) = isGridEqual(FF3,FF1);
+end
+clear FF1 FF2 FF3
 
-% % Loop through the combos, and build up the TestVect
-% % Also read in other base grids from GRASP and loop those
-% FF2 = FF1.grid2DirCos;
-% FF3 = FF2.grid2PhTh;
-% 
-% gridTransTestVect = isGridEqual(FF3,FF1)
+% Test TrueView input
+FF1 = FarField.readGRASPgrd([dataPath,'FF_trueview_spherical']);
+gridTrueViewTest = [gridLocal,gridProj,gridAstro];
+for ii = 1:length(gridTrueViewTest)
+    FF2 = FF1.changeGrid(gridTrueViewTest{ii});
+    if showGridPlots && 1
+%         figure, FF2.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
+        figure, FF2.plot('plotType','2D','showGrid',1)
+    end
+    FF3 = FF2.grid2TrueView;
+    gridTransTrueViewTestVect(ii) = isGridEqual(FF3,FF1);
+end
+clear FF1 FF2 FF3
+
+gridTransTestVect = [gridTransPhThTestVect,gridTransAzElTestVect,gridTransElAzTestVect,gridTransDirCosTestVect,gridTransTrueViewTestVect];
+
+if all(gridTransTestVect)
+    disp('Pass: grid2*')
+    gridTransPass = true;
+else
+    disp('FAIL: grid2*')
+    gridTransPass = false;
+end
+
+
 
 keyboard
 
@@ -288,6 +323,7 @@ end
 %% Final test
 FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,...
     pradIntPass,setPowerPass,...
+    gridTransPass,...
     getRangePass,setRangePass,...
     ]);
 if FarFieldPass
