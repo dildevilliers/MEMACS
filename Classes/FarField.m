@@ -573,6 +573,7 @@ classdef FarField
             % function [E1field, E2field, E3field] = getEfield(obj)
             % Returns the Efield matrices of size [Nang x Nf]
             % Efield = E*exp(-jkr)/r
+            
             k = 2.*pi.*obj.freqHz./obj.c0;
             FFfact = exp(-1i.*k.*obj.r)./obj.r;
             E1field = bsxfun(@times,obj.E1,FFfact);
@@ -776,6 +777,52 @@ classdef FarField
         %% Grid transformation setters
         function obj = changeGrid(obj,gridTypeString)
             % CHANGEGRID Change the current FarField object grid.  
+            %
+            % obj = changeGrid(obj,gridTypeString) transforms the current
+            % grid to that specified in gridTypeString.
+            % This function calls the appropriate grid2* function to
+            % excecute. Note that all the grid2* functions can be directly
+            % called with the object as argument to do the same job.
+            % 
+            % In all cases, if no base grid exists in the object
+            % the base will be set before the transformation to maintain
+            % the original provided grid values for later use. If a base
+            % grid is present, the object will first be set into the base
+            % grid form before transformation - transformations thus always
+            % happens using the original provided data in the base.
+            %
+            % If the object is already in the specified grid, nothing is
+            % done.
+            %
+            % When a projection type grid is provided, and transformation
+            % is done to one of the astronomical grids, the transformation
+            % is done locally.  That means no orientation, position or time
+            % information is used - it is assumed that the provided
+            % projection is of the astronomical grid.  The opposite is also
+            % true - astronomical grids will be projected locally and not
+            % shifted and rotated first.
+            % 
+            % Inputs
+            % - obj: FarField object
+            % - gridTypeString: 'PhTh'|'DirCos'|'AzEl'|'ElAz'|'TrueView'|'ArcSin'|'Horiz'|'RAdec'|'GalLongLat'
+            %
+            % Outputs
+            % - obj: FarField object - possibly with added base grid
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2019-08-13, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   F = F.changeGrid('AzEl');
+            %   F.plot('plotType','2D','showGrid',1)
             
             mustBeMember(gridTypeString, {'PhTh','DirCos','AzEl','ElAz','TrueView','ArcSin','Horiz','RAdec','GalLongLat'});
             handleGridType = str2func(['grid2',gridTypeString]);
@@ -785,6 +832,8 @@ classdef FarField
         % Local grids
         function obj = grid2PhTh(obj)
             % GRID2PHTH Change the current grid to a PhTh grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'PhTh')
                 if isempty(obj.xBase)
@@ -802,6 +851,8 @@ classdef FarField
         
         function obj = grid2AzEl(obj)
             % GRID2AZEL Change the current grid to a AzEl grid.
+            %
+            % See help changeGrid for details
             
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
@@ -822,7 +873,9 @@ classdef FarField
         
         function obj = grid2ElAz(obj)
             % GRID2ELAZ Change the current grid to a ElAz grid.
-            
+            %
+            % See help changeGrid for details
+                        
             % First get in PhTh from the base, then transform the current
             % system to AzEl.  This way the rotation is done on the PhTh
             % grid only...
@@ -843,6 +896,8 @@ classdef FarField
         % Projections
         function obj = grid2DirCos(obj)
             % GRID2DIRCOS Change the current grid to a DirCos grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'DirCos')
                 if isempty(obj.xBase)
@@ -857,6 +912,8 @@ classdef FarField
         
         function obj = grid2TrueView(obj)
             % GRID2TRUEVIEW Change the current grid to a TrueView grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'TrueView')
                 if isempty(obj.xBase)
@@ -871,6 +928,8 @@ classdef FarField
         
         function obj = grid2ArcSin(obj)
             % GRID2ARCSIN Change the current grid to an ArcSin grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'ArcSin')
                 if isempty(obj.xBase)
@@ -886,6 +945,8 @@ classdef FarField
         % Astro grids
         function obj = grid2Horiz(obj)
             % GRID2Horiz Change the current FarField object grid to an Horiz grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'Horiz')
                 if isempty(obj.xBase)
@@ -903,6 +964,8 @@ classdef FarField
         
         function obj = grid2RAdec(obj)
             % GRID2RAdec Change the current FarField object grid to a RAdec grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'RAdec')
                 if isempty(obj.xBase)
@@ -920,6 +983,8 @@ classdef FarField
         
         function obj = grid2GalLongLat(obj)
             % GRID2GALLONGLAT Change the current FarField object grid to a GalLongLat grid.
+            %
+            % See help changeGrid for details
             
             if ~strcmp(obj.gridType,'GalLongLat')
                 if isempty(obj.xBase)
