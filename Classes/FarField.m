@@ -575,18 +575,23 @@ classdef FarField
             % Returns the Efield matrices of size [Nang x Nf]
             % Efield = E*exp(-jkr)/r
             
-            k = 2.*pi.*obj.freqHz./obj.c0;
-            FFfact = exp(-1i.*k.*obj.r)./obj.r;
-            E1field = bsxfun(@times,obj.E1,FFfact);
-            if ~isempty(obj.E2)
-                E2field = bsxfun(@times,obj.E2,FFfact);
+            if strcmp(obj.coorType,'power')
+                E1field = obj.E1;
+                [E2field,E3field] = deal([]);
             else
-                E2field = [];
-            end
-            if ~isempty(obj.E3)
-                E3field = bsxfun(@times,obj.E3,FFfact);
-            else
-                E3field = [];
+                k = 2.*pi.*obj.freqHz./obj.c0;
+                FFfact = exp(-1i.*k.*obj.r)./obj.r;
+                E1field = bsxfun(@times,obj.E1,FFfact);
+                if ~isempty(obj.E2)
+                    E2field = bsxfun(@times,obj.E2,FFfact);
+                else
+                    E2field = [];
+                end
+                if ~isempty(obj.E3)
+                    E3field = bsxfun(@times,obj.E3,FFfact);
+                else
+                    E3field = [];
+                end
             end
         end
         
@@ -1468,6 +1473,57 @@ classdef FarField
         %% Coordinate system transformation methods
         function obj = changeCoor(obj,coorTypeString,setStdGrid)
             % CHANGECOOR Change the FarField object coordinate type.
+            %
+            % obj = changeCoor(obj,coorTypeString,setStdGrid) transforms 
+            % the current coordinate system to that specified in 
+            % coorTypeString. The grid is also changed to the standard grid
+            % associated with each coordinate system type if requested by
+            % the setStdGrid flag.
+            % This function calls the appropriate coor2* function to
+            % excecute. Note that all the coor2* functions can be directly
+            % called with the object as argument to do the same job.
+            % 
+            % In all cases (except power), if no base field exists in the object
+            % the base will be set before the transformation to maintain
+            % the original provided field values for later use. If a base
+            % field is present, the object will first be set into the base
+            % field form before transformation - transformations thus always
+            % happens using the original provided data in the base.
+            %
+            % If the object is already in the specified coordinate type, nothing is
+            % done.
+            %
+            % If changing to the power type, the base field will be
+            % cleared. The idea is to store a field with smaller memory
+            % requirements, so only one component (magnitude) is kept, and
+            % therefore transforming back to another coorType from power is
+            % not possible.
+            %
+            % Inputs
+            % - obj: FarField object
+            % - coorTypeString: 'spherical'|'Ludwig1'|'Ludwig2AE'|'Ludwig2EA'|'Ludwig3'|'power'
+            % - setStdGrid:     Logical that determines if the grid should
+            %                   be kept (false) or changed to the stadard
+            %                   assiciated with the coorType (true
+            %                   - default)
+            %
+            % Outputs
+            % - obj: FarField object - possibly with added base grid
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Ridalise Louw
+            % Updated: 2019-08-13, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   F = F.changeCoor('Ludwig3');
+            %   F.plot('plotType','2D','showGrid',1,'output','E1')
             
             if nargin < 3, setStdGrid = true; end
             mustBeMember(coorTypeString, {'spherical','Ludwig1','Ludwig2AE','Ludwig2EA','Ludwig3','power'});
@@ -1476,12 +1532,17 @@ classdef FarField
         end
         
         function obj = coor2spherical(obj,setStdGrid)
-            % COOR2SPHERICAL Change the current FarField object coordinate
-            % type to spherical coordinates.
+            % COOR2SPHERICAL Change the current coorType to spherical
+            %
+            % See help changeCoor for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'spherical')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getEspherical(obj);
                 obj.coorType = 'spherical';
             end
@@ -1491,12 +1552,17 @@ classdef FarField
         end
         
         function obj = coor2Ludwig1(obj,setStdGrid)
-            % COOR2LUDWIG1 Change the current FarField object coordinate
-            % type to Ludwig1 coordinates.
+            % COOR2LUDWIG1 Change the current coorType to Ludwig1
+            %
+            % See help changeCoor for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig1')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getELudwig1(obj);
                 obj.coorType = 'Ludwig1';
             end
@@ -1506,12 +1572,17 @@ classdef FarField
         end
         
         function obj = coor2Ludwig2AE(obj,setStdGrid)
-            % COOR2LUDWIG2AE Change the current FarField object coordinate
-            % type to Ludwig2AE coordinates.
+            % COOR2LUDWIG2AE Change the current coorType to Ludwig2 Az/El
+            %
+            % See help changeCoor for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2AE')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getELudwig2AE(obj);
                 obj.coorType = 'Ludwig2AE';
             end
@@ -1521,12 +1592,17 @@ classdef FarField
         end
         
         function obj = coor2Ludwig2EA(obj,setStdGrid)
-            % COOR2LUDWIG2EA Change the current FarField object coordinate
-            % type to Ludwig2EA coordinates.
+            % COOR2LUDWIG2EA Change the current coorType to Ludwig2 El/Az
+            %
+            % See help changeCoor for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2EA')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getELudwig2EA(obj);
                 obj.coorType = 'Ludwig2EA';
             end
@@ -1536,12 +1612,17 @@ classdef FarField
         end
         
         function obj = coor2Ludwig3(obj,setStdGrid)
-            % COOR2LUDWIG3 Change the current FarField object coordinate
-            % type to Ludwig3 coordinates.
+            % COOR2LUDWIG3 Change the current coorType to Ludwig3
+            %
+            % See help changeCoor for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig3')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getELudwig3(obj);
                 obj.coorType = 'Ludwig3';
             end
@@ -1551,14 +1632,20 @@ classdef FarField
         end
         
         function obj = coor2power(obj,setStdGrid)
-            % COOR2POWER Change the current FarField object coordinate
-            % type to power coordinates.
+            % COOR2POWER Change the current coorType to power
+            %
+            % See help changeCoor for details
             
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'power')
+                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                if ~isempty(obj.E1Base)
+                    obj = obj.clearBaseFields;    % Clean the base - no going back from change to power
+                end
                 obj.E1 = sqrt(2*obj.eta0.*obj.getW);
                 obj.E2 = [];
                 obj.coorType = 'power';
+                obj.polType = 'none';
             end
             if setStdGrid
                 obj = obj.grid2PhTh;
@@ -5330,6 +5417,16 @@ classdef FarField
             obj.polTypeBase = obj.polType;
         end
         
+        function obj = clearBaseFields(obj)
+            % CLEARBASEFIELDS Clear the base fields
+            
+            obj.E1Base = [];
+            obj.E2Base = [];
+            obj.E3Base = [];
+            obj.coorTypeBase = [];
+            obj.polTypeBase = [];
+        end
+        
         function [FF1,FF2,level] = mathSetup(obj1,obj2)
             % MATHSETUP returns 2 equal sampled FarFields for math
             % operations
@@ -5378,6 +5475,7 @@ classdef FarField
             end
             [FF1,FF2] = deal(obj1,obj2);
         end
+        
         %% Grid getters
         function [u, v, w] = getDirCos(obj)
             % GETDIRCOS Get DirCos grid.
@@ -5550,50 +5648,54 @@ classdef FarField
             % GETESPHERICAL Get Espherical coordinates.
             
             tol = 10^(-obj.nSigDig);
-            % Get the base Ph and Th
-            obj1 = obj.grid2Base;
-            [Ph,Th] = getPhTh(obj1); % Faster than using the dependent variables - just called once
-            clear obj1;
+            % Get the base Ph and Th - changed to base grid externally
+            [Ph,Th] = getPhTh(obj); % Faster than using the dependent variables - just called once
             TH = repmat(Th(:,1),1,obj.Nf);
             PH = repmat(Ph(:,1),1,obj.Nf);
-            % Change to the Base values here....
-            switch obj.coorTypeBase
+            switch obj.coorType
                 case 'spherical'
-                    Eth = obj.E1Base;
-                    Eph = obj.E2Base;
+                    Eth = obj.E1;
+                    Eph = obj.E2;
                 case 'Ludwig1'
-                    Eth = cos(TH).*cos(PH).*obj.E1Base + cos(TH).*sin(PH).*obj.E2Base - sin(TH).*obj.E3;
-                    Eph = -sin(PH).*obj.E1Base + cos(PH).*obj.E2Base;
+                    Eth = cos(TH).*cos(PH).*obj.E1 + cos(TH).*sin(PH).*obj.E2 - sin(TH).*obj.E3;
+                    Eph = -sin(PH).*obj.E1 + cos(PH).*obj.E2;
                 case 'Ludwig2AE'
                     cosEl = sqrt(1 - sin(TH).^2.*sin(PH).^2);
                     Del = cos(PH).^2 + cos(TH).^2.*sin(PH).^2;
-                    Eth = (cosEl./Del).*(cos(PH).*obj.E1Base + cos(TH).*sin(PH).*obj.E2Base);
-                    Eph = (cosEl./Del).*(-cos(TH).*sin(PH).*obj.E1Base + cos(PH).*obj.E2Base);
+                    Eth = (cosEl./Del).*(cos(PH).*obj.E1 + cos(TH).*sin(PH).*obj.E2);
+                    Eph = (cosEl./Del).*(-cos(TH).*sin(PH).*obj.E1 + cos(PH).*obj.E2);
                     % Pole at th = +-90; ph = +-90
                     polePos = ((abs(abs(wrap2pi(TH))-pi/2) < tol) & (abs(abs(wrap2pi(PH))-pi/2) < tol));
-                    Eth(polePos) = obj.E1Base(polePos);
-                    Eph(polePos) = obj.E2Base(polePos);
+                    Eth(polePos) = obj.E1(polePos);
+                    Eph(polePos) = obj.E2(polePos);
                 case 'Ludwig2EA'
                     cosAl = sqrt(1 - sin(TH).^2.*cos(PH).^2);
                     Del = cos(TH).^2.*cos(PH).^2 + sin(PH).^2;
-                    Eth = (cosAl./Del).*(cos(TH).*cos(PH).*obj.E1Base + sin(PH).*obj.E2Base);
-                    Eph = (cosAl./Del).*(-sin(PH).*obj.E1Base + cos(TH).*cos(PH).*obj.E2Base);
+                    Eth = (cosAl./Del).*(cos(TH).*cos(PH).*obj.E1 + sin(PH).*obj.E2);
+                    Eph = (cosAl./Del).*(-sin(PH).*obj.E1 + cos(TH).*cos(PH).*obj.E2);
+                    % Poles at th = +-90; ph = [-180|0|180|360]
+                    % Keep continuous in ph-cuts - get limits along constant phi
+                    polePos = ((abs(abs(wrap2pi(TH))-pi/2) < tol) & ((abs(abs(wrap2pi(PH))-0) < tol) | (abs(abs(wrap2pi(PH))-pi) < tol) | (abs(abs(wrap2pi(PH))-2*pi) < tol)));
+                    Eth(polePos) = -cos(PH(polePos)).*obj.E1(polePos);
+                    Eph(polePos) = cos(PH(polePos)).*obj.E2(polePos);
                 case 'Ludwig3'
                     Del = 1;
-                    Eth = (1./Del).*(cos(PH).*obj.E1Base + sin(PH).*obj.E2Base);
-                    Eph = (1./Del).*(-sin(PH).*obj.E1Base + cos(PH).*obj.E2Base);
+                    Eth = (1./Del).*(cos(PH).*obj.E1 + sin(PH).*obj.E2);
+                    Eph = (1./Del).*(-sin(PH).*obj.E1 + cos(PH).*obj.E2);
             end
-            Er = zeros(size(Eth));
+            if nargout > 2
+                Er = zeros(size(Eth));
+            end
         end
         
         function [Ex, Ey, Ez] = getELudwig1(obj)
             % GETELUDWIG1 Get ELudwig1 coordinates.
             
-            switch obj.coorTypeBase
+            switch obj.coorType
                 case 'Ludwig1'
-                    Ex = obj.E1Base;
-                    Ey = obj.E2Base;
-                    Ez = obj.E3;
+                    Ex = obj.E1;
+                    Ey = obj.E2;
+                    if nargout > 2, Ez = obj.E3; end
                 otherwise
                     [Eth, Eph, ~] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -5601,18 +5703,18 @@ classdef FarField
                     % Assume farfield so no radial E-field
                     Ex = cos(TH).*cos(PH).*Eth - sin(PH).*Eph;
                     Ey = cos(TH).*sin(PH).*Eth + cos(PH).*Eph;
-                    Ez = zeros(size(Ex));   % Strict definition in the Ludwig paper
+                    if nargout > 2, Ez = zeros(size(Ex)); end  % Strict definition in the Ludwig paper 
             end
         end
         
         function [Eaz, Eel, E3] = getELudwig2AE(obj)
             % GETELUDWIG2AE Get ELudwig2AE coordinates.
             
-            switch obj.coorTypeBase
+            switch obj.coorType
                 case 'Ludwig2AE'
-                    Eaz = obj.E1Base;
-                    Eel = obj.E2Base;
-                    E3 = obj.E3;
+                    Eaz = obj.E1;
+                    Eel = obj.E2;
+                    if nargout > 2, E3 = obj.E3; end
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -5620,25 +5722,26 @@ classdef FarField
                     cosEl = sqrt(1 - sin(TH).^2.*sin(PH).^2);
                     Eaz = (1./cosEl).*(cos(PH).*Eth - cos(TH).*sin(PH).*Eph);
                     Eel = (1./cosEl).*(cos(TH).*sin(PH).*Eth + cos(PH).*Eph);
-                    E3 = zeros(size(Eaz));
-                    % TODO: Sort out singularities at poles (|el| = [90,270]) - Interpolate
-                    % along constant azimuth?
-                    phPoles = deg2rad([-270,-90,90,270].');
-                    poleMat = [ones(4,1).*deg2rad(90),phPoles]; % [th=90,ph]
-                    [~,iPole] = ismember(poleMat,[obj.th,obj.ph],'rows');
+                    if nargout > 2, E3 = zeros(size(Eaz)); end
+                    % Take limit in poles along constant ph
+                    phPoles = deg2rad([90,270].');
+                    poleMat = [ones(2,1).*deg2rad(90),phPoles;ones(2,1).*deg2rad(270),phPoles]; % [th=90,ph]
+                    [~,iPole] = ismember(poleMat,[abs(obj.th),abs(obj.ph)],'rows');
                     iPole = iPole(iPole>0);
-                    [Eaz(iPole,:),Eel(iPole,:),E3(iPole,:)] = deal(0);
+                    Eaz(iPole,:) = sin(TH(iPole)).*sin(PH(iPole)).*Eph(iPole,:);
+                    Eel(iPole,:) = -sin(TH(iPole)).*sin(PH(iPole)).*Eth(iPole,:);
+                    if nargout > 2, E3(iPole,:) = 0; end
             end
         end
         
         function [Eal, Eep, E3] = getELudwig2EA(obj)
             % GETELUDWIG2EA Get ELudwig2EA coordinates.
             
-            switch obj.coorTypeBase
+            switch obj.coorType
                 case 'Ludwig2EA'
-                    Eal = obj.E1Base;
-                    Eep = obj.E2Base;
-                    E3 = obj.E3;
+                    Eal = obj.E1;
+                    Eep = obj.E2;
+                    if nargout > 2, E3 = obj.E3; end
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     TH = repmat(obj.th(:,1),1,obj.Nf);
@@ -5646,35 +5749,36 @@ classdef FarField
                     cosAl = sqrt(1 - sin(TH).^2.*cos(PH).^2);
                     Eal = (1./cosAl).*(cos(TH).*cos(PH).*Eth - sin(PH).*Eph);
                     Eep = (1./cosAl).*(sin(PH).*Eth + cos(TH).*cos(PH).*Eph);
-                    E3 = zeros(size(Eal));
-                    % TODO: Sort out singularities at poles (|al| = [90,270]) - Interpolate
-                    % along constant ep?
-                    phPoles = deg2rad([-360,-180,0,180,360].');
-                    poleMat = [ones(5,1).*deg2rad(90),phPoles]; % [th=90,ph]
-                    [~,iPole] = ismember(poleMat,[obj.th,obj.ph],'rows');
+                    if nargout > 2, E3 = zeros(size(Eal)); end
+                    % Take limit in poles along constant ph
+                    phPoles = deg2rad([0,180,360].');
+                    poleMat = [ones(3,1).*deg2rad(90),phPoles;ones(3,1).*deg2rad(270),phPoles]; % [th=90,ph]
+                    [~,iPole] = ismember(poleMat,[abs(obj.th),abs(obj.ph)],'rows');
                     iPole = iPole(iPole>0);
-                    [Eal(iPole,:),Eep(iPole,:),E3(iPole,:)] = deal(0);
+                    Eal(iPole,:) = -sin(TH(iPole)).*cos(PH(iPole)).*Eth(iPole,:);
+                    Eep(iPole,:) = -sin(TH(iPole)).*cos(PH(iPole)).*Eph(iPole,:);
+                    if nargout > 2, E3(iPole,:) = 0; end
             end
         end
         
         function [Eh, Ev, E3] = getELudwig3(obj)
             % GETELUDWIG3 Get ELudwig3 coordinates.
             
-            switch obj.coorTypeBase
+            switch obj.coorType
                 case 'Ludwig3'
-                    Eh = obj.E1Base;
-                    Ev = obj.E2Base;
-                    E3 = obj.E3;
+                    Eh = obj.E1;
+                    Ev = obj.E2;
+                    if nargout > 2, E3 = obj.E3; end
                 otherwise
                     [Eth, Eph] = getEspherical(obj);
                     PH = repmat(obj.ph(:,1),1,obj.Nf);
                     Eh = cos(PH).*Eth - sin(PH).*Eph;
                     Ev = sin(PH).*Eth + cos(PH).*Eph;
-                    E3 = zeros(size(Eh));
+                    if nargout > 2, E3 = zeros(size(Eh)); end
             end
         end
         
-                
+        
         %% Polarization type getters
         function [E1lin, E2lin, E3lin] = getElin(obj)
             % GETELIN Get linear polarization.

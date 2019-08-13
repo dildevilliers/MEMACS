@@ -126,7 +126,6 @@ else
 end
 
 
-
 %% Field normalization
 % pradInt - use the known power from GRASP as test
 tol = 1e-3;
@@ -136,8 +135,23 @@ FF2 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_azel_spherical_sym180']);
 errIntAzEl = abs(FF2.Prad - FF2.pradInt)./FF2.Prad;
 FF3 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_elaz_spherical_sym180']);
 errIntElAz = abs(FF3.Prad - FF3.pradInt)./FF3.Prad;
-
-pradIntTestVect = [errIntPhTh,errIntAzEl];
+% Also integrate the CST fields - should all give the same answer
+PradCST = zeros(1,length(coorVect)*length(polVect)*length(xRangeVect)*length(yRangeVect));
+ii = 1;
+for cc = 1:length(coorVect)
+    for pp = 1:length(polVect)
+        for xx = 1:length(xRangeVect)
+            for yy = 1:length(yRangeVect)
+                fileName = ['FF_',coorVect{cc},'_',polVect{pp},'_',xRangeVect{xx},yRangeVect{yy}];
+                FF = FarField.readCSTtxt([dataPathCSTtxt,fileName]);
+                PradCST(ii) = FF.pradInt;
+                ii = ii+1;
+            end
+        end
+    end
+end
+errIntCST = diff(round(PradCST*1e4));
+pradIntTestVect = [errIntPhTh,errIntAzEl,errIntCST];
 if all(pradIntTestVect < tol)
     disp('Pass: pradInt')
     pradIntPass = true;
@@ -167,12 +181,13 @@ showGridPlots = false;
 gridLocal = {'PhTh','AzEl','ElAz'};
 gridProj = {'DirCos','TrueView','ArcSin'}; 
 gridAstro = {'Horiz','RAdec','GalLongLat'};
+gridTest = [gridLocal,gridProj,gridAstro];
+
 
 % Test PhTh input 
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_sym180']);
-gridPhThTest = [gridLocal,gridProj,gridAstro];
-for ii = 1:length(gridPhThTest)
-    FF2 = FF1.changeGrid(gridPhThTest{ii});
+for ii = 1:length(gridTest)
+    FF2 = FF1.changeGrid(gridTest{ii});
     if showGridPlots && 1
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
@@ -183,9 +198,8 @@ clear FF1 FF2 FF3
 
 % Test AzEl input
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_azel_spherical_sym180']);
-gridAzElTest = [gridLocal,gridProj,gridAstro];
-for ii = 1:length(gridAzElTest)
-    FF2 = FF1.changeGrid(gridAzElTest{ii});
+for ii = 1:length(gridTest)
+    FF2 = FF1.changeGrid(gridTest{ii});
     if showGridPlots  && 0
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
@@ -196,9 +210,8 @@ clear FF1 FF2 FF3
 
 % Test ElAz input
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_elaz_spherical_sym180']);
-gridElAzTest = [gridLocal,gridProj,gridAstro];
-for ii = 1:length(gridElAzTest)
-    FF2 = FF1.changeGrid(gridElAzTest{ii});
+for ii = 1:length(gridTest)
+    FF2 = FF1.changeGrid(gridTest{ii});
     if showGridPlots && 0
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
@@ -209,9 +222,8 @@ clear FF1 FF2 FF3
 
 % Test DirCos input
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_uv_spherical']);
-gridDirCosTest = [gridLocal,gridProj,gridAstro];
-for ii = 1:length(gridDirCosTest)
-    FF2 = FF1.changeGrid(gridDirCosTest{ii});
+for ii = 1:length(gridTest)
+    FF2 = FF1.changeGrid(gridTest{ii});
     if showGridPlots && 0
         figure, FF2.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
     end
@@ -222,9 +234,8 @@ clear FF1 FF2 FF3
 
 % Test TrueView input
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_trueview_spherical']);
-gridTrueViewTest = [gridLocal,gridProj,gridAstro];
-for ii = 1:length(gridTrueViewTest)
-    FF2 = FF1.changeGrid(gridTrueViewTest{ii});
+for ii = 1:length(gridTest)
+    FF2 = FF1.changeGrid(gridTest{ii});
     if showGridPlots && 1
 %         figure, FF2.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
         figure, FF2.plot('plotType','2D','showGrid',1)
@@ -242,6 +253,122 @@ if all(gridTransTestVect)
 else
     disp('FAIL: grid2*')
     gridTransPass = false;
+end
+
+%% Coordinate transformations
+showCoorPlots = false;
+output = 'E1';
+outputType = 'real';
+scaleMag = 'lin';
+setStdGrd = true;
+coorVect = {'spherical','Ludwig1','Ludwig2AE','Ludwig2EA','Ludwig3','power'};
+% coorVect = {'spherical'};
+tol = 1e-10;
+
+% Test spherical input
+FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_spherical_lin_sym180']);
+for ii = 1:length(coorVect)
+    FF2 = FF1.changeCoor(coorVect{ii},setStdGrd);
+    if showCoorPlots && 1
+        figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+    end
+    % Don't reset for power coordinate - just run through
+    if ~strcmp(coorVect(ii),'power')
+        FF3 = FF2.coor2spherical;
+        FFd = FF3 - FF1;
+        normE = FFd.norm;
+        coorTransSphTestVect(ii) = max(normE) < tol;
+    end
+end
+clear FF1 FF2 FF3
+
+% Test the GRASP spherical input coor on different grids
+inputGridNameLocal = {'phth','azel','elaz'};
+inputGridNameProj = {'uv','trueview'};
+inputGridName = [inputGridNameLocal,inputGridNameProj];
+jj = 1;
+for gg = 1:length(inputGridName)
+    if any(strcmp(inputGridName(gg),inputGridNameLocal))
+        FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_',inputGridName{gg},'_spherical_sym180']);
+    else
+        FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_',inputGridName{gg},'_spherical']);
+    end
+    for ii = 1:length(coorVect)
+        FF2 = FF1.changeCoor(coorVect{ii},setStdGrd);
+        if showCoorPlots && 1
+            figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+        end
+        % Don't reset for power coordinate - just run through
+        if ~strcmp(coorVect(ii),'power')
+            FF3 = FF2.coor2spherical;
+            FFd = FF3 - FF1;
+            normE = FFd.norm;
+            coorTransSphGRASPTestVect(jj) = max(normE) < tol;
+            jj = jj+1;
+        end
+    end
+    clear FF1 FF2 FF3
+end
+
+% Test AzEl input
+FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_azel_lin_sym180']);
+for ii = 1:length(coorVect)
+    FF2 = FF1.changeCoor(coorVect{ii},setStdGrd);
+    if showCoorPlots && 1
+        figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+    end
+    % Don't reset for power coordinate - just run through
+    if ~strcmp(coorVect(ii),'power')
+        FF3 = FF2.coor2Ludwig2AE;
+        FFd = FF3 - FF1;
+        normE = FFd.norm;
+        coorTransAzElTestVect(ii) = max(normE) < tol;
+    end
+end
+clear FF1 FF2 FF3
+
+% Test ElAz input
+FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_elaz_lin_sym180']);
+for ii = 1:length(coorVect)
+    FF2 = FF1.changeCoor(coorVect{ii},setStdGrd);
+    if showCoorPlots && 1
+        figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+    end
+    % Don't reset for power coordinate - just run through
+    if ~strcmp(coorVect(ii),'power')
+        FF3 = FF2.coor2Ludwig2EA;
+        FFd = FF3 - FF1;
+        normE = FFd.norm;
+        coorTransElAzTestVect(ii) = max(normE) < tol;
+    end
+end
+clear FF1 FF2 FF3
+
+% Test Ludwig3 input
+FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_L3_lin_sym180']);
+for ii = 1:length(coorVect)
+    FF2 = FF1.changeCoor(coorVect{ii},setStdGrd);
+    if showCoorPlots && 1
+        figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+    end
+    % Don't reset for power coordinate - just run through
+    if ~strcmp(coorVect(ii),'power')
+        FF3 = FF2.coor2Ludwig3;
+        FFd = FF3 - FF1;
+        normE = FFd.norm;
+        coorTransL3TestVect(ii) = max(normE) < tol;
+    end
+end
+clear FF1 FF2 FF3
+
+coorTransTestVect = [coorTransSphTestVect,coorTransSphGRASPTestVect,coorTransAzElTestVect,coorTransElAzTestVect,coorTransL3TestVect];
+
+if all(coorTransTestVect)
+    disp('Pass: coor2*')
+    coorTransPass = true;
+else
+    disp('FAIL: coor2*')
+    coorTransPass = false;
 end
 
 %% 
@@ -362,7 +489,7 @@ end
 %% Final test
 FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,...
     pradIntPass,setPowerPass,...
-    gridTransPass,...
+    gridTransPass,coorTransPass,...
     getRangePass,setRangePass,...
     ]);
 if FarFieldPass
