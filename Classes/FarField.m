@@ -114,9 +114,9 @@ classdef FarField
             % - y: column vector of th angles in rad, [Nang x 1]
             % - E1: First E-field pattern component, [Nang x Nf]
             % - E2: Second E-field pattern component, [Nang x Nf]
-            % - freq: Frequencies where the fields are defined in Hz, [1 x Nf]
-            % - Prad: Radiated power at each frequency in W, [1 x Nf]
-            % - radEff: Radiation efficiency at each frequency, [1 x Nf]
+            % - freq: Frequencies where the fields are defined in Hz (1e9), [1 x Nf]
+            % - Prad: Radiated power at each frequency in W (4*pi/(2.*obj.eta0)), [1 x Nf]
+            % - radEff: Radiation efficiency at each frequency (1), [1 x Nf]
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
             %   keywords and values are from the sets 
             %   -- E3:          Radial component of E-field ([]), [Nang x 1]
@@ -457,6 +457,7 @@ classdef FarField
             angBackRotate = getEulerangBetweenCoors(CoordinateSystem,obj.coorOrientation);
         end
         
+        %% Field and frequency setters
         function obj = setFreq(obj,freq,freqUnit)
             % SETFREQ sets the frequency of the object
             
@@ -711,7 +712,7 @@ classdef FarField
             P = zeros(1,obj.Nf);
             for ff = 1:obj.Nf
                 if strcmp(obj.symmetryBOR,'none')
-                    integrand = reshape(U(:,ff),ny,nx).*JacFuncTh(TH);
+                    integrand = reshape(U(:,ff),ny,nx).*abs(JacFuncTh(TH));
                     P(ff) = integral2D(PH,TH,integrand);
                 else
                     Nth = ny;
@@ -719,7 +720,7 @@ classdef FarField
                     if strcmp(obj.symmetryBOR,'BOR0')
                         integrand = 2*U(:,ff).*sin(th_vect);
                     elseif strcmp(obj.symmetryBOR,'BOR1')
-                        integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*JacFuncTh(th_vect);
+                        integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*abs(JacFuncTh(th_vect));
                     end
                     P(ff) = pi*integral1D(th_vect,integrand);
                     symFact = 1;    % Just to be sure...
@@ -812,7 +813,7 @@ classdef FarField
             % Dependencies
             % -
             %
-            % Created: 2019, Dirk de Villiers
+            % Created: 2019, Ridalise Louw
             % Updated: 2019-08-13, Dirk de Villiers
             %
             % Tested : Matlab R2018b
@@ -1037,7 +1038,7 @@ classdef FarField
         end
         
         function obj = copyAndInsertXcut(obj1,xvalCopy,xvalPaste,tol)
-            % COPYANDINSERTXCUT Copy a FarField cut into another position.
+            % COPYANDINSERTXCUT Copy a FarField x-cut into another position.
             
             % Use this to copy an X cut into another position.  Typically
             % handy when some transformation does not include the closing
@@ -1048,7 +1049,8 @@ classdef FarField
                 tol = mean(diff(unique(obj1.x)));
             end
             % Make a whole new object to initialise the base
-            % correctly
+            % correctly - that is, no base after this change since it
+            % changed the grid size
             inInd = find(abs(obj1.x - xvalCopy) < tol);
             xNew = [obj1.x;xvalPaste.*ones(size(inInd))];
             yNew = [obj1.y;obj1.y(inInd)];
@@ -1063,15 +1065,44 @@ classdef FarField
             else
                 E3New = [];
             end
-%             obj = FarField(xNew,yNew,E1New,E2New,E3New,obj1.freq,...
-%                 obj1.Prad.*2,obj1.radEff,obj1.coorType,obj1.polType,obj1.gridType,obj1.freqUnit,obj1.slant);
             obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
                 'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
             obj = obj.sortGrid;
-            obj = obj.setBase;
-%             obj = FarField(obj.x,obj.y,obj.E1,obj.E2,obj.E3,obj.freq,...
-%                 obj.Prad.*2,obj.radEff,obj.coorType,obj.polType,obj.gridType,obj.freqUnit,obj.slant);
+        end
+        
+        function obj = copyAndInsertYcut(obj1,yvalCopy,yvalPaste,tol)
+            % COPYANDINSERTYCUT Copy a FarField y-cut into another position.
+            
+            % Use this to copy an X cut into another position.  Typically
+            % handy when some transformation does not include the closing
+            % cut - that is the 0 and 360 or -180 and 180 cuts.  Can in
+            % principle be used to do random stuff - so careful.
+            
+            if nargin < 4
+                tol = mean(diff(unique(obj1.y)));
+            end
+            % Make a whole new object to initialise the base
+            % correctly - that is, no base after this change since it
+            % changed the grid size
+            inInd = find(abs(obj1.y - yvalCopy) < tol);
+            xNew = [obj1.x;obj1.x(inInd)];
+            yNew = [obj1.y;yvalPaste.*ones(size(inInd))];
+            E1New = [obj1.E1;obj1.E1(inInd,:)];
+            if ~isempty(obj1.E2)
+                E2New = [obj1.E2;obj1.E2(inInd,:)];
+            else
+                E2New = [];
+            end
+            if ~isempty(obj1.E3)
+                E3New = [obj1.E3;obj1.E3(inInd,:)];
+            else
+                E3New = [];
+            end
+            obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
+                'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
+                'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+            obj = obj.sortGrid;
         end
         
         function obj = setYrange(obj,type)
@@ -1766,7 +1797,7 @@ classdef FarField
             %                  | 'bot'}
             %
             % Outputs
-            % - ax:             Axis handle
+            % - 
             %
             % Dependencies
             % - MATLAB Antennas Toolbox for 3D plot
@@ -1780,12 +1811,12 @@ classdef FarField
             %
             % Example
             %   FF = FarField;
-            %   FF.plot('plotType','2D','step',1)
+            %   FF.plot('plotType','2D')
             
             
             narginchk(1,40);
             
-            %% Parsing through the inputs
+            % Parsing through the inputs
             parseobj = inputParser;
             parseobj.FunctionName = 'plot';
             
@@ -1863,8 +1894,7 @@ classdef FarField
             showGrid = parseobj.Results.showGrid;
             hemisphere = parseobj.Results.hemisphere;
             
-            %% Sort out the plot grid and names
-            
+            % Sort out the plot grid and names
             
             % Get valid positions for the plot
             if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
@@ -1991,7 +2021,7 @@ classdef FarField
                     ynamePlot = [obj.yname, ' ' ,axisUnit];
             end
             
-            %% Condition outputs
+            % Condition outputs
             % Phase results
             if (strcmp(output,'E1') || strcmp(output,'E2') || strcmp(output,'E3')) && strcmp(outputType,'phase')
                 Zplot = angle(Z);
@@ -2045,7 +2075,7 @@ classdef FarField
                 end
             end
             
-            %% Make the plots
+            % Make the plots
             switch freqUnitPlot
                 case 'Hz'
                     freqMult = 1;
@@ -2236,7 +2266,7 @@ classdef FarField
             % Returns a vector of axis handles
             
             
-            %% Parse input
+            % Parse input
             parseobj = inputParser;
             parseobj.FunctionName = 'plotJones';
             
@@ -2259,7 +2289,7 @@ classdef FarField
             dynamicRange_dB = parseobj.Results.dynamicRange_dB;
             step = parseobj.Results.step;
             
-            %% Plot the result
+            % Plot the result
             [w,h] = deal(0.4);
             botTop = 0.56;
             botBot = 0.08;
@@ -2338,7 +2368,7 @@ classdef FarField
             %   (For Power quantities only one plot is generated, for the rest both will be
             %   plotted, with the first (solid line) determined by the input value)
             
-            %% Parse input
+            % Parse input
             parseobj = inputParser;
             parseobj.FunctionName = 'plotPrincipleCuts';
             
@@ -2369,7 +2399,7 @@ classdef FarField
             output = parseobj.Results.output;
             
             
-            %% Plot the result
+            % Plot the result
             
             % Estimate a nice step size
             thRange = (max(FF.thBase) - min(FF.thBase));
@@ -3050,7 +3080,6 @@ classdef FarField
             obj = obj.setBase;
         end
         
-        
         %% Maths - all overloaded methods
         function obj = plus(obj1,obj2)
             % PLUS Add two FarFields
@@ -3222,7 +3251,7 @@ classdef FarField
 %             T = FF_T.Prad;
         end
         
-        %% Frequency modifications
+        %% Frequency and field modifications
         function obj = getFi(obj1,freqIndex)
             % GETFI Returns an object only containing the results in
             % freqIndex.
@@ -4471,6 +4500,197 @@ classdef FarField
             
         end
 
+        function FF = readCSTtxt(pathName,varargin)
+            % READCSTTXT Create a FarField object from a CST .txt file
+            %
+            % FF = readCSTtxt(pathName,freq,Prad,radEff,varargin) loads a FarField object
+            % from the CST .txt file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs. The
+            % file should be generated by exporting the ASCII plot data
+            % from a 2D FarField plot in CST. This format only allows a
+            % single frequency at a time, and has no information about the
+            % power, efficiency or frequency, so these can be optionally
+            % provided
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an ffs file
+            % - freq: Frequencies where the fields are defined in Hz, [1 x Nf]
+            % - Prad: Radiated power at each frequency in W, [1 x Nf]
+            % - radEff: Radiation efficiency at each frequency, [1 x Nf]
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- freq:        See FarField constructor help for details
+            %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-08-13, Dirk de Villiers
+            % Updated: 2019-08-13, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readCSTtxt;
+            %   F.plot('plotType','2D','showGrid',1)
+            
+            % Parsing through the inputs
+            parseobj = inputParser;
+            parseobj.FunctionName = 'readCSTtxt';
+            
+            typeValidator_pathName = @(x) isa(x,'char');
+            parseobj.addRequired('pathname',typeValidator_pathName);
+            
+            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','nondecreasing','nrows',1},'FarField');
+            parseobj.addOptional('freq',1e9,typeValidation_freq);
+            
+            typeValidation_power = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan'},'FarField');
+            parseobj.addOptional('Prad',[],typeValidation_power);
+            parseobj.addOptional('radEff',1,typeValidation_power);
+
+            expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
+            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+            parseobj.addParameter('r',1,typeValidation_scalar);
+            
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+            
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+            
+            typeValidation_time = @(x) isa(x,'datetime');
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+            
+            if nargin == 0
+                [name,path] = uigetfile('*.txt');
+                pathName = [path,name];
+            end
+            parseobj.parse(pathName,varargin{:})
+            
+            pathName = parseobj.Results.pathname;
+            freq = parseobj.Results.freq;
+            Prad = parseobj.Results.Prad;
+            radEff = parseobj.Results.radEff;
+            freqUnit = parseobj.Results.freqUnit;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            % Open the data file
+            if ~strcmp(pathName(end-3:end),'.txt')
+                pathName = [pathName,'.txt'];
+            end
+            fid = fopen(pathName);
+            if (fid==-1)
+                error(['Unable to open data file ', fileName, '!']);
+            end
+            
+            header = fgetl(fid);
+            fgetl(fid);
+            Ncol = 8;
+            data = fscanf(fid,'%f%f%f%f%f%f%f%f');
+            fclose(fid);
+            
+            % Reshape the data into a matrix
+            Nrow = length(data)/Ncol;
+            data = reshape(data,Ncol,Nrow).';
+            xIn = deg2rad(data(:,2));
+            yIn = deg2rad(data(:,1));
+            
+            headerCell = split(header,']');
+            
+            % figure out the grid type
+            gridMark = strtok(headerCell{1},' [');
+            switch gridMark
+                case 'Theta'
+                    gridTypeIn = 'PhTh';
+                    coorTypeIn = [];
+                case 'Elev.'
+                    gridTypeIn = 'AzEl';
+                    coorTypeIn = 'Ludwig2AE';
+                case 'Alpha'
+                    gridTypeIn = 'ElAz';
+                    coorTypeIn = 'Ludwig2EA';
+            end
+            
+            % Figure out the coor and pol Type
+            coorMark = strtok(headerCell{4},' [');
+            if contains(coorMark,'Theta')
+                coorTypeIn = 'spherical';
+                polTypeIn = 'linear';
+            elseif contains(coorMark,'Horiz')
+                coorTypeIn = 'Ludwig3';
+                polTypeIn = 'linear';
+            elseif contains(coorMark,'Left')
+                polTypeIn = 'circular';
+                % In this case we are actually not sure if it is due to
+                % Ludwig3 or spherical - so just select spherical as
+                % default
+                if isempty(coorTypeIn)
+                    coorTypeIn = 'spherical';
+                end
+            elseif contains(coorMark,'Azimu')
+                coorTypeIn = 'Ludwig2AE';
+                polTypeIn = 'linear';
+            elseif contains(coorMark,'Alpha')
+                coorTypeIn = 'Ludwig2EA';
+                polTypeIn = 'linear';
+            else
+                error('Only linear and circular polarizations implemented at this stage')
+            end
+            
+            % Figure out the output type
+            [typeMark,scaleMark] = strtok(headerCell{3},' [');
+            if contains(typeMark,'Abs(V')
+                outTypeIn = 'E-pattern';
+            else
+                error('Only the E-pattern output type supported at this stage')
+            end
+            
+            % Figure out the scale
+            if contains(scaleMark,'dB')
+                E1In = lin20(data(:,4));
+                E2In = lin20(data(:,6));
+            else
+                E1In = data(:,4);
+                E2In = data(:,6);
+            end
+            E1In = E1In.*exp(1i.*deg2rad(data(:,5)));
+            E2In = E2In.*exp(1i.*deg2rad(data(:,7)));
+            
+            FF = FarField(xIn,yIn,E1In,E2In,freq,Prad,radEff,...
+                'coorType',coorTypeIn,'polType',polTypeIn,'gridType',gridTypeIn,'freqUnit',freqUnit,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            
+            % Copy in the missing redundant edge cut
+            if strcmp(FF.yRangeType,'180')
+                xvalCopy = min(FF.xRange);
+                xvalPaste = xvalCopy + 2*pi;
+                FF = FF.copyAndInsertXcut(xvalCopy,xvalPaste);
+            elseif strcmp(FF.yRangeType,'360')
+                yvalCopy = min(FF.yRange);
+                yvalPaste = yvalCopy + 2*pi;
+                FF = FF.copyAndInsertYcut(yvalCopy,yvalPaste);
+            end
+            
+            FF.Prad = FF.pradInt;
+            FF.radEff = FF.Prad./0.5;   % Default CST power is 0.5 W - this could be wrong in some cases if the CST power is changed in the simulation
+            
+        end
+        
         function FF = readNFSscan(pathName,varargin)
             % READNFSSCAN Create a FarField object from a NFS spherical range scan .txt file.
             
@@ -5159,10 +5379,6 @@ classdef FarField
             [FF1,FF2] = deal(obj1,obj2);
         end
         %% Grid getters
-        % All grid getters operate on current coordinate system.  Use the
-        % grid2* functions to change to the base or not - depending on the
-        % specific situation
-        
         function [u, v, w] = getDirCos(obj)
             % GETDIRCOS Get DirCos grid.
             
@@ -5330,7 +5546,6 @@ classdef FarField
         end
         
         %% Coordinate system getters
-        
         function [Eth, Eph, Er] = getEspherical(obj)
             % GETESPHERICAL Get Espherical coordinates.
             

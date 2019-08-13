@@ -21,10 +21,24 @@
 - [ ] Typical pattern parameters calculator: eff, SLL, XP, Beamwidth, etc.
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
-- [ ] Plan help files
+- [ ] Pattern getters help files
+- [ ] Field and frequency setters help files
+- [ ] Grid range shifter help files
+- [ ] Coordinate sytem transformation help files
+- [ ] Polarization transformation help files
+- [ ] transformTypes help file
+- [ ] Base grid function help files
+- [ ] Plotting method help files
+- [ ] interpolation method help files
+- [ ] Maths overloaded methods help files
+- [ ] Frequency and field modification help files
+- [ ] symmetry handler help files
+- [ ] Format and tester help files
+- [ ] astronomical methods help files
+- [ ] File output help files
+- [ ] Farfield file reading methods help files
 - [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
-- [ ] ReadCSTascii
 - [ ] Multiple frequency concat
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
@@ -59,6 +73,9 @@
 - [x] Sped up the constructor and rotation utilities for very large fields
 - [x] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
 - [x] Sped up 2D plotting when the provided grid is not changed
+- [x] Grid type transformation help files
+- [x] ReadCSTascii
+
 
 # Arrays
 ## General

@@ -11,6 +11,11 @@ disp('...Testing FarField...');
 p = mfilename('fullpath');
 [filepath] = fileparts(p);
 dataPath = [filepath,'\..\data\SimPatterns\'];
+dataPathGRASPgrd = [dataPath,'GRASPgrd\'];
+dataPathGRASPcut = [dataPath,'GRASPcut\'];
+dataPathCSTffs = [dataPath,'CSTffs\'];
+dataPathCSTtxt = [dataPath,'CSTtxt\'];
+
 
 %% Constructors - just run them through
 tol = 1e-10;
@@ -48,13 +53,13 @@ end
 
 % GRASP constructors
 try
-    FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
-    FF2 = FarField.readGRASPgrd([dataPath,'FF_uv_spherical']);
-    FF3 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_pos180']);
-    FF4 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_pos180']);
-    FF5 = FarField.readGRASPgrd([dataPath,'FF_trueview_spherical']);
-    FF6 = FarField.readGRASPgrd([dataPath,'FF_phth_ludwig3_pos180']);
-    FF7 = FarField.readGRASPgrd([dataPath,'FF_phth_circular_pos180']);
+    FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_pos180']);
+    FF2 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_uv_spherical']);
+    FF3 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_azel_spherical_pos180']);
+    FF4 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_elaz_spherical_pos180']);
+    FF5 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_trueview_spherical']);
+    FF6 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_ludwig3_pos180']);
+    FF7 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_circular_pos180']);
     disp('Pass: readGRASPgrd')
     readGRASPgrdPass = true;
     clear FF1 FF2 FF3 FF4 FF5 FF6 FF7
@@ -67,9 +72,9 @@ try
     Nf = 11;
     Ncut = 37;
     f = linspace(1,1.5,Nf);
-    FF1 = FarField.readGRASPcut([dataPath,'FFcut_spherical'],Nf,Ncut,'freq',f,'freqUnit','GHz');
-    FF2 = FarField.readGRASPcut([dataPath,'FFcut_ludwig3'],Nf,Ncut,'freq',f,'freqUnit','GHz');
-    FF3 = FarField.readGRASPcut([dataPath,'FFcut_circular'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF1 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_spherical'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF2 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_ludwig3'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF3 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_circular'],Nf,Ncut,'freq',f,'freqUnit','GHz');
     disp('Pass: readGRASPcut')
     readGRASPcutPass = true;
     clear FF1 FF2 FF3
@@ -78,9 +83,9 @@ catch readCSTffs_errInfo
     readGRASPcutPass = false;
 end
 
-% CST constructor
+% CST constructors
 try
-    FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+    FF = FarField.readCSTffs([dataPathCSTffs,'FF']);
     disp('Pass: readCSTffs')
     readCSTffsPass = true;
     clear FF
@@ -89,14 +94,47 @@ catch readCSTffs_errInfo
     readCSTffsPass = false;
 end
 
+readCSTtxtPass = true;
+coorVect = {'spherical','azel','elaz','L3'};
+polVect = {'lin','circ'};
+xRangeVect = {'pos','sym'};
+yRangeVect = {'180','360'};
+for cc = 1:length(coorVect)
+    for pp = 1:length(polVect)
+        for xx = 1:length(xRangeVect)
+            for yy = 1:length(yRangeVect)
+                fileName = ['FF_',coorVect{cc},'_',polVect{pp},'_',xRangeVect{xx},yRangeVect{yy}];
+                try
+                    FF = FarField.readCSTtxt([dataPathCSTtxt,fileName]);
+                    if 0
+                        figure, FF.plot('plotType','2D','showGrid',1)
+                    end
+                    readCSTtxtPass = readCSTtxtPass && 1;
+                catch readCSTtxt_errInfo
+                    readCSTtxtPass = readCSTtxtPass && 0;
+                    keyboard
+                end
+            end
+        end
+    end
+end
+if readCSTtxtPass
+    disp('Pass: readCSTtxt')
+    clear FF 
+else
+    disp('FAIL: readCSTtxt')
+end
+
+
+
 %% Field normalization
 % pradInt - use the known power from GRASP as test
 tol = 1e-3;
-FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_pos180']);
 errIntPhTh = abs(FF1.Prad - FF1.pradInt)./FF1.Prad;
-FF2 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_sym180']);
+FF2 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_azel_spherical_sym180']);
 errIntAzEl = abs(FF2.Prad - FF2.pradInt)./FF2.Prad;
-FF3 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_sym180']);
+FF3 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_elaz_spherical_sym180']);
 errIntElAz = abs(FF3.Prad - FF3.pradInt)./FF3.Prad;
 
 pradIntTestVect = [errIntPhTh,errIntAzEl];
@@ -110,7 +148,7 @@ else
 end
 
 % setPower
-FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_pos180']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_pos180']);
 FF2 = FF1.setPower(1);
 errSetPower = abs(FF2.pradInt - 1);
 
@@ -124,14 +162,14 @@ else
 end
 
 %% Grid transformations
-showGridPlots = true;
+showGridPlots = false;
 
 gridLocal = {'PhTh','AzEl','ElAz'};
 gridProj = {'DirCos','TrueView','ArcSin'}; 
 gridAstro = {'Horiz','RAdec','GalLongLat'};
 
 % Test PhTh input 
-FF1 = FarField.readGRASPgrd([dataPath,'FF_phth_spherical_sym180']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_sym180']);
 gridPhThTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridPhThTest)
     FF2 = FF1.changeGrid(gridPhThTest{ii});
@@ -144,7 +182,7 @@ end
 clear FF1 FF2 FF3
 
 % Test AzEl input
-FF1 = FarField.readGRASPgrd([dataPath,'FF_azel_spherical_sym180']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_azel_spherical_sym180']);
 gridAzElTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridAzElTest)
     FF2 = FF1.changeGrid(gridAzElTest{ii});
@@ -157,7 +195,7 @@ end
 clear FF1 FF2 FF3
 
 % Test ElAz input
-FF1 = FarField.readGRASPgrd([dataPath,'FF_elaz_spherical_sym180']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_elaz_spherical_sym180']);
 gridElAzTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridElAzTest)
     FF2 = FF1.changeGrid(gridElAzTest{ii});
@@ -170,7 +208,7 @@ end
 clear FF1 FF2 FF3
 
 % Test DirCos input
-FF1 = FarField.readGRASPgrd([dataPath,'FF_uv_spherical']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_uv_spherical']);
 gridDirCosTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridDirCosTest)
     FF2 = FF1.changeGrid(gridDirCosTest{ii});
@@ -183,7 +221,7 @@ end
 clear FF1 FF2 FF3
 
 % Test TrueView input
-FF1 = FarField.readGRASPgrd([dataPath,'FF_trueview_spherical']);
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_trueview_spherical']);
 gridTrueViewTest = [gridLocal,gridProj,gridAstro];
 for ii = 1:length(gridTrueViewTest)
     FF2 = FF1.changeGrid(gridTrueViewTest{ii});
@@ -206,6 +244,7 @@ else
     gridTransPass = false;
 end
 
+%% 
 
 
 keyboard
@@ -321,7 +360,7 @@ end
 
 
 %% Final test
-FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,...
+FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,...
     getRangePass,setRangePass,...
