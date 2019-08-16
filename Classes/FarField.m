@@ -1655,6 +1655,50 @@ classdef FarField
         %% polarization type transformation methods
         function obj = changePol(obj,polTypeString)
             % CHANGEPOL Change the FarField object polarization type.
+            %
+            % obj = changePol(obj,polTypeString) transforms 
+            % the current polarization type to that specified in 
+            % polTypeString. 
+            % This function calls the appropriate pol2* function to
+            % excecute. Note that all the pol2* functions can be directly
+            % called with the object as argument to do the same job.
+            % 
+            % In all cases, if no base field exists in the object
+            % the base will be set before the transformation to maintain
+            % the original provided field values for later use. If a base
+            % field is present, the object will first be set into the base
+            % field form before transformation - transformations thus always
+            % happens using the original provided data in the base.
+            %
+            % If the object is already in the specified polarization type, nothing is
+            % done.
+            %
+            % When a slant type is requested, the public property 'slant' is
+            % used to determine the polarization angle.  A default of pi/4
+            % radians is set. The parameter should be updated before
+            % calling the pol2slant method.
+            %
+            % Inputs
+            % - obj: FarField object
+            % - polTypeString: 'linear'|'circular'|'slant'
+            %
+            % Outputs
+            % - obj: FarField object - possibly with added base grid
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Ridalise Louw
+            % Updated: 2019-08-16, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   F = F.changePol('circular');
+            %   F.plot('plotType','2D','showGrid',1,'output','E1')
             
             mustBeMember(polTypeString, {'linear','circular','slant'});
             handlePolType = str2func(['pol2',polTypeString]);
@@ -1662,33 +1706,45 @@ classdef FarField
         end
         
         function obj = pol2linear(obj)
-            % POL2LINEAR Change the FarField object polarization to linear
-            % polarization
+            % POL2LINEAR Change the polarization to linear
+            %
+            % See help changePol for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the polarisation system type of a power only pattern')
             if ~strcmp(obj.polType,'linear')
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1, obj.E2] = getElin(obj);
                 obj.polType = 'linear';
             end
         end
         
         function obj = pol2circular(obj)
-            % POL2CIRCULAR Change the FarField object polarization to circular
-            % polarization
+            % POL2CIRCULAR Change the polarization to circular
+            %
+            % See help changePol for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the polarisation system type of a power only pattern')
             if ~strcmp(obj.polType,'circular')
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getEcircular(obj);
                 obj.polType = 'circular';
             end
         end
         
         function obj = pol2slant(obj)
-            % POL2SLANT Change the FarField object polarization to slant
-            % polarization
+            % POL2SLANT Change the polarization to slant
+            %
+            % See help changePol for details
             
             assert(~strcmp(obj.coorType,'power'),'Cannot change the polarisation system type of a power only pattern')
             if ~strcmp(obj.polType,'slant')
+                if isempty(obj.E1Base)
+                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
+                end
                 [obj.E1,obj.E2] = getEslant(obj);
                 obj.polType = 'slant';
             end
@@ -5787,23 +5843,21 @@ classdef FarField
             % ranges
             coorTypeIn = obj.coorType;
             coorTypeH = str2func(['coor2',coorTypeIn]);
-            obj1 = obj.reset2Base;
-            obj1 = coorTypeH(obj1,false);
-%             obj1 = obj1.setXrange(obj.xRangeType);
-%             obj1 = obj1.setYrange(obj.yRangeType);
-            switch obj.polTypeBase % Should be the same as the transformed object - can use obj or obj1
+            obj = obj.reset2Base; % This is done just to change the fields - don't care about the grid
+            obj = coorTypeH(obj,false);
+            switch obj.polType % Should be the same as the transformed object - can use obj or obj1
                 case 'linear'
-                    E1lin = obj1.E1;
-                    E2lin = obj1.E2;
+                    E1lin = obj.E1;
+                    E2lin = obj.E2;
                 case 'circular'
                     Del = 2*1i;
-                    E1lin = sqrt(2)./Del.*(1i.*obj1.E1 + 1i.*obj1.E2);
-                    E2lin = sqrt(2)./Del.*(-obj1.E1 + obj1.E2);
+                    E1lin = sqrt(2)./Del.*(1i.*obj.E1 + 1i.*obj.E2);
+                    E2lin = sqrt(2)./Del.*(-obj.E1 + obj.E2);
                 case 'slant'
-                    PSI = ones(size(obj1.E1)).*obj.slant; % Slant of input object
+                    PSI = ones(size(obj.E1)).*obj.slant; % Slant of input object
                     Del = 1;
-                    E1lin = 1./Del.*(cos(PSI).*obj1.E1 + sin(PSI).*obj1.E2);
-                    E2lin = 1./Del.*(-sin(PSI).*obj1.E1 + cos(PSI).*obj1.E2);
+                    E1lin = 1./Del.*(cos(PSI).*obj.E1 + sin(PSI).*obj.E2);
+                    E2lin = 1./Del.*(-sin(PSI).*obj.E1 + cos(PSI).*obj.E2);
             end
             E3lin = [];
         end

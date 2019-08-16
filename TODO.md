@@ -6,7 +6,8 @@
 
 # Farfield
 - [ ] Make a compression function for handling the data of large fields - only initialise the base when required  
-- [ ] Include a struct optional argument in the constructor containing all the nam-value pairs information (including getter function for the struct)
+- [ ] Typical pattern parameters calculator: eff, SLL, XP, Beamwidth, etc.
+- [ ] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign (Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet)
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
 - [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
@@ -17,13 +18,11 @@
 - [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
-- [ ] Typical pattern parameters calculator: eff, SLL, XP, Beamwidth, etc.
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
 - [ ] Pattern getters help files
 - [ ] Field and frequency setters help files
 - [ ] Grid range shifter help files
-- [ ] Polarization transformation help files
 - [ ] transformTypes help file
 - [ ] Base grid function help files
 - [ ] Plotting method help files
@@ -75,6 +74,7 @@
 - [x] ReadCSTascii
 - [x] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [x] Coordinate system transformation help files
+- [x] Polarization transformation help files
 
 
 # Arrays

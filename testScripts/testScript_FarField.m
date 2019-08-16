@@ -371,9 +371,44 @@ else
     coorTransPass = false;
 end
 
-%% 
+%% Polarisation transformations
+% Run through a big set from the CST simulations.
+showPolPlots = true;
+output = 'E1';
+outputType = 'phase';
+scaleMag = 'lin';
+gridVect = {'spherical','azel','elaz','L3'};
+polVectFileName = {'lin','circ'};
+polVect = {'linear','circular','slant'};
+tol = 1e-10;
+cc = 1;
+for gg = 1:1%length(gridVect)
+    for pp = 1:length(polVectFileName)
+        FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_',gridVect{gg},'_',polVectFileName{pp},'_sym180']);
+        for ii = 1:length(polVect)
+            FF2 = FF1.changePol(polVect{ii});
+            if showPolPlots && 1
+                figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+            end
+            FF3 = FF2.changePol(polVect{pp});   % Change back to the type that we read - names are different
+            FFd = FF3 - FF1;
+            normE = FFd.norm;
+            polTransTestVect(cc) = max(normE) < tol;
+            cc = cc + 1;
+        end
+    end
+end
+clear FF1 FF2 FF3
 
+if all(polTransTestVect)
+    disp('Pass: pol2*')
+    polTransPass = true;
+else
+    disp('FAIL: pol2*')
+    polTransPass = false;
+end
 
+%%
 keyboard
 
 % % ReadNFSscan
@@ -489,7 +524,7 @@ end
 %% Final test
 FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,...
     pradIntPass,setPowerPass,...
-    gridTransPass,coorTransPass,...
+    gridTransPass,coorTransPass,polTransPass...
     getRangePass,setRangePass,...
     ]);
 if FarFieldPass
