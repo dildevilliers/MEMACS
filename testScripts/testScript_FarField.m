@@ -280,7 +280,7 @@ for ii = 1:length(coorVect)
         coorTransSphTestVect(ii) = max(normE) < tol;
     end
 end
-clear FF1 FF2 FF3
+clear FF1 FF2 FF3 FFd
 
 % Test the GRASP spherical input coor on different grids
 inputGridNameLocal = {'phth','azel','elaz'};
@@ -307,7 +307,7 @@ for gg = 1:length(inputGridName)
             jj = jj+1;
         end
     end
-    clear FF1 FF2 FF3
+    clear FF1 FF2 FF3 FFd
 end
 
 % Test AzEl input
@@ -325,7 +325,7 @@ for ii = 1:length(coorVect)
         coorTransAzElTestVect(ii) = max(normE) < tol;
     end
 end
-clear FF1 FF2 FF3
+clear FF1 FF2 FF3 FFd
 
 % Test ElAz input
 FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_elaz_lin_sym180']);
@@ -342,7 +342,7 @@ for ii = 1:length(coorVect)
         coorTransElAzTestVect(ii) = max(normE) < tol;
     end
 end
-clear FF1 FF2 FF3
+clear FF1 FF2 FF3 FFd
 
 % Test Ludwig3 input
 FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_L3_lin_sym180']);
@@ -359,7 +359,7 @@ for ii = 1:length(coorVect)
         coorTransL3TestVect(ii) = max(normE) < tol;
     end
 end
-clear FF1 FF2 FF3
+clear FF1 FF2 FF3 FFd
 
 coorTransTestVect = [coorTransSphTestVect,coorTransSphGRASPTestVect,coorTransAzElTestVect,coorTransElAzTestVect,coorTransL3TestVect];
 
@@ -373,7 +373,7 @@ end
 
 %% Polarisation transformations
 % Run through a big set from the CST simulations.
-showPolPlots = true;
+showPolPlots = false;
 output = 'E1';
 outputType = 'phase';
 scaleMag = 'lin';
@@ -382,7 +382,7 @@ polVectFileName = {'lin','circ'};
 polVect = {'linear','circular','slant'};
 tol = 1e-10;
 cc = 1;
-for gg = 1:1%length(gridVect)
+for gg = 1:length(gridVect)
     for pp = 1:length(polVectFileName)
         FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_',gridVect{gg},'_',polVectFileName{pp},'_sym180']);
         for ii = 1:length(polVect)
@@ -398,7 +398,7 @@ for gg = 1:1%length(gridVect)
         end
     end
 end
-clear FF1 FF2 FF3
+clear FF1 FF2 FF3 FFd
 
 if all(polTransTestVect)
     disp('Pass: pol2*')
@@ -408,8 +408,68 @@ else
     polTransPass = false;
 end
 
-%%
-keyboard
+%% Grid range
+% getRange
+FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+yRangeNew = [0,pi/2];
+xRangeNew = [0,deg2rad(355)];
+FFn = FF.getRange(xRangeNew,yRangeNew);
+if all(FFn.xRange == xRangeNew) && all(FFn.yRange == yRangeNew)
+    disp('Pass: getRange')
+    getRangePass = true;
+else
+    disp('FAIL: getRange')
+    getRangePass = false;
+end
+
+% close all
+showGridShiftPlots = false;
+output = 'E2';
+outputType = 'real';
+scaleMag = 'lin';
+
+xGrids = {'pos','sym'};
+yGrids = {'180','360'};
+cc = 1;
+for ii = 1:2
+    xGridIn = xGrids{ii};
+    for jj = 1:2
+        yGridIn = yGrids{jj};
+        FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_spherical_lin_',xGridIn,yGridIn]);
+        for mm = 1:2
+            xGridTrans = xGrids{mm};
+            for nn = 1:2
+                yGridTrans = yGrids{nn};
+                FF2 = FF1.setRangeSph(xGridTrans,yGridTrans);
+                FF3 = FF2.setRangeSph(xGridIn,yGridIn);
+                FFd = FF3 - FF1;
+                if showGridShiftPlots
+%                     figure, FF1.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                    figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+                    axis normal
+%                     figure, FF3.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                    figure, FFd.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+                    axis normal
+                end
+                normE = FFd.norm;
+                gridChangeTestVect(cc) = max(normE) < tol;
+                cc = cc + 1;
+            end
+        end
+    end
+end
+clear FF1 FF2 FF3 FFd
+
+if all(gridChangeTestVect)
+    disp('Pass: setRange')
+    setRangePass = true;
+else
+    disp('FAIL: setRange')
+    setRangePass = false;
+end
+
 
 % % ReadNFSscan
 % output = 'E1';
@@ -436,88 +496,89 @@ keyboard
 % figure, FFdelta.plot('plotType','2D','step',1,'showGrid',false,'output',output,'outputType','mag','scaleMag','dB')
 
 %% Grid range
-% getRange
-FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
-yRangeNew = [0,pi/2];
-xRangeNew = [0,deg2rad(355)];
-FFn = FF.getRange(xRangeNew,yRangeNew);
-if all(FFn.xRange == xRangeNew) && all(FFn.yRange == yRangeNew)
-    disp('Pass: getRange')
-    getRangePass = true;
-else
-    disp('FAIL: getRange')
-    getRangePass = false;
-end
-outputType = 'real';
-output = 'E2';
-% setRange - plot a variety and calculate the differences
-% First PhTh
-FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
-figure, FF.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% Get a tolerance from the field values
-tol = 1e-6*min(sqrt(lin10(FF.Directivity_dBi)));
+% % getRange
+% FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+% yRangeNew = [0,pi/2];
+% xRangeNew = [0,deg2rad(355)];
+% FFn = FF.getRange(xRangeNew,yRangeNew);
+% if all(FFn.xRange == xRangeNew) && all(FFn.yRange == yRangeNew)
+%     disp('Pass: getRange')
+%     getRangePass = true;
+% else
+%     disp('FAIL: getRange')
+%     getRangePass = false;
+% end
 
-% p180 -> s180 -> p180
-FFsym180 = FF.setRangeSph('sym','180');
-figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% FFpos180 = FFsym180.setRangeSph('pos');
-% figure, FFpos180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FFs180 = FFsym180.setRangeSph('pos') - FF;
-err_s180 = norm(norm(FFs180));
-
-% p180 -> s360 -> p180
-FFsym360 = FF.setRangeSph('sym','360');
-figure, FFsym360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FFsym180 = FFsym360.setRangeSph;
-figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FFs360 = FFsym360.setRangeSph('pos') - FF;
-err_s360 = norm(norm(FFs360));
-
-% p180 -> p360 -> p180
-FFpos360 = FF.setRangeSph('pos',360);
-figure, FFpos360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% FFsym180 = FFpos360.setRangeSph;
+% outputType = 'real';
+% output = 'E2';
+% % setRange - plot a variety and calculate the differences
+% % First PhTh
+% FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+% figure, FF.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% % Get a tolerance from the field values
+% tol = 1e-6*min(sqrt(lin10(FF.Directivity_dBi)));
+% 
+% % p180 -> s180 -> p180
+% FFsym180 = FF.setRangeSph('sym','180');
 % figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FFp360 = FFpos360.setRangeSph('pos') - FF;
-err_p360 = norm(norm(FFp360));
-
-% Now the azel/elaz
-FF1 = FF.coor2Ludwig2AE;
-FF1 = FF1.currentForm2Base;
-figure, FF1.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-
-% s180 -> p180 -> s180
-FF1pos180 = FF1.setRangeSph('pos','180');
-figure, FF1pos180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% FF1sym180 = FF1pos180.setRangeSph('sym','180');
-% figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FF1s180 = FF1pos180.setRangeSph - FF1;
-err1_s180 = norm(norm(FF1s180));
-
-% p180 -> s360 -> s180
-FF1sym360 = FF1.setRangeSph('sym','360');
-figure, FF1sym360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% FF1sym180 = FF1sym360.setRangeSph;
-% figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FF1s360 = FF1sym360.setRangeSph - FF1;
-err1_s360 = norm(norm(FF1s360));
-
-% s180 -> p360 -> s180
-FF1pos360 = FF1.setRangeSph('pos','360');
-figure, FF1pos360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-% FF1sym180 = FF1pos360.setRangeSph;
-% figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
-FF1p360 = FF1pos360.setRangeSph - FF1;
-err1_p360 = norm(norm(FF1p360));
-
-setTestVect = [err_s180,err_s360,err_p360,err1_s180,err1_s360,err1_p360];
-if all(setTestVect < tol)
-    disp('Pass: setRange')
-    setRangePass = true;
-else
-    disp('FAIL: setRange')
-    setRangePass = false;
-end
+% % FFpos180 = FFsym180.setRangeSph('pos');
+% % figure, FFpos180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FFs180 = FFsym180.setRangeSph('pos') - FF;
+% err_s180 = norm(norm(FFs180));
+% 
+% % p180 -> s360 -> p180
+% FFsym360 = FF.setRangeSph('sym','360');
+% figure, FFsym360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FFsym180 = FFsym360.setRangeSph;
+% figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FFs360 = FFsym360.setRangeSph('pos') - FF;
+% err_s360 = norm(norm(FFs360));
+% 
+% % p180 -> p360 -> p180
+% FFpos360 = FF.setRangeSph('pos',360);
+% figure, FFpos360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% % FFsym180 = FFpos360.setRangeSph;
+% % figure, FFsym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FFp360 = FFpos360.setRangeSph('pos') - FF;
+% err_p360 = norm(norm(FFp360));
+% 
+% % Now the azel/elaz
+% FF1 = FF.coor2Ludwig2AE;
+% FF1 = FF1.currentForm2Base;
+% figure, FF1.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% 
+% % s180 -> p180 -> s180
+% FF1pos180 = FF1.setRangeSph('pos','180');
+% figure, FF1pos180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% % FF1sym180 = FF1pos180.setRangeSph('sym','180');
+% % figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FF1s180 = FF1pos180.setRangeSph - FF1;
+% err1_s180 = norm(norm(FF1s180));
+% 
+% % p180 -> s360 -> s180
+% FF1sym360 = FF1.setRangeSph('sym','360');
+% figure, FF1sym360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% % FF1sym180 = FF1sym360.setRangeSph;
+% % figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FF1s360 = FF1sym360.setRangeSph - FF1;
+% err1_s360 = norm(norm(FF1s360));
+% 
+% % s180 -> p360 -> s180
+% FF1pos360 = FF1.setRangeSph('pos','360');
+% figure, FF1pos360.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% % FF1sym180 = FF1pos360.setRangeSph;
+% % figure, FF1sym180.plot('plotType','2D','step',1,'showGrid',1,'output',output,'outputType',outputType,'scaleMag','lin')
+% FF1p360 = FF1pos360.setRangeSph - FF1;
+% err1_p360 = norm(norm(FF1p360));
+% 
+% setTestVect = [err_s180,err_s360,err_p360,err1_s180,err1_s360,err1_p360];
+% if all(setTestVect < tol)
+%     disp('Pass: setRange')
+%     setRangePass = true;
+% else
+%     disp('FAIL: setRange')
+%     setRangePass = false;
+% end
 
 
 

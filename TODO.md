@@ -5,12 +5,13 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Make a compression function for handling the data of large fields - only initialise the base when required  
 - [ ] Typical pattern parameters calculator: eff, SLL, XP, Beamwidth, etc.
+- [ ] Multiple frequency concat
 - [ ] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
-- [ ] fix the setRangeSph field signs - copying across the pole should change the sign (Fix pole field sign change for setYrange gridType PhTh for the 3 cases that are not done yet)
+- [ ] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
 - [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
+- [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
 - [ ] readMeasurements
@@ -36,7 +37,6 @@
 - [ ] Farfield file reading methods help files
 - [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
-- [ ] Multiple frequency concat
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
@@ -75,6 +75,7 @@
 - [x] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [x] Coordinate system transformation help files
 - [x] Polarization transformation help files
+- [x] Make a compression function for handling the data of large fields - only initialise the base when required  
 
 
 # Arrays
