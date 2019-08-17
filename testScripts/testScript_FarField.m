@@ -125,6 +125,11 @@ else
     disp('FAIL: readCSTtxt')
 end
 
+%% Performance metrics
+% SLL
+FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FFmainBeam']);
+FF1.plot('plotType','2D','showGrid',1,'norm',true,'freqIndex',3), axis normal
+[sll,ps] = FF1.getSLL;
 
 %% Field normalization
 % pradInt - use the known power from GRASP as test
@@ -422,7 +427,7 @@ else
     getRangePass = false;
 end
 
-% close all
+% setRangeSph
 showGridShiftPlots = false;
 output = 'E2';
 outputType = 'real';
