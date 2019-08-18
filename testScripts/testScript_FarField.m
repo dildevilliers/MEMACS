@@ -126,10 +126,27 @@ else
 end
 
 %% Performance metrics
-% SLL
+% Beamwidth
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FFmainBeam']);
-FF1.plot('plotType','2D','showGrid',1,'norm',true,'freqIndex',3), axis normal
-[sll,ps] = FF1.getSLL;
+% FF1.plot('plotType','2D','showGrid',1,'norm',true,'freqIndex',3), axis normal
+[bw,bwStruct] = FF1.getBeamwidth([-10,-inf]);
+bwPass = any(~isnan(bwStruct(:)));
+if bwPass
+    disp('Pass: getBeamwidth')
+else
+    disp('FAIL: getBeamwidth')
+end
+
+% SLL
+[sll1,sll2,sllStruct] = FF1.getSLL;
+sllPass = any(~isnan([sll1(:);sll2(:)]));
+if sllPass
+    disp('Pass: getSLL')
+else
+    disp('FAIL: getSLL')
+end
+
+clear FF1
 
 %% Field normalization
 % pradInt - use the known power from GRASP as test
@@ -589,6 +606,7 @@ end
 
 %% Final test
 FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,...
+    bwPass,sllPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
     getRangePass,setRangePass,...

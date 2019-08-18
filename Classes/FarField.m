@@ -671,199 +671,151 @@ classdef FarField
         %% Performance metrics
         function [SLL1,SLL2,SLLstruct] = getSLL(obj)
             % GETSLL Get the sidelobe level of the beam
+            %
+            % [SLL1,SLL2,SLLstruct] = getSLL(obj) calculates the the
+            % sidelone level of a well-defined beam pattern pointing in the
+            % z-direction.  
+            % 
+            % Inputs
+            % - obj: FarField object (defined on regular grid)
+            %
+            % Outputs
+            % - SLL1:  Maximum first SLL (over x-grid) in dB ([1 x obj.Nf])
+            % - SLL2:  Maximum second SLL (over x-grid) in dB ([1 x obj.Nf])
+            % - SLLstruct: Full information over cut angles and frequency ([obj.Nx x obj.Nf])
+            %   -- SLL1: first SLL (in dB)
+            %   -- SLL2: second SLL (in dB)
+            %   -- ang1: angle (y-value) of first SLL (in unit of obj.y)
+            %   -- ang2: angle (y-value) of second SLL (in unit of obj.y)
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-08-17, Dirk de Villiers
+            % Updated: 2019-08-18, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   [SLL1,SLL2] = F.getSLL;
+            %   iF = 1;
+            %   F.plot('plotType','2D','showGrid',1,'norm',true,'freqIndex',iF), axis normal, hold on, view([140,45])
+            %   plot3(unique(rad2deg(F.x)),rad2deg(sllStruct.ang1(:,iF)),sllStruct.SLL1(:,iF),'or')
+            %   plot3(unique(rad2deg(F.x)),rad2deg(sllStruct.ang2(:,iF)),sllStruct.SLL2(:,iF),'or')
+
             
             assert(obj.isGridUniform,'Uniform grid expected for SLL calculation')
             
             [SLL1,SLL2] = deal(NaN(1,obj.Nf));
+            [SLL1full,SLL2full,ang1full,ang2full] = deal(NaN(obj.Nx,obj.Nf)); 
+            % Get valid th angles from the -3dB beamwidth
+            [~,BW] = obj.getBeamwidth(-3);
+            BWmin = min(BW);     % Minimum -3dB beamwidth
             for ff = 1:obj.Nf
                 % Get normalized dB directivity
                 D = dB10(obj.getFi(ff).getDirectivity) - obj.Directivity_dBi(ff);
-                % Get valid th angles
-                ith = 3:obj.Ny;  % TODO
+                
+                yVect = unique(obj.y);
                 AF = [obj.y(1:obj.Ny),reshape(D,obj.Ny,obj.Nx)];
-                AF = AF(ith,:);
+                AF = AF(yVect > BWmin(ff),:);
                 
                 [pk,ps] = SLL(AF);
                 SLL1(ff) = max(pk(:,1));
-                SLL2(ff) = max(pk(:,2));
+                if nargout > 1
+                    SLL2(ff) = max(pk(:,2));
+                end
+                if nargout > 2
+                   SLL1full(:,ff) = pk(:,1);
+                   SLL2full(:,ff) = pk(:,2);
+                   ang1full(:,ff) = ps(:,1);
+                   ang2full(:,ff) = ps(:,2);
+                end
+            end
+            if nargout > 2
+                SLLstruct = struct('SLL1',SLL1full,'SLL2',SLL2full,'ang1',ang1full,'ang2',ang2full);
             end
         end
         
-        
-%         function [pk,ps,spk,sps] = SLL(obj,plt,par)
-%             % SLL Get the side lobe level of the beam
-%             %
-%             % SLL       [pk,ps,spk,sps] = SLL(AF,plt,par)
-%             %           Calculate maximum SLL and maximum shoulder for a linear antenna pattern
-%             %           Assumes beam peak is clearly defined and 'enough' angles given
-%             %
-%             %           AF  = pattern.
-%             %           plt = [] 1 for plots (default = 0)
-%             %           par = [No of points to use in polynomial fitting (odd),
-%             %                  Polynomial order
-%             %                  No of points to generate to determine maximum - this defines accuracy]
-%             %                 (default = [7 4 1000])
-%             %
-%             %           pk  = [dB]  maximum (interpolated) SLL
-%             %           ps  = [deg] angle at maximum SLL
-%             %           spk = [dB]  maximum shoulder
-%             %           sps = [deg] angle at maximum shoulder
-%             
-%             %           Author: R. Lehmensiek, 08/2002.
-%             
-%             if nargin==1, plt = []; par = [];
-%             elseif nargin==2, par = [];
-%             end
-%             
-%             if isempty(plt), plt = 0; end
-%             if isempty(par), par = [7 4 1000]; end
-%             
-%             pts = par(1);     % [7] No of points to use in polynomial fitting (odd)
-%             ord = par(2);     % [4]  Polynomial order
-%             Nop = par(3);     % [1000] No of points to generate to determine maximum - this defines accuracy
-%             Nos = 3;          % [2] No of SLL peaks to investigate in order to determine maximum
-%             
-% %             obj = obj.grid2PhTh;
-%             assert(obj.isGridUniform,'Uniform grid expected for SLL calculation')
-%             % TODO: multiple frequencies
-%             ff = 1;
-%             % Get normalized dB directivity
-%             D = dB10(obj.getFi(ff).getDirectivity) - obj.Directivity_dBi(ff);
-%             AF(:,1) = obj.y(1:obj.Ny);
-%             AF = [AF,reshape(D,obj.Ny,obj.Nx)];
-%             
-%             N = size(AF,2);
-%             [pk,ps] = deal(NaN(N-1,Nos));
-%             
-% %             % Normalize
-% %             [bw,af_pk] = BW_P(AF);
-%             
-%             warning off MATLAB:nearlySingularMatrix
-%             if plt, hf = figure; hl = zeros(1,2+Nos*3); end
-%             
-%             for k = 2:N
-%                 % find the maximum sll
-% %                 pat = db(AF(:,k))-af_pk(k-1);
-%                 pat = AF(:,k);
-%                 dpat = gradient(pat);
-%                 
-%                 ind = [find(dpat>=0); length(dpat)];
-%                 ind1 = find(diff(ind)~=1);
-%                 
-%                 pk_ = pat(ind(ind1));
-%                 ps_ = ind(ind1);
-%                 if ps_(end)==length(pat), pk_ = pk_(1:end-1); ps_ = ps_(1:end-1); end
-%                 
-%                 if length(ps_)==1, [pk,ps] = deal(NaN);
-%                 else
-% %                     if (length(ps_)-1)<Nos, Nos = length(ps_)-1; end
-%                     if (length(ps_))<Nos, Nos = length(ps_); end
-%                     
-%                     if plt
-%                         clf;
-%                         hl(1:2) = plot(AF(:,1),pat,'b-',AF(ps_,1),pk_,'ro'); hold on; 
-%                         axis([min(AF(:,1)) max(AF(:,1)) -50 0]); 
-%                     end
-%                     
-%                     [pk_,ind] = sort(pk_);
-%                     pk_ind = ps_(ind(end));
-% %                     pk_ = pk_(end-Nos:end-1);
-% %                     ps_ = ps_(ind(end-Nos:end-1));
-%                     pk_ = pk_(end-Nos+1:end);
-%                     ps_ = ps_(ind(end-Nos+1:end));
-%                     if plt
-%                         hl(3) = plot(AF(ps_,1),pk_,'g*');
-% %                         prtl(1);
-%                         pause;
-%                         delete(hl(2:3));
-%                     end
-%                     
-%                     hpts = fix((pts-1)/2);
-%                     
-%                     for n = 1:Nos
-%                         ind = [ps_(n)-hpts:ps_(n)+hpts];
-%                         ang1 = [AF(ind(1),1):(AF(ind(end),1)-AF(ind(1),1))/(Nop-1):AF(ind(end),1)];
-% %                         [t,Y] = polfit(AF(ind,1),pat(ind),ord,ang1);
-%                         [P,~,MU] = polyfit(AF(ind,1),pat(ind),ord);
-%                         Y = polyval(P,(ang1-MU(1))./MU(2));
-%                         [pk_(n),tind] = max(Y);
-%                         ps_(n) = ang1(tind);
-%                         if plt
-%                             hl(2+(n-1)*3:n*3+1) = plot(AF(ind,1),pat(ind),'b*',ang1,Y,'r-',ps_(n),pk_(n),'g*'); 
-%                             pause
-%                         end
-%                     end
-%                     
-% %                     [pk,ind] = max(pk_);
-% %                     ps = ps_(ind);
-%                     pk(k-1,1:Nos) = flipud(pk_).';
-%                     ps(k-1,1:Nos) = flipud(ps_).';
-%                     if plt
-%                         hl(end) = plot(ps,pk,'mo','Markersize',10);
-%                         pause
-% %                         prtl(1);
-%                         ind = find(hl);
-%                         delete(hl(ind(2:end)));
-%                     end
-%                 end
-%                 
-%                 % TODO: This part not checked for compatibility
-%                 if nargout>2
-%                     ddpat = gradient(dpat);
-%                     ind1 = pk_ind-1; while sign(dpat(ind1))==sign(dpat(ind1-1)), if ind1>2, ind1 = ind1-1; else ind1 = 1; end; end
-%                     ind2 = pk_ind+1; while sign(dpat(ind2))==sign(dpat(ind2+1)), if ind2<length(dpat)-1, ind2 = ind2+1; else ind2 = length(ddpat); end; end
-%                     ind = ind1:ind2;
-%                     %     plot(AF(ind1:ind2,1),10000*ddpat(ind1:ind2)); pause
-%                     
-%                     sps_ = [];
-%                     for k = ind1+1:pk_ind
-%                         if (sign(ddpat(k))~=sign(ddpat(k-1))) & (ddpat(k-1)<ddpat(k)), sps_ = [sps_ k]; end
-%                     end
-%                     for k = pk_ind+1:ind2
-%                         if (sign(ddpat(k))~=sign(ddpat(k-1))) & (ddpat(k-1)>ddpat(k)), sps_ = [sps_ k]; end
-%                     end
-%                     
-%                     if length(sps_)==0, [spk,sps] = deal(NaN);
-%                     else
-%                         if length(sps_)<Nos, Nos = length(sps_); end
-%                         
-%                         spk_ = pat(sps_);
-%                         if plt, hl(2) = plot(AF(sps_,1),spk_,'ro'); end
-%                         
-%                         [spk_,ind] = sort(spk_);
-%                         spk_ = spk_(end-Nos+1:end);
-%                         sps_ = sps_(ind(end-Nos+1:end));
-%                         if plt
-%                             hl(3) = plot(AF(sps_,1),spk_,'g*');
-%                             pause
-% %                             prtl(1);
-%                             delete(hl(2:3));
-%                         end
-%                         
-%                         for n = 1:Nos
-%                             ind = [sps_(n)-hpts:sps_(n)+hpts];
-%                             ang1 = [AF(ind(1),1):(AF(ind(end),1)-AF(ind(1),1))/(Nop-1):AF(ind(end),1)];
-%                             [t,Y] = polfit(AF(ind,1),dpat(ind),ord,ang1);
-%                             [spk_(n),tind] = min(abs(Y));
-%                             sps_(n) = ang1(tind);
-%                             [t,spk_(n)] = polfit(AF(ind,1),pat(ind),ord,sps_(n));
-%                             if plt, plot(AF(ind,1),pat(ind),'b*',[ang1(1) ang1(1)],[-50 0],'r-',[ang1(end) ang1(end)],[-50 0],'r-',sps_(n),spk_(n),'g*'); end
-%                         end
-%                         
-%                         [spk,ind] = max(spk_);
-%                         sps = sps_(ind);
-%                         if plt
-%                             plot(sps,spk,'mo','Markersize',10);
-%                             pause
-% %                             prtl(1); 
-%                         end
-%                     end
-%                 end
-%             end
-%             
-%             if plt, delete(hf); end
-%             warning on MATLAB:nearlySingularMatrix
-%         end
+        function [BW,BWfull] = getBeamwidth(obj,dBlevel)
+            % GETBEAMWIDTH Get the beamwidth of the beam
+            %
+            % [BW,BWfull] = getBeamwidth(obj,dBlevel) calculates the the
+            % beamwidth of a well-defined beam pattern pointing in the
+            % z-direction.  A vector of requested beamwidth levels can be provided
+            % 
+            % Inputs
+            % - obj: FarField object (defined on regular grid)
+            % - dBlevel: The (vector) value of the beam taper where the
+            %            beamwidth is required (negative dB). A value of
+            %            -inf is interpreted as requesting the first null.
+            %            Default -3 dB
+            %
+            % Outputs
+            % - BW:  Mean beamwidth (over x-grid) in the unit of the y-grid ([length(dBlevel) x obj.Nf])
+            % - BWfull: Full beamwidth over cut angles and frequency ([obj.Nx x obj.Nf x length(dBlevel)])
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-08-18, Dirk de Villiers
+            % Updated: 2019-08-18, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   [BW,BWfull] = F.getBeamwidth([-3,-inf]);
+            %   iF = 3;
+            %   F.plot('plotType','2D','showGrid',1,'norm',true,'freqIndex',iF), axis normal, hold on
+            %   plot(rad2deg(unique(F.x)),rad2deg(BWfull(:,iF,1)),'k','linewidth',2)
+            %   plot(rad2deg(unique(F.x)),rad2deg(BWfull(:,iF,2)),'k','linewidth',2)
+            
+            % TODO: get more accurate first null position
+            
+            assert(obj.isGridUniform,'Uniform grid expected for SLL calculation')
+            
+            if nargin < 2
+                dBlevel = -3;
+            else
+                if any(dBlevel >= 0)
+                    warning('dBlevel should typically be a negative number')
+                end
+            end
+            
+            BWfull = NaN(obj.Nx,obj.Nf,length(dBlevel));
+            BW = NaN(length(dBlevel),obj.Nf);
+            nullPos = obj.yRange(2); % Deafault the null position to the edge of the y-range
+            for ff = 1:obj.Nf
+                % Get normalized dB directivity
+                D = reshape(dB10(obj.getFi(ff).getDirectivity),obj.Ny,obj.Nx) - obj.Directivity_dBi(ff);
+                for xx = 1:obj.Nx
+                    % Get a single cut
+                    dvect = D(:,xx);
+                    % Find the first null - the difference in pattern must be positive
+                    % after a negative difference...
+                    ddif = diff(sign(diff(dvect)));
+                    nP = find(ddif == 2,1);
+                    if ~isempty(nP), nullPos = nP; end
+                    % Interpolate up to the null (ang as function of level)
+                    angVect = obj.y(1:nullPos);
+                    for dd = 1:length(dBlevel)
+                        if isinf(dBlevel(dd))
+                            BWfull(xx,ff,dd) = angVect(nullPos);
+                        else
+                            BWfull(xx,ff,dd) = interp1(dvect(1:nullPos),angVect,dBlevel(dd),'spline');
+                        end
+                    end
+                end
+            end
+            for dd = 1:length(dBlevel)
+                BW(dd,:) = mean(BWfull(:,:,dd));
+            end
+        end
         
         %% Field normalization
         function P = pradInt(obj)
@@ -2758,7 +2710,7 @@ classdef FarField
             % Plot the result
             
             % Estimate a nice step size
-            thRange = (max(FF.thBase) - min(FF.thBase));
+            thRange = (max(FF.y) - min(FF.y));
             Nstep = round(sqrt(FF.Nang));
             Nstep = Nstep + 1-mod(Nstep,2);
             step = thRange/(Nstep-1);

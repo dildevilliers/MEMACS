@@ -46,25 +46,14 @@ for k = 2:N
     
     pk_ = pat(ind(ind1));
     ps_ = ind(ind1);
-    %     try
-    %         if ps_(end)==length(pat), pk_ = pk_(1:end-1); ps_ = ps_(1:end-1); end
-    %     catch ME
-    %         keyboard;
-    %     end
     
     % If only last point found - ignore it
-    try
-        if ~isempty(ps_) && ps_(end)==length(pat)
-            pk_ = pk_(1:end-1); ps_ = ps_(1:end-1); 
-        end
-    catch ME
-        keyboard;
+    if ~isempty(ps_) && ps_(end)==length(pat)
+        pk_ = pk_(1:end-1); ps_ = ps_(1:end-1);
     end
     if isempty(ps_)
         % Do nothing - TODO: return the shoulder?
-        %         [pk,ps] = deal(NaN);
     else
-        
         if (length(ps_))<Nos, Nos = length(ps_); end
         
         if plt
@@ -74,11 +63,7 @@ for k = 2:N
         end
         
         [pk_,ind] = sort(pk_);
-        try
-            pk_ind = ps_(ind(end));
-        catch ME
-            keyboard;
-        end
+        pk_ind = ps_(ind(end));
         pk_ = pk_(end-Nos+1:end);
         ps_ = ps_(ind(end-Nos+1:end));
         if plt
@@ -92,11 +77,7 @@ for k = 2:N
         for n = 1:Nos
             ind = [ps_(n)-hpts:ps_(n)+hpts];
             ind = ind(ind<=size(AF,1));
-            try
             ang1 = [AF(ind(1),1):(AF(ind(end),1)-AF(ind(1),1))/(Nop-1):AF(ind(end),1)];
-            catch ME
-                keyboard;
-            end
             [P,~,MU] = polyfit(AF(ind,1),pat(ind),ord);
             Y = polyval(P,(ang1-MU(1))./MU(2));
             [pk_(n),tind] = max(Y);
