@@ -725,7 +725,14 @@ classdef FarField
                 AF = [obj.y(1:obj.Ny),reshape(D,obj.Ny,obj.Nx)];
                 AF = AF(yVect > BWmin(ff),:);
                 
-                [pk,ps] = SLL(AF);
+                try
+                    % Not the most stable function - so catch errors and
+                    % return nothing
+                    [pk,ps] = SLL(AF);
+                catch 
+                    % Just return the NaNs
+                    return;
+                end
                 SLL1(ff) = max(pk(:,1));
                 if nargout > 1
                     SLL2(ff) = max(pk(:,2));

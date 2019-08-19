@@ -76,7 +76,7 @@ for k = 2:N
         
         for n = 1:Nos
             ind = [ps_(n)-hpts:ps_(n)+hpts];
-            ind = ind(ind<=size(AF,1));
+            ind = ind(ind<=size(AF,1) & ind>0);
             ang1 = [AF(ind(1),1):(AF(ind(end),1)-AF(ind(1),1))/(Nop-1):AF(ind(end),1)];
             [P,~,MU] = polyfit(AF(ind,1),pat(ind),ord);
             Y = polyval(P,(ang1-MU(1))./MU(2));
