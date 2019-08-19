@@ -5,7 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Typical pattern parameters calculator: eff, SLL, XP, Beamwidth, etc.
+- [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] Multiple frequency concat
 - [ ] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
 - [ ] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
@@ -76,6 +76,8 @@
 - [x] Coordinate system transformation help files
 - [x] Polarization transformation help files
 - [x] Make a compression function for handling the data of large fields - only initialise the base when required  
+- [x] Beamwidth calculator 
+- [x] SLL calculator
 
 
 # Arrays

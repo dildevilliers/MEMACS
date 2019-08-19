@@ -506,7 +506,9 @@ classdef FarField
             % GETFARFIELDSTRUCT Returns the legacy FarField struct data format.
             % FFpattern = getFarFieldStruct(obj) Converts a FarField
             % object into a struct data type. The struct format is compatible
-            % with old script-based code.
+            % with old script-based code.  In some cases the th and ph
+            % fields must be expanded to Nf columns, but this depends on
+            % the MATLAB version and the script implementation.
             % 
             % Inputs
             % - obj:    FarField object
@@ -518,7 +520,7 @@ classdef FarField
             % -
             %
             % Created: 2019-05-09, Dirk de Villiers
-            % Updated: 2019-05-09, Dirk de Villiers
+            % Updated: 2019-08-19, Dirk de Villiers
             %
             % Tested : Matlab R2018b, Fahmi Mokhupuki
             %  Level : 1
@@ -532,8 +534,8 @@ classdef FarField
             % the tons of old code
             
             obj = obj.coor2spherical(true);
-            FFpattern.th = repmat(obj.y,1,obj.Nf);
-            FFpattern.ph = repmat(obj.x,1,obj.Nf);
+            FFpattern.th = obj.y;
+            FFpattern.ph = obj.x;
             FFpattern.Eth = obj.E1;
             FFpattern.Eph = obj.E2;
             FFpattern.freq = obj.freqHz;
@@ -541,6 +543,7 @@ classdef FarField
             FFpattern.Nph = obj.Nx;
             FFpattern.Nf = obj.Nf;
             FFpattern.Prad = obj.Prad;
+            FFpattern.radEff = obj.radEff;
         end
         
         function [E1field, E2field, E3field] = getEfield(obj)
