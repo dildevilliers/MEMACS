@@ -800,30 +800,36 @@ classdef FarField
             BWfull = NaN(obj.Nx,obj.Nf,length(dBlevel));
             BW = NaN(length(dBlevel),obj.Nf);
             nullPos = obj.yRange(2); % Deafault the null position to the edge of the y-range
-            for ff = 1:obj.Nf
-                % Get normalized dB directivity
-                D = reshape(dB10(obj.getFi(ff).getDirectivity),obj.Ny,obj.Nx) - obj.Directivity_dBi(ff);
-                for xx = 1:obj.Nx
-                    % Get a single cut
-                    dvect = D(:,xx);
-                    % Find the first null - the difference in pattern must be positive
-                    % after a negative difference...
-                    ddif = diff(sign(diff(dvect)));
-                    nP = find(ddif == 2,1);
-                    if ~isempty(nP), nullPos = nP; end
-                    % Interpolate up to the null (ang as function of level)
-                    angVect = obj.y(1:nullPos);
-                    for dd = 1:length(dBlevel)
-                        if isinf(dBlevel(dd))
-                            BWfull(xx,ff,dd) = angVect(nullPos);
-                        else
-                            BWfull(xx,ff,dd) = interp1(dvect(1:nullPos),angVect,dBlevel(dd),'spline');
+            try  % Can sometimes crash at a variety of places for strange beams - just return NaNs
+                for ff = 1:obj.Nf
+                    % Get normalized dB directivity
+                    D = reshape(dB10(obj.getFi(ff).getDirectivity),obj.Ny,obj.Nx) - obj.Directivity_dBi(ff);
+                    for xx = 1:obj.Nx
+                        % Get a single cut
+                        dvect = D(:,xx);
+                        % Find the first null - the difference in pattern must be positive
+                        % after a negative difference...
+                        ddif = diff(sign(diff(dvect)));
+                        nP = find(ddif == 2,1);
+                        if ~isempty(nP), nullPos = nP; end
+                        % Interpolate up to the null (ang as function of level)
+                        angVect = obj.y(1:nullPos);
+                        for dd = 1:length(dBlevel)
+                            if isinf(dBlevel(dd))
+                                BWfull(xx,ff,dd) = angVect(nullPos);
+                            else
+                                
+                                BWfull(xx,ff,dd) = interp1(dvect(1:nullPos),angVect,dBlevel(dd),'spline');
+                                
+                            end
                         end
                     end
                 end
-            end
-            for dd = 1:length(dBlevel)
-                BW(dd,:) = mean(BWfull(:,:,dd));
+                for dd = 1:length(dBlevel)
+                    BW(dd,:) = mean(BWfull(:,:,dd));
+                end
+            catch
+                return
             end
         end
         
