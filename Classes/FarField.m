@@ -492,10 +492,13 @@ classdef FarField
                 obj.E2(iSet) = E2in; 
             end
             if nargin > 4 && ~isempty(E3in)
-                obj.E3(iSet) = E3in; 
+                obj.E3(iSet) = E3in;
             end
+            if ~isempty(obj.xBase) || ~isempty(obj.E1Base)
+                warning('FarField:baseRemoveWarning','setEfield will remove the base grid from the object, since the operation is performed on the current grid, and the base typically becomes invalid')
+            end
+            obj = obj.clearBase;
             
-            obj = obj.setBase;
             if obj.isGrid4pi && calcP
                 obj.Prad = obj.pradInt; 
             end
@@ -1585,7 +1588,7 @@ classdef FarField
             if any(strcmp(obj.gridType,obj.sphereGrids))
                 rangeHandle = str2func(['range',yType,xType]);
                 if ~isempty(obj.xBase) || ~isempty(obj.E1Base)
-                    warning('setRangeSph will remove the base grid from the object, since the operation is performed on the current grid, and the grid size might change')
+                    warning('FarField:baseRemoveWarning','setRangeSph will remove the base grid from the object, since the operation is performed on the current grid, and the grid size might change')
                 end
                 obj = obj.clearBase;
                 obj = rangeHandle(obj);
@@ -1648,7 +1651,19 @@ classdef FarField
             if numel(obj.E3) > 0
                 obj.E3 = obj.E3(iKeep,:);
             end
-            obj = obj.setBase;
+            if ~isempty(obj.xBase)
+                obj.xBase = obj.xBase(iKeep);
+                obj.yBase = obj.yBase(iKeep);
+            end
+            if ~isempty(obj.E1Base)
+                obj.E1Base = obj.E1Base(iKeep);
+            end
+            if ~isempty(obj.E2Base)
+                obj.E2Base = obj.E2Base(iKeep);
+            end
+            if ~isempty(obj.E3Base)
+                obj.E3Base = obj.E3Base(iKeep);
+            end
         end
         
         %% Coordinate system transformation methods
@@ -3961,7 +3976,7 @@ classdef FarField
             % Created: 2019-04-22
             
             assert(obj.isGridUniform,'Standard uniform grid required for GRASP cut write')
-            assert(strcmp(obj.gridTypeBase,'PhTh'),'Base grid must be PhTh for GRASP cut write')
+            assert(strcmp(obj.gridType,'PhTh'),'Grid type must be PhTh for GRASP cut write')
             
             % Sort out the data
             th_vect = unique(obj.th);
