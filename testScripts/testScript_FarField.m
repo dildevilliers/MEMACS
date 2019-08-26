@@ -446,12 +446,14 @@ end
 
 % setRangeSph
 showGridShiftPlots = false;
-output = 'E2';
-outputType = 'real';
+output = 'E1';
+outputType = 'phase';
 scaleMag = 'lin';
 
+tol = 1e-6;
 xGrids = {'pos','sym'};
 yGrids = {'180','360'};
+% PhTh grid
 cc = 1;
 for ii = 1:2
     xGridIn = xGrids{ii};
@@ -472,11 +474,11 @@ for ii = 1:2
                     axis normal
 %                     figure, FF3.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
 %                     axis normal
-                    figure, FFd.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
-                    axis normal
+%                     figure, FFd.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
                 end
                 normE = FFd.norm;
-                gridChangeTestVect(cc) = max(normE) < tol;
+                gridChangePhThTestVect(cc) = max(normE) < tol;
                 cc = cc + 1;
             end
         end
@@ -484,7 +486,73 @@ for ii = 1:2
 end
 clear FF1 FF2 FF3 FFd
 
-if all(gridChangeTestVect)
+% AzEl grid
+cc = 1;
+for ii = 1:2
+    xGridIn = xGrids{ii};
+    for jj = 1:2
+        yGridIn = yGrids{jj};
+        FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_azel_lin_',xGridIn,yGridIn]);
+        for mm = 1:2
+            xGridTrans = xGrids{mm};
+            for nn = 1:2
+                yGridTrans = yGrids{nn};
+                FF2 = FF1.setRangeSph(xGridTrans,yGridTrans);
+                FF3 = FF2.setRangeSph(xGridIn,yGridIn);
+                FFd = FF3 - FF1;
+                if showGridShiftPlots
+%                     figure, FF1.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                    figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+                    axis normal
+%                     figure, FF3.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+%                     figure, FFd.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                end
+                normE = FFd.norm;
+                gridChangeAzElTestVect(cc) = max(normE) < tol;
+                cc = cc + 1;
+            end
+        end
+    end
+end
+clear FF1 FF2 FF3 FFd
+
+% ElAz grid
+cc = 1;
+for ii = 1:2
+    xGridIn = xGrids{ii};
+    for jj = 1:2
+        yGridIn = yGrids{jj};
+        FF1 = FarField.readCSTtxt([dataPathCSTtxt,'FF_elaz_lin_',xGridIn,yGridIn]);
+        for mm = 1:2
+            xGridTrans = xGrids{mm};
+            for nn = 1:2
+                yGridTrans = yGrids{nn};
+                FF2 = FF1.setRangeSph(xGridTrans,yGridTrans);
+                FF3 = FF2.setRangeSph(xGridIn,yGridIn);
+                FFd = FF3 - FF1;
+                if showGridShiftPlots
+%                     figure, FF1.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                    figure, FF2.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+                    axis normal
+%                     figure, FF3.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+%                     figure, FFd.plot('plotType','2D','showGrid',1,'output',output,'outputType',outputType,'scaleMag',scaleMag)
+%                     axis normal
+                end
+                normE = FFd.norm;
+                gridChangeelAzTestVect(cc) = max(normE) < tol;
+                cc = cc + 1;
+            end
+        end
+    end
+end
+clear FF1 FF2 FF3 FFd
+
+if all([gridChangePhThTestVect,gridChangeAzElTestVect,gridChangeelAzTestVect])
     disp('Pass: setRange')
     setRangePass = true;
 else

@@ -6225,10 +6225,6 @@ classdef FarField
                     if strcmp(obj.gridType,'PhTh')
                         iShift = find(obj.y > pi + tol);
                         yshift = @(y) 2*pi - y;
-%                         % Fix E-field signs
-                        iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
-                        obj.E1(iE) = -obj.E1(iE);
-                        obj.E2(iE) = -obj.E2(iE);
                         obj.x(iShift) = xshift(obj.x(iShift));
                         obj.y(iShift) = yshift(obj.y(iShift));
                         iin = find(abs(obj.y - pi) < tol);
@@ -6240,8 +6236,12 @@ classdef FarField
                         obj.x(iShift) = xshift(obj.x(iShift));
                         obj.y(iShift) = yshift(obj.y(iShift));
                         iin = find(abs(abs(obj.y) - pi/2) < tol);
-                        poleSign = 1;
+                        poleSign = -1;
                     end
+                    % Fix E-field signs
+                    iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+                    obj.E1(iE) = -obj.E1(iE);
+                    obj.E2(iE) = -obj.E2(iE);
                     if abs(ySpanOrig - 2*pi) < tol
                         xAdd = xshift(obj.x(iin));
                         yAdd = yshift(obj.y(iin));
@@ -6253,14 +6253,14 @@ classdef FarField
                     if strcmp(obj.gridType,'PhTh')
                         iShift = find(obj.y < -tol);
                         yshift = @(y) -y;
-                        % Fix E-field signs
-                        iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
-                        obj.E1(iE) = -obj.E1(iE);
-                        obj.E2(iE) = -obj.E2(iE);
                     else
                         iShift = find(abs(obj.y) > pi/2+tol);
                         yshift = @(y) sign(y).*(pi-abs(y));
                     end
+                    % Fix E-field signs
+                    iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+                    obj.E1(iE) = -obj.E1(iE);
+                    obj.E2(iE) = -obj.E2(iE);
                     obj.x(iShift) = xshift(obj.x(iShift));
                     obj.y(iShift) = yshift(obj.y(iShift));
                     if abs(ySpanOrig - 2*pi) < tol
@@ -6269,7 +6269,7 @@ classdef FarField
                             poleSign = -1;
                         else
                             iin = find(abs(abs(obj.y) - pi/2) < tol);
-                            poleSign = 1;
+                            poleSign = -1;
                         end
                         xAdd = xshift(obj.x(iin));
                         yAdd = yshift(obj.y(iin));
@@ -6289,15 +6289,7 @@ classdef FarField
                 % Sort
                 obj = obj.sortGrid;
                 % Reset coordinate Type
-                %                 if obj.Nang ~= NangOrig
-                %                     obj = obj.setBase;
-                %                 end
                 obj = coorTypeHandle(obj,false);
-                %                 % Only change the base if we have to...
-                %                 if obj.Nang ~= NangOrig
-                %                     obj = obj.setBase;
-                %                 end
-                %             obj = obj.setBase;
             end
         end
         
@@ -6365,10 +6357,6 @@ classdef FarField
                 xshift = @(x) -sign(x).*(pi - abs(x));
                 if strcmp(obj.gridType,'PhTh')
                     yshift = @(y) -y;
-                    % Fix E-field signs
-                    iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
-                    obj.E1(iE) = -obj.E1(iE);
-                    obj.E2(iE) = -obj.E2(iE);
                     % Grab the required y = 0 cut for later insertion to
                     % ensure a smooth pole
                     ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
@@ -6377,15 +6365,28 @@ classdef FarField
                 else
                     yshift = @(y) (sign(y) + ~sign(y)).*pi-y; % Make the sign(y) = 0 -> 1
                 end
+                % Fix E-field signs
+                iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+                obj.E1(iE) = -obj.E1(iE);
+                obj.E2(iE) = -obj.E2(iE);
+
                 obj.x(iShift) = xshift(obj.x(iShift));
                 obj.y(iShift) = yshift(obj.y(iShift));
                 if abs(xSpanOrig - 2*pi) < tol
                     iin = find(abs(abs(obj.x) - pi/2) < tol);
                     xAdd = xshift(obj.x(iin));
                     yAdd = yshift(obj.y(iin));
-                    % Negative sign for y < 0, positive for the rest
-                    E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(yAdd < (0-tol)));
-                    E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd < (0-tol)));
+                    if strcmp(obj.gridType,'PhTh')
+                        % Negative sign for y < 0, positive for the rest
+                        ySignChange = 0;
+                        E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(yAdd < (ySignChange-tol)));
+                        E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd < (ySignChange-tol)));
+                    else
+                        % Negative sign for |y| > pi/2, positive for the rest
+                        ySignChange = pi/2;
+                        E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(abs(yAdd) > (ySignChange-tol)));
+                        E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(abs(yAdd) > (ySignChange-tol)));
+                    end
                     obj = insertMissingCuts(obj,iin,xAdd,yAdd,E1in,E2in);
                 end
                 if strcmp(obj.gridType,'PhTh')
@@ -6406,15 +6407,7 @@ classdef FarField
                 % Sort
                 obj = obj.sortGrid;
 %                 % Reset coordinate Type
-%                 if obj.Nang ~= NangOrig
-%                     obj = obj.setBase;
-%                 end
                 obj = coorTypeHandle(obj,false);
-%                 % Only change the base if we have to...
-%                 if obj.Nang ~= NangOrig
-%                     obj = obj.setBase;
-%                 end
-%                 obj = obj.setBase;
             end
         end
         
@@ -6444,10 +6437,6 @@ classdef FarField
                 ixPoleCuts = find(obj.x >= -tol);
                 if strcmp(obj.gridType,'PhTh')
                     yshift = @(y) 2*pi - y;
-                    % Fix E-field signs
-                    iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
-                    obj.E1(iE) = -obj.E1(iE);
-                    obj.E2(iE) = -obj.E2(iE);
                     % Grab the required y = pi cut for later insertion to
                     % ensure a smooth pole
                     iy0 = intersect(find(abs(obj.y - pi) < tol),ixPoleCuts);
@@ -6457,6 +6446,10 @@ classdef FarField
                     % ensure a smooth pole
                     iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
                 end
+                % Fix E-field signs
+                iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
+                obj.E1(iE) = -obj.E1(iE);
+                obj.E2(iE) = -obj.E2(iE);
                 [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
                 obj.x(iShift) = xshift(obj.x(iShift));
                 obj.y(iShift) = yshift(obj.y(iShift));
@@ -6465,9 +6458,15 @@ classdef FarField
                     iin = find(abs(obj.x) < tol);
                     xAdd = xshift(obj.x(iin));
                     yAdd = wrap22pi(yshift(obj.y(iin)));
-                    % Negative sign for y > pi, positive for the rest
-                    E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(yAdd >= (pi-tol)));
-                    E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd >= (pi-tol)));
+                    if strcmp(obj.gridType,'PhTh')
+                        % Negative sign for y > pi, positive for the rest
+                        ySignChange = pi;
+                    else
+                        % Negative sign for y > pi/2, positive for the rest
+                        ySignChange = pi/2;
+                    end
+                    E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(yAdd >= (ySignChange-tol)));
+                    E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd >= (ySignChange-tol)));
                     obj = insertMissingCuts(obj,iin,xAdd,yAdd,E1in,E2in);
                 end
                 % Remove the 180 pole, and insert the original
@@ -6483,14 +6482,7 @@ classdef FarField
                 % Sort
                 obj = obj.sortGrid;
                 % Reset coordinate Type
-%                 if obj.Nang ~= NangOrig
-%                     obj = obj.setBase;
-%                 end
                 obj = coorTypeHandle(obj,false);
-%                 % Only change the base if we have to...
-%                 if obj.Nang ~= NangOrig
-%                     obj = obj.setBase;
-%                 end
             end
         end
 
