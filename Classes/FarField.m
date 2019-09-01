@@ -3599,10 +3599,16 @@ classdef FarField
             obj = obj1;
             obj.E1 = obj1.E1(:,freqIndex);
             if ~isempty(obj1.E2), obj.E2 = obj1.E2(:,freqIndex); end
+            if ~isempty(obj1.E3), obj.E3 = obj1.E3(:,freqIndex); end
             obj.freq = obj1.freq(freqIndex);
             obj.Prad = obj1.Prad(freqIndex);
             obj.radEff = obj1.radEff(freqIndex);
-            obj = setBase(obj);
+            if ~isempty(obj1.xBase)
+                obj = obj.setBaseGrid;
+            end
+            if ~isempty(obj1.E1Base)
+                obj = obj.setBaseFields;
+            end
         end
         
         %% Symmetry handlers
