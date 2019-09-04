@@ -55,6 +55,8 @@ classdef FarField
         radEff_dB       % Radiation efficiency in dB    
         xRangeType      % Type of x-range: 'sym' or 'pos'
         yRangeType      % Type of y-range: 180 or 360
+        
+        auxParamStruct     % Structure containing all the nam-value pair parameters
     end
     
     properties (Dependent = true, Hidden = true)
@@ -166,7 +168,7 @@ classdef FarField
             parseobj = inputParser;
             parseobj.FunctionName = 'FarField';
             
-            % Optional inputs
+            % 'Optional' inputs
             typeValidation_grid = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','ncols',1},'FarField');
             parseobj.addOptional('x',ph0,typeValidation_grid);
             parseobj.addOptional('y',th0,typeValidation_grid);
@@ -184,37 +186,43 @@ classdef FarField
             parseobj.addOptional('Prad',Prad0,typeValidation_power);
             parseobj.addOptional('radEff',1,typeValidation_power);
             
+            % Structure of name-value pairs. If a variable is defined here,
+            % and also as a name-value pair later, this valuewill
+            % overwrite the name-value pair based value
+            typeValidation_struct = @(x) validateattributes(x,{'struct'},{},'FarField','inputStruct');
+            parseobj.addOptional('inputStruct',[],typeValidation_struct);
+            
             % Name-value pairs
             parseobj.addParameter('E3',[],typeValidation_fields);
             
             expected_coorType = {'spherical','Ludwig1','Ludwig2AE','Ludwig2EA','Ludwig3','power'};
-            parseobj.addParameter('coorType','spherical', @(x) any(validatestring(x,expected_coorType)));
+            parseobj.addParameter('coorType','spherical', @(x) any(validatestring(x,expected_coorType,'FarField','coorType')));
             
             expected_polType = {'linear','circular','slant','none'};
-            parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType)));
+            parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType,'FarField','polType')));
             
             expected_gridType = {'PhTh','DirCos','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
-            parseobj.addParameter('gridType','PhTh', @(x) any(validatestring(x,expected_gridType)));
+            parseobj.addParameter('gridType','PhTh', @(x) any(validatestring(x,expected_gridType,'FarField','gridType')));
             
             expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
-            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
+            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit,'FarField','freqUnit')));
             
             expected_symPlane = {'none','electric','magnetic'};
-            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
+            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane,'FarField','symmetryXZ')));
+            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane,'FarField','symmetryYZ')));
+            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane,'FarField','symmetryXY')));
             
             expected_symBOR = {'none','BOR0','BOR1'};
-            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
+            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR,'FarField','symmetryBOR')));
             
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'FarField');
             parseobj.addParameter('r',1,typeValidation_scalar);
             parseobj.addParameter('slant',pi/4,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField');
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','orientation');
             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
-            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField');
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','earthLocation');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
             
             typeValidation_time = @(x) isa(x,'datetime');
@@ -229,20 +237,79 @@ classdef FarField
             obj.freq = parseobj.Results.freq;
             obj.Prad = parseobj.Results.Prad;
             obj.radEff = parseobj.Results.radEff;
+            inStruct = parseobj.Results.inputStruct;
             obj.E3 = parseobj.Results.E3;
-            obj.coorType = parseobj.Results.coorType;
-            obj.polType = parseobj.Results.polType;
-            obj.gridType = parseobj.Results.gridType;
-            obj.freqUnit = parseobj.Results.freqUnit;
-            obj.symmetryXZ = parseobj.Results.symmetryXZ;
-            obj.symmetryYZ = parseobj.Results.symmetryYZ;
-            obj.symmetryXY = parseobj.Results.symmetryXY;
-            obj.symmetryBOR = parseobj.Results.symmetryBOR;
-            obj.r = parseobj.Results.r;
-            obj.slant = parseobj.Results.slant;
-            obj.orientation = parseobj.Results.orientation;
-            obj.earthLocation = parseobj.Results.earthLocation;
-            obj.time = parseobj.Results.time;
+            
+            % Overwrite nam-value pairs with structure values
+            if isfield(inStruct,'coorType') && any(validatestring(inStruct.coorType,expected_coorType,'FarField','inputStruct.coorType'))
+                obj.coorType = inStruct.coorType;
+            else
+                obj.coorType = parseobj.Results.coorType;
+            end
+            if isfield(inStruct,'polType') && any(validatestring(inStruct.polType,expected_polType,'FarField','inputStruct.polType'))
+                obj.polType = inStruct.polType;
+            else
+                obj.polType = parseobj.Results.polType;
+            end
+            if isfield(inStruct,'gridType') && any(validatestring(inStruct.gridType,expected_gridType,'FarField','inputStruct.gridType'))
+                obj.gridType = inStruct.gridType;
+            else
+                obj.gridType = parseobj.Results.gridType;
+            end
+            if isfield(inStruct,'freqUnit') && any(validatestring(inStruct.freqUnit,expected_freqUnit,'FarField','inputStruct.freqUnit'))
+                obj.freqUnit = inStruct.freqUnit;
+            else
+                obj.freqUnit = parseobj.Results.freqUnit;
+            end
+            if isfield(inStruct,'symmetryXZ') && any(validatestring(inStruct.symmetryXZ,expected_symPlane,'FarField','inputStruct.symmetryXZ'))
+                obj.symmetryXZ = inStruct.symmetryXZ;
+            else
+                obj.symmetryXZ = parseobj.Results.symmetryXZ;
+            end
+            if isfield(inStruct,'symmetryYZ') && any(validatestring(inStruct.symmetryYZ,expected_symPlane,'FarField','inputStruct.symmetryYZ'))
+                obj.symmetryYZ = inStruct.symmetryYZ;
+            else
+                obj.symmetryYZ = parseobj.Results.symmetryYZ;
+            end
+            if isfield(inStruct,'symmetryXY') && any(validatestring(inStruct.symmetryXY,expected_symPlane,'FarField','inputStruct.symmetryXY'))
+                obj.symmetryXY = inStruct.symmetryXY;
+            else
+                obj.symmetryXY = parseobj.Results.symmetryXY;
+            end
+            if isfield(inStruct,'symmetryBOR') && any(validatestring(inStruct.symmetryBOR,expected_symBOR,'FarField','inputStruct.symmetryBOR'))
+                obj.symmetryBOR = inStruct.symmetryBOR;
+            else
+                obj.symmetryBOR = parseobj.Results.symmetryBOR;
+            end
+            if isfield(inStruct,'r') && ~isempty(inStruct.r)
+                validateattributes(inStruct.r,{'numeric'},{'real','finite','nonnan','scalar'},'FarField','inputStruct.r')
+                obj.r = inStruct.r;
+            else
+                obj.r = parseobj.Results.r;
+            end
+            if isfield(inStruct,'slant') && ~isempty(inStruct.slant)
+                validateattributes(inStruct.slant,{'numeric'},{'real','finite','nonnan','scalar'},'FarField','inputStruct.slant')
+                obj.slant = inStruct.slant;
+            else
+                obj.slant = parseobj.Results.slant;
+            end
+            if isfield(inStruct,'orientation') && ~isempty(inStruct.orientation)
+                validateattributes(inStruct.orientation,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','inputStruct.orientation')
+                obj.orientation = inStruct.orientation;
+            else
+                obj.orientation = parseobj.Results.orientation;
+            end
+            if isfield(inStruct,'earthLocation') && ~isempty(inStruct.earthLocation)
+                validateattributes(inStruct.earthLocation,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','inputStruct.earthLocation')
+                obj.earthLocation = inStruct.earthLocation;
+            else
+                obj.earthLocation = parseobj.Results.earthLocation;
+            end
+            if isfield(inStruct,'time') && ~isempty(inStruct.time) && isa(inStruct.time,'datetime')
+                obj.time = inStruct.time;
+            else
+                obj.time = parseobj.Results.time;
+            end
             
             % Check input sizes
             Nang = size(obj.x,1);
@@ -457,6 +524,13 @@ classdef FarField
             angBackRotate = getEulerangBetweenCoors(CoordinateSystem,obj.coorOrientation);
         end
         
+        function auxParamStruct = get.auxParamStruct(obj)
+            auxParamStruct = struct('coorType',obj.coorType,'gridType',obj.gridType,'polType',obj.polType,...
+                'symmetryXZ',obj.symmetryXZ,'symmetryYZ',obj.symmetryYZ,'symmetryXY',obj.symmetryXY,'symmetryBOR',obj.symmetryBOR,...
+                'r',obj.r,'slant',obj.slant,'freqUnit',obj.freqUnit,...
+                'orientation',obj.orientation,'earthLocation',obj.earthLocation,'time',obj.time);
+        end
+            
         %% Field and frequency setters
         function obj = setFreq(obj,freq,freqUnit)
             % SETFREQ sets the frequency of the object
@@ -2948,7 +3022,12 @@ classdef FarField
             % everything out after transforming, and it is standard for
             % extending the range for smooth interpolants
             if any(strcmp(obj.gridType,obj.localGrids))
+                % Suppress the warning - we know the base is deleted and
+                % don't care, since we are working with the current grid
+                % and not returning the object
+                warning('off','FarField:baseRemoveWarning');
                 obj = obj.setRangeSph('sym','180');
+                warning('on','FarField:baseRemoveWarning');
             end
             % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
             % angular grids
@@ -3611,6 +3690,36 @@ classdef FarField
             end
         end
         
+        function obj = catFreq(objIn)
+           % CATFREQ Concatenates the frequencies in the input array  
+            
+           [~,xEqual,yEqual] = isGridEqual(objIn);
+           assert(all(xEqual)&&all(yEqual),'Input grids must be equal to concatenate frequencies')
+           assert(objIn.typesAreEqual,'All types (grid, coor, pol) must be equal to concatenate frequencies')
+           assert(objIn.symmetryEqual,'All symmetry types must be equal to concatenate frequencies')
+           assert(objIn.isAstroEqual,'Orientation, earthLocation and time must be equal to concatenate frequencies')
+           assert(objIn.fieldParsEqual,'Field parameters r and slant must be equal to concatenate frequencies')
+           
+           Nin = length(objIn);
+           [E1Cat,E2Cat,E3Cat,freqCat,PradCat,radEffCat] = deal(cell(1,Nin));
+               
+           for tt = 1:Nin
+               E1Cat{tt} = objIn(tt).E1;
+               E2Cat{tt} = objIn(tt).E2;
+               E3Cat{tt} = objIn(tt).E3;
+               freqCat{tt} = objIn(tt).freq;
+               PradCat{tt} = objIn(tt).Prad;
+               radEffCat{tt} = objIn(tt).radEff;
+           end
+           E1Cat = cell2mat(E1Cat);
+           E2Cat = cell2mat(E2Cat);
+           E3Cat = cell2mat(E3Cat);
+           freqCat = cell2mat(freqCat);
+           PradCat = cell2mat(PradCat);
+           radEffCat = cell2mat(radEffCat);
+           obj = FarField(objIn(1).x,objIn(1).y,E1Cat,E2Cat,freqCat,PradCat,radEffCat,objIn(1).auxParamStruct,'E3',E3Cat);
+        end
+        
         %% Symmetry handlers
         function obj = setSymmetryXZ(obj,symmetryType)
             % SETSYMMETRYXZ Specify symmetry along the XZ plane.
@@ -3858,30 +3967,100 @@ classdef FarField
         end
         
         %% Format and other testers
-        function y = isGridEqual(obj1,obj2)
+        function [y,xEqual,yEqual,gridEqual,fEqual] = isGridEqual(obj1,obj2)
             % ISGRIDEQUAL Compares the grid between two FarField objects.
             
-            % Dont go for formal equality - floating point error just too much...
-            tol = 10^(-obj1.nSigDig+1);
-            if all(size(obj1.x) == size(obj2.x)) && all(size(obj1.y) == size(obj2.y))
-                xEqual = abs(obj1.x - obj2.x) < tol;
-                yEqual = abs(obj1.y - obj2.y) < tol;
-                gridEqual = strcmp(obj1.gridType,obj2.gridType);
-                fEqual = isequal(obj1.freqHz,obj2.freqHz);
-                y = all(xEqual) && all(yEqual) && gridEqual && fEqual;
-            else
-                y = 0;
+            obj = obj1;
+            if nargin == 2
+                obj = [obj1,obj2];
             end
+            Nin = length(obj);
+            [xEqual,yEqual,gridEqual,fEqual] = deal(zeros(1,Nin-1));
+            for tt = 2:Nin
+                % Dont go for formal equality - floating point error just too much...
+                tol = 10^(-obj(1).nSigDig+1);
+                if all(size(obj(tt).x) == size(obj(tt-1).x)) && all(size(obj(tt).y) == size(obj(tt-1).y))
+                    xEqual(tt-1) = all(abs(obj(tt).x - obj(tt-1).x) < tol);
+                    yEqual(tt-1) = all(abs(obj(tt).y - obj(tt-1).y) < tol);
+                    gridEqual(tt-1) = strcmp(obj(tt).gridType,obj(tt-1).gridType);
+                    fEqual(tt-1) = isequal(obj(tt).freqHz,obj(tt-1).freqHz);
+                end
+            end
+            y = all(xEqual) && all(yEqual) && all(gridEqual) && all(fEqual);
         end
         
-        function y = typesAreEqual(obj1,obj2)
+        function [y,gridEqual,coorEqual,polEqual] = typesAreEqual(obj1,obj2)
             % TYPESAREEQUAL Compares if the grid, coorTpe and polarization
             % are equal between two FarField objects.
             
-            gridEqual = strcmp(obj1.gridType,obj2.gridType);
-            coorEqual = strcmp(obj1.coorType,obj2.coorType);
-            polEqual = strcmp(obj1.polType,obj2.polType);
-            y = gridEqual && coorEqual && polEqual;
+            obj = obj1;
+            if nargin == 2
+                obj = [obj1,obj2];
+            end
+            Nin = length(obj);
+            [gridEqual,coorEqual,polEqual] = deal(zeros(1,Nin-1));
+            for tt = 2:Nin
+                gridEqual(tt-1) = strcmp(obj(tt).gridType,obj(tt-1).gridType);
+                coorEqual(tt-1) = strcmp(obj(tt).coorType,obj(tt-1).coorType);
+                polEqual(tt-1) = strcmp(obj(tt).polType,obj(tt-1).polType);
+            end
+            y = all(gridEqual) && all(coorEqual) && all(polEqual);
+        end
+        
+        function [y,symmetryXYequal,symmetryXZequal,symmetryYZequal,symmetryBORequal] = symmetryEqual(obj1,obj2)
+           % SYMMETRYEQUAL tests if the symmetry definitions are equal 
+           
+           obj = obj1;
+           if nargin == 2
+               obj = [obj1,obj2];
+           end
+           Nin = length(obj);
+           [symmetryXYequal,symmetryXZequal,symmetryYZequal,symmetryBORequal] = deal(zeros(1,Nin-1));
+           for tt = 2:Nin
+               symmetryXYequal(tt-1) = strcmp(obj(tt).symmetryXY,obj(tt-1).symmetryXY);
+               symmetryXZequal(tt-1) = strcmp(obj(tt).symmetryXZ,obj(tt-1).symmetryXZ);
+               symmetryYZequal(tt-1) = strcmp(obj(tt).symmetryYZ,obj(tt-1).symmetryYZ);
+               symmetryBORequal(tt-1) = strcmp(obj(tt).symmetryBOR,obj(tt-1).symmetryBOR);
+           end
+           y = all(symmetryXYequal) && all(symmetryXZequal) && all(symmetryYZequal) && all(symmetryBORequal);
+        end
+        
+        function [y,orientEqual,locEqual,timeEqual] = isAstroEqual(obj1,obj2)
+            % ISASTROEQUAL tests if the astronomical descriptions are equal
+            
+            obj = obj1;
+            if nargin == 2
+                obj = [obj1,obj2];
+            end
+            Nin = length(obj);
+            [orientEqual,locEqual,timeEqual] = deal(zeros(1,Nin-1));
+            for tt = 2:Nin
+                orientEqual(tt-1) = isequal(obj(tt).orientation,obj(tt-1).orientation);
+                locEqual(tt-1) = isequal(obj(tt).earthLocation,obj(tt-1).earthLocation);
+                timeEqual(tt-1) = isequal(obj(tt).time,obj(tt-1).time);
+            end
+            y = all(orientEqual) && all(locEqual) && all(timeEqual);
+        end
+        
+        function [y,rEqual,slantEqual] = fieldParsEqual(obj1,obj2)
+            % FIELDPARSEQUAL tests equality of field parameters r and slant
+            
+            obj = obj1;
+            if nargin == 2
+                obj = [obj1,obj2];
+            end
+            Nin = length(obj);
+            [rEqual,slantEqual] = deal(zeros(1,Nin-1));
+            for tt = 2:Nin
+                rEqual(tt-1) = isequal(obj(tt).r,obj(tt-1).r);
+                % Only care about the slant angle if that is the polType
+                if strcmp(obj(tt).polType,'slant') && strcmp(obj(tt-1).polType,'slant')
+                    slantEqual(tt-1) = isequal(obj(tt).slant,obj(tt-1).slant);
+                else
+                    slantEqual(tt-1) = true;
+                end
+            end
+            y = all(rEqual) && all(slantEqual);
         end
         
         function y = isGrid4pi(obj)

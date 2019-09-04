@@ -5,16 +5,13 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Typical pattern parameters calculator: eff, XP, etc.
-- [ ] Multiple frequency concat
-- [ ] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
-- [ ] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
+- [ ] readMeasurements
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
+- [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
-- [ ] readMeasurements
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
@@ -78,6 +75,10 @@
 - [x] Make a compression function for handling the data of large fields - only initialise the base when required  
 - [x] Beamwidth calculator 
 - [x] SLL calculator
+- [x] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
+- [x] Multiple frequency concat
+- [x] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
+
 
 
 # Arrays

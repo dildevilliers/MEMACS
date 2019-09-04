@@ -41,11 +41,22 @@ catch constructorPower_errInfo
     errConstrPower = true;
 end
 
-constructTestVect = [errConstrEmpty,errConstrBasic,errConstrPower];
+try
+    inStruct = struct('coorType','Ludwig1','gridType','AzEl','polType','circular',...
+                'symmetryXZ','electric','symmetryYZ','none','symmetryXY','none','symmetryBOR','none',...
+                'r',2,'slant',deg2rad(30),'freqUnit','MHz',...
+                'orientation',[0,0,0],'earthLocation',[0 0 0],'time',FF2.time);
+    FF3 = FarField(FF.x,FF.y,FF.E1,FF.E2,FF.freq,1,1,inStruct);
+    errConstrStruct = ~isequal(FF3.auxParamStruct,inStruct);
+catch constructorStruct_errInfo
+    errConstrStruct = true;
+end
+
+constructTestVect = [errConstrEmpty,errConstrBasic,errConstrPower,errConstrStruct];
 if all(constructTestVect < tol)
     disp('Pass: constructor')
     constructorPass = true;
-    clear FF FF1 FF2
+    clear FF FF1 FF2 FF3
 else
     disp('FAIL: constructor')
     constructorPass = false;
