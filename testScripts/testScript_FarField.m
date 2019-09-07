@@ -4,6 +4,7 @@
 
 close all
 clearvars
+clear all
 
 disp('-------------------------------------------------------------------')
 disp('...Testing FarField...');
@@ -15,6 +16,7 @@ dataPathGRASPgrd = [dataPath,'GRASPgrd\'];
 dataPathGRASPcut = [dataPath,'GRASPcut\'];
 dataPathCSTffs = [dataPath,'CSTffs\'];
 dataPathCSTtxt = [dataPath,'CSTtxt\'];
+dataPathNFSscan = [dataPath,'NFSscan\'];
 
 
 %% Constructors - just run them through
@@ -136,6 +138,30 @@ else
     disp('FAIL: readCSTtxt')
 end
 
+% NFS constructor
+readNFSscanPass = true;
+NFSnameVect = {'az180el360','az360el180','th180ph360','th360ph180'};
+for nn = 1:length(NFSnameVect)
+    fileName = ['NFSscan_',NFSnameVect{nn}];
+    try
+        FF = FarField.readNFSscan([dataPathNFSscan,fileName]);
+        if 1
+            figure, FF.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
+        end
+        readNFSscanPass = readNFSscanPass && 1;
+    catch readNFSscan_errInfo
+        readNFSscanPass = readNFSscanPass && 0;
+        keyboard
+    end
+end
+if readNFSscanPass
+    disp('Pass: readNFSscan')
+    clear FF 
+else
+    disp('FAIL: readNFSscan')
+end
+
+keyboard
 %% Performance metrics
 % Beamwidth
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FFmainBeam']);
@@ -684,7 +710,7 @@ end
 
 
 %% Final test
-FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,...
+FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,...
     bwPass,sllPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...

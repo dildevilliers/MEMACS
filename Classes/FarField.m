@@ -55,8 +55,6 @@ classdef FarField
         radEff_dB       % Radiation efficiency in dB    
         xRangeType      % Type of x-range: 'sym' or 'pos'
         yRangeType      % Type of y-range: 180 or 360
-        
-        auxParamStruct     % Structure containing all the nam-value pair parameters
     end
     
     properties (Dependent = true, Hidden = true)
@@ -72,6 +70,8 @@ classdef FarField
         baseTypeDifferent % Flag that indicates base grid and current grid are local and astro (or changed astro) (true) or both local/both astro (false)
         coorOrientation % Coordinate system indicating the orientation
         angBackRotate   % Required Euler rotation angles to align the antenna to to North,Zenith system
+        
+        auxParamStruct     % Structure containing all the nam-value pair parameters
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -5222,6 +5222,38 @@ classdef FarField
         
         function FF = readNFSscan(pathName,varargin)
             % READNFSSCAN Create a FarField object from a NFS spherical range scan .txt file.
+            %
+            % FF = readNFSscan(pathName,varargin) loads a FarField object
+            % from the NFS scanner .txt file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs. 
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an ffs file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-09-06, Dirk de Villiers
+            % Updated: 2019-09-06, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readNFSscan;
+            %   F.plot('plotType','2D','showGrid',1)
+            
             
             % Parsing through the inputs
             parseobj = inputParser;
@@ -5284,18 +5316,18 @@ classdef FarField
             fgetl(fid); % Skip th/az heading line
             a = fgetl(fid); % Read the first dimension data line1
             D1 = textscan(a,'%s%s%f%s%s%s%f%s%s%s%f');
-            a = fgetl(fid); % Read the first dimension data line2
-            D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
             [x1span,x1center,x1N] = deal(D1{3},D1{7},D1{11});
-            [x1start,x1stop,x1delta] = deal(D2{2},D2{6},D2{10});
+            a = fgetl(fid); % Read the first dimension data line2
+%             D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
+%             [x1start,x1stop,x1delta] = deal(D2{2},D2{6},D2{10});
             
             fgetl(fid); % Skip ph/el heading line
             a = fgetl(fid); % Read the second dimension data line1
             D1 = textscan(a,'%s%s%f%s%s%s%f%s%s%s%f');
-            a = fgetl(fid); % Read the second dimension data line2
-            D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
             [x2span,x2center,x2N] = deal(D1{3},D1{7},D1{11});
-            [x2start,x2stop,x2delta] = deal(D2{2},D2{6},D2{10});
+            a = fgetl(fid); % Read the second dimension data line2
+%             D2 = textscan(a,'%s%f%s%s%s%f%s%s%s%f%s');
+%             [x2start,x2stop,x2delta] = deal(D2{2},D2{6},D2{10});
             
             fgetl(fid); % Skip rotation line
             fgetl(fid); % Skip interpolation line
@@ -5347,27 +5379,16 @@ classdef FarField
             % Read second pol data
             DATA2 = fscanf(fid,'%f%f%f%f',[4, x1N*x2N]).';
             
-            % Get angles
-%             x = deg2rad(DATA1(:,1));
-%             y = deg2rad(DATA1(:,2));
             
-%             % Sort and format the data
+            % Sort and format the data
             iPhaseChange = [];
             phaseChange = 0;
             switch gridType
                 case 'PhTh'
-%                     if x2span > 180 && x1start < 0 && x1stop > 0 % Don't have full sphere, but some data repeats
-%                         % Remove the negative part
-%                         % TODO: Check if this always works - not sure if
-%                         % the negative side is always the continuous part
-%                         % Must also still check to only remove the parts
-%                         % that repeat
-%                         iRemove = find(DATA1(:,1) < 0);
-%                         DATA1(iRemove,:) = [];
-%                         DATA2(iRemove,:) = [];
-%                     end
                     % th=0 is continuous to the negative side, so shift
                     % by 180 degrees
+                    % TODO: Not sure if this is a rule - works for the test
+                    % cases
                     iPhaseChange = find(DATA1(:,1) == 0);
                     phaseChange = 180;
                     y = deg2rad(DATA1(:,1));
@@ -5402,16 +5423,6 @@ classdef FarField
             FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
-            
-%             % Set to a standard grid - try to get positive x range and 180
-%             % y range
-%             FF = FF.setYrange(180);
-%             % Insert the missing cut if required
-%             % TODO: Remove after setYrange and setXrange have been fixed to
-%             % be more general
-%             FF = FF.copyAndInsertXcut(-pi,pi);
-%             FF = FF.setXrange('pos');
-%             FF = FF.setBase;
         end
         
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)

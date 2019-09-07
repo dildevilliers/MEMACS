@@ -5,7 +5,6 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] readMeasurements
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
@@ -32,7 +31,6 @@
 - [ ] astronomical methods help files
 - [ ] File output help files
 - [ ] Farfield file reading methods help files
-- [ ] generalise the PhTh readNFSscan for repeating data - only remove what is repeated
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
@@ -78,6 +76,7 @@
 - [x] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
 - [x] Multiple frequency concat
 - [x] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
+- [x] readMeasurements
 
 
 
