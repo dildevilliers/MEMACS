@@ -57,27 +57,6 @@
 - [ ] General CBFP/SWE/Zernike interpolation over parameters
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
-- [x] Set coorType = power for astrogrids by default
-- [x] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
-- [x] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
-- [x] Refactor setXgrid and setYgrid. 
-- [x] include the elevation type angles for setXgrid and setYgrid
-- [x] Sped up the constructor and rotation utilities for very large fields
-- [x] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
-- [x] Sped up 2D plotting when the provided grid is not changed
-- [x] Grid type transformation help files
-- [x] ReadCSTascii
-- [x] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
-- [x] Coordinate system transformation help files
-- [x] Polarization transformation help files
-- [x] Make a compression function for handling the data of large fields - only initialise the base when required  
-- [x] Beamwidth calculator 
-- [x] SLL calculator
-- [x] fix the setRangeSph field signs - copying across the pole should change the sign (for azel and elaz - phth works)
-- [x] Multiple frequency concat
-- [x] Include a struct optional argument in the constructor containing all the name-value pairs information (including getter function for the struct)
-- [x] readMeasurements
-
 
 
 # Arrays
