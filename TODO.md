@@ -5,31 +5,44 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Plan help files
+- [ ] Fix rotate - used to work at some stage?  Only works for power coorType
+- [ ] Typical pattern parameters calculator: eff, XP, etc.
+- [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
+- [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
+- [ ] readFITS (DdV)
+- [ ] harden up E-field setters
+- [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
+- [ ] make a legacy struct constructor
+- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
+- [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
+- [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
+- [ ] writeFEKOffe
+- [ ] Pattern getters help files
+- [ ] Field and frequency setters help files
+- [ ] Grid range shifter help files
+- [ ] transformTypes help file
+- [ ] Base grid function help files
+- [ ] Plotting method help files
+- [ ] interpolation method help files
+- [ ] Maths overloaded methods help files
+- [ ] Frequency and field modification help files
+- [ ] symmetry handler help files
+- [ ] Format and tester help files
+- [ ] astronomical methods help files
+- [ ] File output help files
+- [ ] Farfield file reading methods help files
 - [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
-- [ ] ReadCSTascii
-- [ ] Multiple frequency concat
-- [ ] More robust automatic interpolation grid calculator (rotate has a basic version hardcoded)
-- [ ] Fix default behaviour of the 2-D plotType to have a finite step. It should run out the box with no step provided.
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
-- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
-- [ ] readMeasurements
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] Fix FarField.rotate field components pole at th = 180 (DdV)
 - [ ] Field symmetries: XY plane (DdV)
 - [ ] Gaussian/cosn pattern fitter
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
-- [ ] readFITS (DdV)
+- [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
-- [ ] CBFP expansion (Fahmi)
-- [ ] SWE of a given field (Fahmi + Brandt)
-- [ ] Typical pattern parameters calculator: SLL, XP, Beamwidth, etc.
 - [ ] writeCSTffs
-- [ ] writeFEKOfft
-- [ ] Test the sym/pos and 180/360 plotting order rules.  Should be X and then Y shifts always - force this in the code somehow.
-- [ ] Fix AzEl and ElAz poles in getELudwig2EA and getELudwig2AE: should not be 0
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
 - [ ] Fix 3D plot for negative y-(th)axis cases
@@ -44,7 +57,6 @@
 - [ ] General CBFP/SWE/Zernike interpolation over parameters
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
-- [x] Fix grid2AzAlt orientation rotation
 
 
 # Arrays
