@@ -103,10 +103,6 @@ for pp = 1:Npar
     end
 end
 
-iLevel1 = [ParStruct.type];
-name1 = {ParStruct(iLevel1 == 0).name};
-value1 = [ParStruct(iLevel1 == 0).expr];
-
 [~,iSort] = sort([ParStruct.type]);
 ParamStruct = ParStruct(iSort);
 
@@ -115,7 +111,6 @@ for pp = 1:Npar
     numFlag(pp) = isnumeric(ParamStruct(pp).expr);
 end
 iSplit = find(~numFlag,1);
-notSorted = true;
 swopped = true;
 whileCounter = 0;
 while swopped
