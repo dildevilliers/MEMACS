@@ -12,11 +12,11 @@
 - [ ] readFITS (DdV)
 - [ ] harden up E-field setters
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
-- [ ] make a legacy struct constructor
 - [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
+- [ ] writeCSTffs
 - [ ] Pattern getters help files
 - [ ] Field and frequency setters help files
 - [ ] Grid range shifter help files
@@ -39,6 +39,7 @@
 - [ ] Fix FarField.rotate field components pole at th = 180 (DdV)
 - [ ] Field symmetries: XY plane (DdV)
 - [ ] Gaussian/cosn pattern fitter
+- [ ] Gaussian/cosn/etc pattern constructor
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
@@ -57,6 +58,7 @@
 - [ ] General CBFP/SWE/Zernike interpolation over parameters
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
+- [x] make a legacy struct constructor
 
 
 # Arrays

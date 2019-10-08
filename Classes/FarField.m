@@ -591,24 +591,31 @@ classdef FarField
             % - obj:    FarField object
             % 
             % Outputs
-            % - FFpattern: FarField struct
+            % - FFpattern: FarField struct with fields
+            %   -- th: theta angles in rad [Nang x 1]
+            %   -- ph: phi angles in rad [Nang x 1]
+            %   -- Eth: theta E-field component in V/m [Nang x Nf]
+            %   -- Eph: phi E-field component in V/m [Nang x Nf]
+            %   -- freq: Frequency in Hz [1 x Nf]
+            %   -- Nth: Number of unique theta angles
+            %   -- Nph: Number of unique phi angles
+            %   -- Nf: Number of frequencies
+            %   -- Prad: Radiated power in Watt [1 x Nf]
+            %   -- radEff: Radiation efficiency [1 x Nf]
             %
             % Dependencies
             % -
             %
             % Created: 2019-05-09, Dirk de Villiers
-            % Updated: 2019-08-19, Dirk de Villiers
+            % Updated: 2019-10-08, Dirk de Villiers
             %
-            % Tested : Matlab R2018b, Fahmi Mokhupuki
-            %  Level : 1
-            %   File : 
+            % Tested : Matlab R2018b, Dirk de Villiers
+            %  Level : 2
+            %   File : testScript_FarField.m
             %
             % Example
             %   F = FarField;
             %   FFpattern = getFarFieldStruct(F);
-            
-            % This returns the legacy structure format for testing with all
-            % the tons of old code
             
             obj = obj.coor2spherical(true);
             FFpattern.th = obj.y;
@@ -5835,6 +5842,98 @@ classdef FarField
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
         
+        function FF = fromStruct(FFpattern,varargin)
+            % FROMSTRUCT Create a FarField object from a obj.getFarFieldStruct struct
+            %
+            % FF = fromStruct(FFpattern) loads a FarField object
+            % from the struct in FFpattern.  The struct should have (some of) the
+            % fields defined in the method FarField.getFarFieldStruct
+            % 
+            % Inputs
+            % - FFpattern: Struct containing the following fields:
+            %   -- th: theta angles in rad [Nang x 1]
+            %   -- ph: phi angles in rad [Nang x 1]
+            %   -- Eth: theta E-field component in V/m [Nang x Nf]
+            %   -- Eph: phi E-field component in V/m [Nang x Nf]
+            %   -- freq: Frequency in Hz [1 x Nf]
+            %   -- Prad: Radiated power in Watt [1 x Nf]
+            %   -- radEff: Radiation efficiency [1 x Nf]
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are  
+            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-10-08, Dirk de Villiers
+            % Updated: 2019-10-08, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   FF = FarField;
+            %   FFpattern = FF.getFarFieldStruct;
+            %   FF1 = FarField.fromStruct(FFpattern);
+            %   FF1.plot
+
+            % Parsing through the inputs
+            parseobj = inputParser;
+            parseobj.FunctionName = 'fromStruct';
+            
+            typeValidator_FF = @(x) isa(x,'struct');
+            parseobj.addRequired('FFpattern',typeValidator_FF);
+            
+            expected_symPlane = {'none','electric','magnetic'};
+            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
+            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
+            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
+            
+            expected_symBOR = {'none','BOR0','BOR1'};
+            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'fromStruct');
+            parseobj.addParameter('r',1,typeValidation_scalar);
+            
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'fromStruct');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+            
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'fromStruct');
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+            
+            typeValidation_time = @(x) isa(x,'datetime');
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+            
+            parseobj.parse(FFpattern,varargin{:})
+            
+            FFpattern = parseobj.Results.FFpattern;
+            symmetryXZ = parseobj.Results.symmetryXZ;
+            symmetryYZ = parseobj.Results.symmetryYZ;
+            symmetryXY = parseobj.Results.symmetryXY;
+            symmetryBOR = parseobj.Results.symmetryBOR;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            if ~isfield(FFpattern,'Prad'), FFpattern.Prad = []; end
+            if ~isfield(FFpattern,'radEff'), FFpattern.radEff = 1; end
+            
+            FF = FarField(FFpattern.ph,FFpattern.th,FFpattern.Eth,FFpattern.Eph,FFpattern.freq,FFpattern.Prad,FFpattern.radEff,...
+                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+        end
     end
     
     methods (Access = private)
