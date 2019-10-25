@@ -70,6 +70,9 @@
 - [ ] include polarization information
 - [ ] include plot for the direction and polarization vectors
 
+## ArrayImaging
+- [ ] make class
+
 ## ArrayElements
 - [ ] channelErrors frequency dependent
 - [ ] different field patterns for each element
