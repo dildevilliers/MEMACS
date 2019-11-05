@@ -5,14 +5,16 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] finish SimpleTaper constructor, write help and testscript
+- [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] readFITS (DdV)
+- [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
-- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
@@ -59,6 +61,7 @@
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
 - [x] make a legacy struct constructor
+- [x] Small bug fix in readNFSscan
 
 
 # Arrays

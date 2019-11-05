@@ -5430,6 +5430,7 @@ classdef FarField
             FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            FF = FF.sortGrid;
         end
         
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
@@ -5786,30 +5787,31 @@ classdef FarField
             if isscalar(U)
                 U = U./(4.*pi).*ones(size(ph));
             end
+            Emag = sqrt(U./r^2.*2*eta0); % E-field magnitude
             %From power pattern and polarization parameters, generate E1 and E2 accordingly
             if strcmp(symmetryBOR,'none')
                 coorType = 'Ludwig3';
                 switch fieldPol
                     case 'linearX' % linearly polarised along X-axis
                         polType = 'linear';
-                        E1  = sqrt(U./r^2.*2*eta0);
+                        E1  = Emag;
                         E2  = zeros(size(U));
                     case 'linearY' % linearly polarised along Y-axis
                         polType = 'linear';
                         E1  = zeros(size(U));
-                        E2  = sqrt(U./r^2.*2*eta0);
+                        E2  = Emag;
                     case 'circularLH'  % Lefthand Circular polarization
                         polType = 'circular';
-                        E1  = sqrt(U./r^2.*2*eta0);
+                        E1  = Emag;
                         E2  = zeros(size(U));
                     case 'circularRH'  % Righthand Circular polarization
                         polType = 'circular';
                         E1  = zeros(size(U));
-                        E2  = sqrt(U./r^2.*2*eta0);
+                        E2  = Emag;
                     case 'power' % Only real power pattern of interest
                         polType = 'none';
                         coorType = 'power';
-                        E1 = sqrt(U./r^2.*2*eta0);
+                        E1 = Emag;
                         E2 = [];
                     otherwise
                         error('fieldPol input string unrecognised')
@@ -5933,6 +5935,136 @@ classdef FarField
             FF = FarField(FFpattern.ph,FFpattern.th,FFpattern.Eth,FFpattern.Eph,FFpattern.freq,FFpattern.Prad,FFpattern.radEff,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+        end
+        
+        % Analytic pattern functions
+        function FF = SimpleTaper(taperAng_deg, taper_zx_dB, taper_zy_dB, freq, Nx, Ny, varargin)
+            % SIMPLETAPER creates a simple tapered pattern
+            %
+            %
+            
+            % Parsing through the inputs
+            parseobj = inputParser;
+            parseobj.FunctionName = 'SimpleTaper';
+            
+            typeValidation_taper = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','ncols',1},'SimpleTaper');
+            parseobj.addRequired('taperAng_deg',typeValidation_taper);
+            parseobj.addRequired('taper_zx_dB',typeValidation_taper);
+            parseobj.addRequired('taper_zy_dB',typeValidation_taper);
+            
+            parseobj.addRequired('freq');
+            
+            typeValidation_Ngrid = @(x) validateattributes(x,{'numeric'},{'integer','finite','positive','scalar'},'SimpleTaper');
+            parseobj.addRequired('Nx',typeValidation_Ngrid);
+            parseobj.addRequired('Ny',typeValidation_Ngrid);
+            
+            typeValidation_lims = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan'},'SimpleTaper');
+            parseobj.addParameter('xLims',[],typeValidation_lims);
+            parseobj.addParameter('yLims',[],typeValidation_lims);
+            
+            expected_fieldPol = {'linearX','linearY','circularLH','circularRH','power'};
+            parseobj.addParameter('fieldPol','linearY', @(x) any(validatestring(x,expected_fieldPol)));
+            
+            parseobj.addParameter('gridType','PhTh');
+            parseobj.addParameter('freqUnit','Hz');
+            
+            parseobj.addParameter('r',1);
+            parseobj.addParameter('orientation',[0,0,0]);
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300]);
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0));
+            
+            parseobj.parse(taperAng_deg, taper_zx_dB, taper_zy_dB, freq, Nx, Ny, varargin{:})
+            
+            taperAng_deg = parseobj.Results.taperAng_deg;
+            taper_zx_dB = parseobj.Results.taper_zx_dB;
+            taper_zy_dB = parseobj.Results.taper_zy_dB;
+            freq = parseobj.Results.freq;
+            Nx = parseobj.Results.Nx;
+            Ny = parseobj.Results.Ny;
+            xLims = parseobj.Results.xLims;
+            yLims = parseobj.Results.yLims;
+            fieldPol = parseobj.Results.fieldPol;
+            gridType = parseobj.Results.gridType;
+            freqUnit = parseobj.Results.freqUnit;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            % Build the grid - TODO: extract the following as an external
+            % function
+            [X,Y] = meshgrid(linspace(0,1,Nx),linspace(0,1,Ny));
+            x = X(:);
+            y = Y(:);
+            switch gridType
+                case 'PhTh'
+                    if isempty(xLims), xLims = deg2rad([0,360]); end
+                    if isempty(yLims), yLims = deg2rad([0,180]); end
+                case [{'AzEl','ElAz'},FarField.astroGrids]
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'DirCos'
+                    if isempty(xLims), xLims = [-1,1]; end
+                    if isempty(yLims), yLims = [-1,1]; end
+                case 'TrueView'
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-180,180]); end
+                case 'ArcSin'
+                    if isempty(xLims), xLims = deg2rad([-90,90]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'Mollweide'
+                    if isempty(xLims), xLims = [-1,1].*2.*sqrt(2).*r; end
+                    if isempty(yLims), yLims = [-1,1].*sqrt(2).*r; end
+            end
+            assert(numel(xLims) == 2,'xLims must be a vector of length 2')
+            assert(numel(yLims) == 2,'yLims must be a vector of length 2')
+            x = x.*diff(xLims) + xLims(1);
+            y = y.*diff(yLims) + yLims(1);
+            
+            % Get the grid in PhTh
+            if strcmp(gridType,'PhTh')
+                ph = x;
+                th = y;
+            else
+                PhThHandle = str2func([gridType,'2DirCos']);
+                [u,v,w] = PhThHandle(x,y);
+                [ph,th] = DirCos2PhTh(u,v,w);
+            end
+            
+            A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2);
+            A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2);
+            
+            coorType = 'spherical';
+            switch fieldPol
+                case 'linearX' % linearly polarised along X-axis
+                    polType = 'linear';
+                    E1  = A0.*cos(ph);
+                    E2  = -A90.*sin(ph);
+                case 'linearY' % linearly polarised along Y-axis
+                    polType = 'linear';
+                    E1  = A0.*sin(ph);
+                    E2  = A90.*cos(ph);
+                case 'circularLH'  % Lefthand Circular polarization
+                    polType = 'circular';
+                    error('circular polarisation TODO')
+                case 'circularRH'  % Righthand Circular polarization
+                    polType = 'circular';
+                    error('circular polarisation TODO')
+                case 'power' % Only real power pattern of interest
+                    polType = 'none';
+                    coorType = 'power';
+                    E1 = sqrt((A0.*sin(ph)).^2 + (A90.*cos(ph)).^2);    % TODO check this
+                    E2 = [];
+                otherwise
+                    error('fieldPol input string unrecognised')
+            end
+            
+            [symmetryXZ,symmetryYZ,symmetryXY,symmetryBOR] = deal('none');
+            FF = FarField(x,y,E1,E2,freq,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            FF = FF.setPower(2*pi./FarField.eta0);
         end
     end
     

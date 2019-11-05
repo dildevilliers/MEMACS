@@ -611,7 +611,8 @@ end
 
 
 
-
+%% Static methods
+% FF = FarField.SimpleTaper(55,-12,12,1e9)
 
 
 
