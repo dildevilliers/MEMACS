@@ -71,7 +71,7 @@ classdef FarField
         coorOrientation % Coordinate system indicating the orientation
         angBackRotate   % Required Euler rotation angles to align the antenna to to North,Zenith system
         
-        auxParamStruct     % Structure containing all the nam-value pair parameters
+        auxParamStruct     % Structure containing all the name-value pair parameters
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -5435,7 +5435,7 @@ classdef FarField
         
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
             % READFITS Create a FarField object from a FITS image file.
-            
+            %
             % Expect the data format as: data([Nx,Ny,Nf,Ne,Nc,Np])
             %   Nx - number of x values
             %   Ny - number of y values
@@ -5449,6 +5449,9 @@ classdef FarField
             % containing a subset of:
             %   .pathName1 - the path and name of the first component (required)
             %   .pathName2 - the path and name of the second component (optional)
+            %                The above pathNames can be cell arrays of
+            %                equal length to indicate the field components
+            %                (first element E1 and second is E2)
             %   .type1 - the type of the first component {('real') | 'imag' | 'mag' | 'phase'} (optional)
             %   .type2 - the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
             %   .scale1 - the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
@@ -5498,7 +5501,7 @@ classdef FarField
             
             parseobj.addParameter('freqUnit','Hz');
             
-            % ToDo - add keyboard functionality to read the second
+            % TODO - add keyboard functionality to read the second
             % component as well as type/scale
             if nargin == 0 || isempty(inputStruct)
                 [name,path] = uigetfile('*.fits','Component 1:');
@@ -5526,6 +5529,11 @@ classdef FarField
             eta0 = 3.767303134749689e+02;
             
             pathName1 = inputStruct.pathName1;
+            if ~iscell(pathName1)
+                pathName1 = {pathName1};
+            end
+            Ni = length(pathName1);  % Number of different field components in different files
+            assert(Ni <= 2,'Expecting a maximum of two elements in the pathName1 cell array');
             
             % Set some defaults
             [type1,scale1] = deal('real','lin');
@@ -5539,6 +5547,10 @@ classdef FarField
             end
             if isfield(inputStruct,'pathName2') && ~isempty(inputStruct.pathName2)
                 pathName2 = inputStruct.pathName2;
+                if ~iscell(pathName2)
+                    pathName2 = {pathName2};
+                end
+                assert(Ni==length(pathName2),'The input path cell arrays must be the same length')
             end
             if isfield(inputStruct,'type2') && ~isempty(inputStruct.type2)
                 type2 = inputStruct.type2;
@@ -5584,31 +5596,56 @@ classdef FarField
             end
             
             % sort out extensions
-            [~,~,ext1] = fileparts(pathName1);
-            if isempty(ext1), pathName1 = [pathName1,'.fits']; end
-            if ~isempty(pathName2)
-                [~,~,ext2] = fileparts(pathName2);
-                if isempty(ext2), pathName2 = [pathName2,'.fits']; end
+            for ee = 1:Ni
+                [~,~,ext1] = fileparts(pathName1{ee});
+                if isempty(ext1), pathName1{ee} = [pathName1{ee},'.fits']; end
+                if ~isempty(pathName2)
+                    [~,~,ext2] = fileparts(pathName2{ee});
+                    if isempty(ext2), pathName2{ee} = [pathName2{ee},'.fits']; end
+                end
             end
             
             % Read the info and data and process the fields
-            info1 = fitsinfo(pathName1);
-            [xvect1,yvect1,fvect1] = fitsGrid(info1,xRange,yRange,fRange);
+            % Not doing many checks now to make sure the different field
+            % components are the same grids etc - it might crash or give
+            % nonsense if not...
+            for ee = 1:Ni
+                info1 = fitsinfo(pathName1{ee});
+                data1{ee} = fitsread(pathName1{ee});
+                if ee == 2
+                    [xvect1temp,yvect1temp,fvect1temp] = fitsGrid(info1,xRange,yRange,fRange);
+                    assert(all(xvect1==xvect1temp) && all(yvect1==yvect1temp)&& all(fvect1==fvect1temp),'The different files must be defined on the same grid');
+                else
+                    [xvect1,yvect1,fvect1] = fitsGrid(info1,xRange,yRange,fRange);
+                end
+            end
             if isa(scaleFuncGrid,'function_handle')
                 [X,Y] = meshgrid(scaleFuncGrid(xvect1),scaleFuncGrid(yvect1));
             else
                 [X,Y] = meshgrid(scaleFuncGrid.*xvect1,scaleFuncGrid.*yvect1);
             end
             [Nx,Ny,Nf] = deal(numel(xvect1),numel(yvect1),numel(fvect1));
-            data1 = fitsread(pathName1);
             
             % Ne = number of fields; Nc = number of components; Np = number
             % of complex parts
-            [~,~,~,Ne,Nc,Np] = size(data1(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+            for ee = 1:Ni
+                if ee == 2
+                    [~,~,~,NeTemp,NcTemp,NpTemp] = size(data1{ee}(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+                    assert(NeTemp==Ne && NcTemp==Nc && NpTemp == Np,'The different files must be defined on the same grid');
+                    assert(Nc == 1,'Cannot have two input files and two field components in them.  Either provide one file with both, or two files with one each')
+                else
+                    [~,~,~,Ne,Nc,Np] = size(data1{ee}(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+                end
+            end
+            
             % E-field naming: EXy; X = component, y = complex part
-            E1a = (data1(:,:,:,:,1,:));
+            E1a = (data1{1}(:,:,:,:,1,:));
             [E1b,E2a,E2b] = deal([]);
-            if Nc > 1, E2a = (data1(:,:,:,:,2,:)); end
+            if Nc == 2
+                E2a = (data1{1}(:,:,:,:,2,:)); 
+            elseif Ni == 2 
+                E2a = (data1{2}(:,:,:,:,1,:)); 
+            end
             % Sort out type and scale
             switch scale1
                 case 'dB10'
@@ -5620,35 +5657,47 @@ classdef FarField
             end
             % Get the second complex parameter
             if ~isempty(pathName2) && Np == 1
-                info2 = fitsinfo(pathName2);
-                [xvect2,yvect2,fvect2] = fitsGrid(info2,xRange,yRange,fRange);
-                data2 = fitsread(pathName2);
-                assert(all(xvect1 == xvect2)&&all(yvect1 == yvect2)&&all(fvect1 == fvect2)&&all(size(data1)==size(data2)),'The two patterns must have identical grids and number of fields')
-                E1b = (data2(:,:,:,:,1));
-                if Nc > 1, E2b = (data2(:,:,:,:,2)); end
+                for ee = 1:Ni
+                    info2 = fitsinfo(pathName2{ee});
+                    [xvect2,yvect2,fvect2] = fitsGrid(info2,xRange,yRange,fRange);
+                    data2{ee} = fitsread(pathName2{ee});
+                    assert(all(xvect1 == xvect2)&&all(yvect1 == yvect2)&&all(fvect1 == fvect2)&&all(size(data1{ee})==size(data2{ee})),'The two patterns must have identical grids and number of fields')
+                end
+                E1b = (data2{1}(:,:,:,:,1));
+                if Nc == 2
+                    E2b = (data2{1}(:,:,:,:,2)); 
+                elseif Ni == 2
+                    E2b = (data2{2}(:,:,:,:,1)); 
+                end
             elseif Np == 2
-                E1b = data1(:,:,:,:,1,2);
-                if Nc > 1, E2b = data1(:,:,:,:,2,2); end
+                E1b = data1{1}(:,:,:,:,1,2);
+                if Nc == 2
+                    E2b = data1{1}(:,:,:,:,2,2); 
+                elseif Ni == 2
+                    E2b = data1{2}(:,:,:,:,1,2); 
+                end
             end
             E1 = E1a(:,:,:,:,1,1);
-            if Nc > 1, E2 = E2a(:,:,:,:,1,1); end
+            if Nc == 2 || Ni == 2
+                E2 = E2a(:,:,:,:,1,1); 
+            end
             
             % Handle the complex number types
             switch type2
                 case 'imag'
                     if ~isempty(E1b), E1 = E1 + 1i.*E1b; end
-                    if Nc > 1
+                    if Nc == 2 || Ni == 2
                         if ~isempty(E2b), E2 = E2 + 1i.*E2b; end
                     end
                 case 'phase'
                     if strcmp(scale2,'deg')
                         E1b = deg2rad(E1b);
-                        if Nc > 1
+                        if Nc == 2 || Ni == 2
                             if ~isempty(E2b), E2b = deg2rad(E2b); end
                         end
                     end
                     if ~isempty(E1b), E1 = E1.*exp(1i.*E1b); end
-                    if Nc > 1
+                    if Nc == 2 || Ni == 2
                         if ~isempty(E2b), E2 = E2.*exp(1i.*E2b); end
                     end
             end
@@ -5938,7 +5987,7 @@ classdef FarField
         end
         
         % Analytic pattern functions
-        function FF = SimpleTaper(taperAng_deg, taper_zx_dB, taper_zy_dB, freq, Nx, Ny, varargin)
+        function FF = SimpleTaper(varargin)
             % SIMPLETAPER creates a simple tapered pattern
             %
             %
@@ -5948,15 +5997,15 @@ classdef FarField
             parseobj.FunctionName = 'SimpleTaper';
             
             typeValidation_taper = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','ncols',1},'SimpleTaper');
-            parseobj.addRequired('taperAng_deg',typeValidation_taper);
-            parseobj.addRequired('taper_zx_dB',typeValidation_taper);
-            parseobj.addRequired('taper_zy_dB',typeValidation_taper);
+            parseobj.addOptional('taperAng_deg',55,typeValidation_taper);
+            parseobj.addOptional('taper_zx_dB',-12,typeValidation_taper);
+            parseobj.addOptional('taper_zy_dB',-12,typeValidation_taper);
             
-            parseobj.addRequired('freq');
+            parseobj.addOptional('freq',1e9);
             
             typeValidation_Ngrid = @(x) validateattributes(x,{'numeric'},{'integer','finite','positive','scalar'},'SimpleTaper');
-            parseobj.addRequired('Nx',typeValidation_Ngrid);
-            parseobj.addRequired('Ny',typeValidation_Ngrid);
+            parseobj.addOptional('Nx',73,typeValidation_Ngrid);
+            parseobj.addOptional('Ny',37,typeValidation_Ngrid);
             
             typeValidation_lims = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan'},'SimpleTaper');
             parseobj.addParameter('xLims',[],typeValidation_lims);
@@ -5973,7 +6022,7 @@ classdef FarField
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300]);
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0));
             
-            parseobj.parse(taperAng_deg, taper_zx_dB, taper_zy_dB, freq, Nx, Ny, varargin{:})
+            parseobj.parse(varargin{:})
             
             taperAng_deg = parseobj.Results.taperAng_deg;
             taper_zx_dB = parseobj.Results.taper_zx_dB;
@@ -5991,36 +6040,9 @@ classdef FarField
             earthLocation = parseobj.Results.earthLocation;
             time = parseobj.Results.time;
             
-            % Build the grid - TODO: extract the following as an external
-            % function
-            [X,Y] = meshgrid(linspace(0,1,Nx),linspace(0,1,Ny));
-            x = X(:);
-            y = Y(:);
-            switch gridType
-                case 'PhTh'
-                    if isempty(xLims), xLims = deg2rad([0,360]); end
-                    if isempty(yLims), yLims = deg2rad([0,180]); end
-                case [{'AzEl','ElAz'},FarField.astroGrids]
-                    if isempty(xLims), xLims = deg2rad([-180,180]); end
-                    if isempty(yLims), yLims = deg2rad([-90,90]); end
-                case 'DirCos'
-                    if isempty(xLims), xLims = [-1,1]; end
-                    if isempty(yLims), yLims = [-1,1]; end
-                case 'TrueView'
-                    if isempty(xLims), xLims = deg2rad([-180,180]); end
-                    if isempty(yLims), yLims = deg2rad([-180,180]); end
-                case 'ArcSin'
-                    if isempty(xLims), xLims = deg2rad([-90,90]); end
-                    if isempty(yLims), yLims = deg2rad([-90,90]); end
-                case 'Mollweide'
-                    if isempty(xLims), xLims = [-1,1].*2.*sqrt(2).*r; end
-                    if isempty(yLims), yLims = [-1,1].*sqrt(2).*r; end
-            end
-            assert(numel(xLims) == 2,'xLims must be a vector of length 2')
-            assert(numel(yLims) == 2,'yLims must be a vector of length 2')
-            x = x.*diff(xLims) + xLims(1);
-            y = y.*diff(yLims) + yLims(1);
-            
+            % Build the grid 
+            [x,y] = FarField.buildGrid(Nx,Ny,xLims,yLims,gridType,r);
+                
             % Get the grid in PhTh
             if strcmp(gridType,'PhTh')
                 ph = x;
@@ -6030,10 +6052,28 @@ classdef FarField
                 [u,v,w] = PhThHandle(x,y);
                 [ph,th] = DirCos2PhTh(u,v,w);
             end
-            
+
+            % Define the field pattern
             A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2);
             A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2);
             
+            % Also build full pattern for power integration if needed
+            if ~isempty(xLims) || ~isempty(yLims) || strcmp(gridType,'Mollweide')
+                [phF,thF] = FarField.buildGrid(181,361,[],[],'PhTh');
+                % Only non-empty if needed
+                A0F = 10.^((taper_zx_dB./20).*(thF./deg2rad(taperAng_deg)).^2);
+                A90F = 10.^((taper_zy_dB./20).*(thF./deg2rad(taperAng_deg)).^2);
+                % Force linear X for power calculation
+                E1F = A0F.*cos(phF);
+                E2F = -A90F.*sin(phF);
+                FFpow = FarField(phF,thF,E1F,E2F,freq,...
+                    'coorType','spherical','polType','linear','gridType','PhTh','freqUnit',freqUnit);
+                Pr = FFpow.Prad;
+            else
+                Pr = [];
+            end
+            
+            % TODO: Extract the following as an external function
             coorType = 'spherical';
             switch fieldPol
                 case 'linearX' % linearly polarised along X-axis
@@ -6060,7 +6100,7 @@ classdef FarField
             end
             
             [symmetryXZ,symmetryYZ,symmetryXY,symmetryBOR] = deal('none');
-            FF = FarField(x,y,E1,E2,freq,...
+            FF = FarField(x,y,E1,E2,freq,Pr,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
@@ -6176,7 +6216,7 @@ classdef FarField
             [FF1,FF2] = deal(obj1,obj2);
         end
         
-        %% Grid getters
+        %% Grid getters and builders
         function [u, v, w] = getDirCos(obj)
             % GETDIRCOS Get DirCos grid.
             
@@ -6477,7 +6517,6 @@ classdef FarField
                     if nargout > 2, E3 = zeros(size(Eh)); end
             end
         end
-        
         
         %% Polarization type getters
         function [E1lin, E2lin, E3lin] = getElin(obj)
@@ -7055,6 +7094,50 @@ classdef FarField
                 stepy = diff(obj.yRange)/(N-1);
             end
         end
+    end
+    
+    methods (Static = true)
+        function [x,y] = buildGrid(Nx,Ny,xLims,yLims,gridType,r)
+            % BUILDGRID builds an x-y grid
+            %
+            % [x,y] = buildGrid(Nx,Ny,xLims,yLims,gridType,r)
+            % All inputs to be provided except r, which defaults to 1
+            % xLims and yLims can be ampty, which implies to full sphere
+            % will be created
+            
+            if nargin < 6
+                r = 1;
+            end
+            
+            [X,Y] = meshgrid(linspace(0,1,Nx),linspace(0,1,Ny));
+            x = X(:);
+            y = Y(:);
+            switch gridType
+                case 'PhTh'
+                    if isempty(xLims), xLims = deg2rad([0,360]); end
+                    if isempty(yLims), yLims = deg2rad([0,180]); end
+                case [{'AzEl','ElAz'},FarField.astroGrids]
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'DirCos'
+                    if isempty(xLims), xLims = [-1,1]; end
+                    if isempty(yLims), yLims = [-1,1]; end
+                case 'TrueView'
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-180,180]); end
+                case 'ArcSin'
+                    if isempty(xLims), xLims = deg2rad([-90,90]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'Mollweide'
+                    if isempty(xLims), xLims = [-1,1].*2.*sqrt(2).*r; end
+                    if isempty(yLims), yLims = [-1,1].*sqrt(2).*r; end
+            end
+            assert(numel(xLims) == 2,'xLims must be a vector of length 2')
+            assert(numel(yLims) == 2,'yLims must be a vector of length 2')
+            x = x.*diff(xLims) + xLims(1);
+            y = y.*diff(yLims) + yLims(1);
+        end
+        
     end
     
 end

@@ -14,6 +14,7 @@
 - [ ] readFITS (DdV)
 - [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
+- [ ] cannot plot DirCos version of an astrogrids base object due to empty obj.th
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
