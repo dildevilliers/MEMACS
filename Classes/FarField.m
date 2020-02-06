@@ -5459,6 +5459,10 @@ classdef FarField
             %   .scaleFuncGrid - can be a function handle or scaling factor
             %   for the grid. if it is an array with 2 elements, the first
             %   is used for x, and the second for y
+            %   
+            %   varargin can contain name-value pairs... (TODO)
+            %       xRange,yRange,fRange
+            %       Symmetry, orientation, etc - like FarField
             
             % ToDo: This is very hard to generalise - learn as we go and
             % get more variations I guess
@@ -5726,7 +5730,8 @@ classdef FarField
                     startValX  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL1'),2));
                     startPosX = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX1'),2));
                     delX = cell2mat(keywords(strcmp(keywords(:,1),'CDELT1'),2));
-                    xvect = (0:delX:(Nx-1)*delX) + startValX - (startPosX-mod(Nx,2))*delX;
+%                     xvect = (0:delX:(Nx-1)*delX) + startValX - (startPosX-mod(Nx,2))*delX;
+                    xvect = ((1:Nx) - startPosX).*delX + startValX;
                 else
                     xvect = linspace(xRange(1),xRange(2),Nx);
                 end
@@ -5734,7 +5739,8 @@ classdef FarField
                     startValY  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL2'),2));
                     startPosY = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX2'),2));
                     delY = cell2mat(keywords(strcmp(keywords(:,1),'CDELT2'),2));
-                    yvect = (0:delY:(Ny-1)*delY) + startValY - (startPosY-mod(Ny,2))*delY;
+%                     yvect = (0:delY:(Ny-1)*delY) + startValY - (startPosY-mod(Ny,2))*delY;
+                    yvect = ((1:Ny) - startPosY).*delY + startValY;
                 else
                     yvect = linspace(yRange(1),yRange(2),Ny);
                 end
@@ -5742,7 +5748,8 @@ classdef FarField
                     startValF  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL3'),2));
                     startPosF = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX3'),2));
                     delF = cell2mat(keywords(strcmp(keywords(:,1),'CDELT3'),2));
-                    fvect = (0:delF:(Nf-1)*delF) + startValF - (startPosF-mod(Nf,2))*delF;
+%                     fvect = (0:delF:(Nf-1)*delF) + startValF - (startPosF-mod(Nf,2))*delF;
+                    fvect = ((1:Nf) - startPosF).*delF + startValF;
                 else
                     fvect = linspace(fRange(1),fRange(2),Nf);
                 end

@@ -17,6 +17,7 @@ dataPathGRASPcut = [dataPath,'GRASPcut\'];
 dataPathCSTffs = [dataPath,'CSTffs\'];
 dataPathCSTtxt = [dataPath,'CSTtxt\'];
 dataPathNFSscan = [dataPath,'NFSscan\'];
+dataPathFITS = [dataPath,'FITS\'];
 
 
 %% Constructors - just run them through
@@ -145,7 +146,7 @@ for nn = 1:length(NFSnameVect)
     fileName = ['NFSscan_',NFSnameVect{nn}];
     try
         FF = FarField.readNFSscan([dataPathNFSscan,fileName]);
-        if 1
+        if 0
             figure, FF.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
         end
         readNFSscanPass = readNFSscanPass && 1;
@@ -159,6 +160,43 @@ if readNFSscanPass
     clear FF 
 else
     disp('FAIL: readNFSscan')
+end
+
+% FITS constructor
+readFITSpass = true;
+% Seperate real and imag and components - Rick Perley Holography version...
+fitsPath = [dataPathFITS,'\ant5'];
+inputStructL.pathName1 = {[fitsPath,'LLreal_small.fits'],[fitsPath,'LRreal_small.fits']};
+inputStructL.pathName2 = {[fitsPath,'LLimag_small.fits'],[fitsPath,'LRimag_small.fits']};
+inputStructL.type1 = 'real';
+inputStructL.type2 = 'imag';
+[inputStructL.scale1,inputStructL.scale2] = deal('lin');
+inputStructL.scaleFuncGrid = @sind;
+% Seperate Real and Imaginary - Khan Asad EM models version
+fitsPath = [dataPathFITS,'\MeerKAT_EM_'];
+inputStructEM.pathName1 = [fitsPath,'real_small.fits'];
+inputStructEM.pathName2 = [fitsPath,'imag_small.fits'];
+inputStructEM.type1 = 'real';
+inputStructEM.type2 = 'imag';
+[inputStructEM.scale1,inputStructEM.scale2] = deal('lin');
+inputStructEM.scaleFuncGrid = @sind;
+try
+    FF = FarField.readFITS(inputStructL,'DirCos','Ludwig3','circular');
+    FF1 = FarField.readFITS(inputStructEM,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[950e6,1670e6]);
+    if 1
+        figure, FF.plot('plotType','2D','showGrid',1)
+        figure, plotJones(FF1(1),FF1(2))
+    end
+    readFITSpass = readFITSpass && 1;
+catch readFITS_sepComp_errInfo
+    readFITSpass = readFITSpass && 0;
+    keyboard
+end
+if readFITSpass
+    disp('Pass: readFITS')
+    clear FF 
+else
+    disp('FAIL: readFITS')
 end
 
 % Struct constructor
@@ -617,7 +655,7 @@ FF = FarField.SimpleTaper(55, -12, -12, 1e9)
 
 
 %% Final test
-FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,FarFieldfromStructPass,...
+FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,readFITSpass,FarFieldfromStructPass,...
     bwPass,sllPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
