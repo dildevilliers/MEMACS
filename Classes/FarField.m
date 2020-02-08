@@ -5436,6 +5436,14 @@ classdef FarField
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
             % READFITS Create a FarField object from a FITS image file.
             %
+            % FF = readFITS(inputStruct,gridType,coorType,polType,varargin) 
+            % loads a FarField object from a .FITS image file. Only a
+            % limited number of internal formats are supported - see format
+            % notes below.
+            % Can have several optional arguments describing the local 
+            % field and symmetry as name value pairs. 
+            %
+            % FITS data format:
             % Expect the data format as: data([Nx,Ny,Nf,Ne,Nc,Np])
             %   Nx - number of x values
             %   Ny - number of y values
@@ -5445,24 +5453,63 @@ classdef FarField
             %   Np - number of complex data parts [1 | 2] (if this is just
             %   1, the other complex component is expected from another
             %   fits file - see inputStruct.type)
-            % inputStruct is a struct of important input parameters,
-            % containing a subset of:
-            %   .pathName1 - the path and name of the first component (required)
-            %   .pathName2 - the path and name of the second component (optional)
+            %   This method will try to get information about the grid from
+            %   the information in the FITS keywords, and overwrite the
+            %   provided input values if any information is found in the
+            %   file.  
+            %
+            % Inputs
+            % - inputStruct: A struct of important input parameters,
+            %                containing a subset of:
+            %   .pathName1:  the path and name of the first component (required)
+            %   .pathName2:  the path and name of the second component (optional)
             %                The above pathNames can be cell arrays of
             %                equal length to indicate the field components
             %                (first element E1 and second is E2)
-            %   .type1 - the type of the first component {('real') | 'imag' | 'mag' | 'phase'} (optional)
-            %   .type2 - the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
-            %   .scale1 - the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
-            %   .scale2 - the scale of the second component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
-            %   .scaleFuncGrid - can be a function handle or scaling factor
-            %   for the grid. if it is an array with 2 elements, the first
-            %   is used for x, and the second for y
-            %   
-            %   varargin can contain name-value pairs... (TODO)
-            %       xRange,yRange,fRange
-            %       Symmetry, orientation, etc - like FarField
+            %   .type1:      the type of the first component {('real') | 'imag' | 'mag' | 'phase'} (optional)
+            %   .type2:      the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
+            %   .scale1:     the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
+            %   .scale2:     the scale of the second component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
+            %   .scaleFuncGrid: can be a function handle or scaling factor
+            %                   for the grid. if it is an array with 2 
+            %                   elements, the first is used for x, and the second for y
+            % - gridType:   See FarField help for details
+            % - coorType:   See FarField help for details
+            % - polType:   See FarField help for details
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- xRange:      Two element vector of the x range limits
+            %   -- yRange:      Two element vector of the y range limits
+            %   -- fRange:      Two element vector of the frequency range limits
+            %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
+            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-09-06, Dirk de Villiers
+            % Updated: 2020-02-07, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   [name,path] = uigetfile('*.fits','Click on repo\data\SimPatterns\FITS\MeerKAT_Holo_small.fits for this example');
+            %   inputStructH.pathName1 = [path,name];
+            %   inputStructH.scaleFuncGrid = @sind;
+            %   FF = FarField.readFITS(inputStructH,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[899e6,899e6]);
+            %   FF(1).plot('plotType','2D','showGrid',1)
             
             % ToDo: This is very hard to generalise - learn as we go and
             % get more variations I guess
@@ -5510,6 +5557,9 @@ classdef FarField
             if nargin == 0 || isempty(inputStruct)
                 [name,path] = uigetfile('*.fits','Component 1:');
                 inputStruct.pathName1 = [path,name];
+                gridType = input('Input the gridType string:');
+                coorType = input('Input the coorType string:');
+                polType = input('Input the polType string:');
             end
             parseobj.parse(inputStruct,gridType,coorType,polType,varargin{:})
             

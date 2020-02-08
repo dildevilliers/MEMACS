@@ -180,12 +180,18 @@ inputStructEM.type1 = 'real';
 inputStructEM.type2 = 'imag';
 [inputStructEM.scale1,inputStructEM.scale2] = deal('lin');
 inputStructEM.scaleFuncGrid = @sind;
+% All in one file - Khan Asad MeerKAT Holography version
+fitsPath = [dataPathFITS,'\MeerKAT_Holo_'];
+inputStructH.pathName1 = [fitsPath,'small.fits'];
+inputStructH.scaleFuncGrid = @sind;
 try
     FF = FarField.readFITS(inputStructL,'DirCos','Ludwig3','circular');
     FF1 = FarField.readFITS(inputStructEM,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[950e6,1670e6]);
+    FF2 = FarField.readFITS(inputStructH,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[899e6,899e6]);
     if 1
         figure, FF.plot('plotType','2D','showGrid',1)
         figure, plotJones(FF1(1),FF1(2))
+        figure, plotJones(FF2(1),FF2(2))
     end
     readFITSpass = readFITSpass && 1;
 catch readFITS_sepComp_errInfo
@@ -194,7 +200,7 @@ catch readFITS_sepComp_errInfo
 end
 if readFITSpass
     disp('Pass: readFITS')
-    clear FF 
+    clear FF FF1 FF2
 else
     disp('FAIL: readFITS')
 end
