@@ -103,6 +103,7 @@ classdef FarField
         projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
         astroGrids = {'Horiz','RAdec','GalLongLat'};
         localGrids = {'PhTh','AzEl','ElAz'};
+        version = 0.4;
     end
     
     methods
@@ -4246,6 +4247,55 @@ classdef FarField
             fclose(fid);
         end
         
+        function writeASCII(obj,pathName)
+            % WRITEASCII Write a FarField object to an ASCII .txt file
+            % writeASCII(obj,pathName) writes a FarField object to an ASCII
+            % .txt file. The whole cube is output as one file with columns
+            % [x,y,f,E1real,E1imag,E2real,E2imag]. Some information about
+            % the format is provided in the heading
+            % 
+            % Inputs
+            % - obj:    FarField object
+            % - pathName: The full path and name of the target file
+            % 
+            % Outputs
+            % - 
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-13, Dirk de Villiers
+            % Updated: 2020-02-14, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b, Dirk de Villiers
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField;
+            %   F.writeASCII('c:\Temp\FFwrite.txt');
+            
+            if strcmp(pathName(end-4:end),'.txt'), pathName = pathName(1:end-4); end
+            
+            fid = fopen([pathName,'.txt.'],'w+');
+            fprintf(fid,'%s\n','Field pattern data written by MATLAB FarField class');
+            fprintf(fid,'%s\t%2.1f\n','version:',obj.version);
+            fprintf(fid,'%s\t%i\t%i\t%i\n','Nx,Ny,Nf:',obj.Nx,obj.Ny,obj.Nf);
+            fprintf(fid,'%s\t%s\t%s\t%s\t%s\n','grid/coor/pol/freqUnit:',obj.gridType,obj.coorType,obj.polType,obj.freqUnit);
+            MATout = [repmat(obj.x,obj.Nf,1),repmat(obj.y,obj.Nf,1),reshape(repmat(obj.freq,obj.Nang,1),obj.Nang*obj.Nf,1),...
+                real(obj.E1(:)),imag(obj.E1(:))];
+            if strcmp(obj.coorType,'power')
+                fprintf(fid,'%s\t%s\t%s\t%s\t%s\n',...
+                    strrep(obj.xname,'\',''),strrep(obj.yname,'\',''),'Freq',[obj.E1name,'_real'],[obj.E1name,'_imag']);
+            else
+                fprintf(fid,'%s\t%s\t%s\t%s\t%s\t%s\t%s\n',...
+                    strrep(obj.xname,'\',''),strrep(obj.yname,'\',''),'Freq',[obj.E1name,'_real'],[obj.E1name,'_imag'],...
+                    [obj.E2name,'_real'],[obj.E2name,'_imag']);
+                MATout = [MATout,real(obj.E2(:)),imag(obj.E2(:))];
+            end
+            fprintf(fid,'%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\n',MATout.');
+            fclose(fid);
+        end
     end
     
     methods (Static = true)
@@ -5269,13 +5319,13 @@ classdef FarField
             typeValidator_pathName = @(x) isa(x,'char');
             parseobj.addRequired('pathname',typeValidator_pathName);
             
-            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readNFSscan');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readNFSscan');
             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
-            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readNFSscan');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
             
             typeValidation_time = @(x) isa(x,'datetime');
@@ -5804,6 +5854,111 @@ classdef FarField
                     fvect = linspace(fRange(1),fRange(2),Nf);
                 end
             end
+        end
+        
+        function FF = readASCII(pathName,varargin)
+            % READASCII reads a FarField object from a .txt file
+            %
+            % FF = readASCII(pathName,varargin) loads a FarField object
+            % from the .txt file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs. 
+            % The file format is governed by what is in FarField.writeASCII
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an ffs file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-14, Dirk de Villiers
+            % Updated: 2020-02-14, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField.readASCII;
+            %   F.plot('plotType','2D','showGrid',1)
+            
+            parseobj = inputParser;
+            parseobj.FunctionName = 'readASCII';
+            
+            typeValidator_pathName = @(x) isa(x,'char');
+            parseobj.addRequired('pathname',typeValidator_pathName);
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readASCII');
+            parseobj.addParameter('r',1,typeValidation_scalar);
+            
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readASCII');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+            
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readASCII');
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+            
+            typeValidation_time = @(x) isa(x,'datetime');
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+            
+            if nargin == 0
+                [name,path] = uigetfile('*.txt');
+                pathName = [path,name];
+            end
+            parseobj.parse(pathName,varargin{:})
+            
+            pathName = parseobj.Results.pathname;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            % Open the data file
+            if ~strcmp(pathName(end-3:end),'.txt')
+                pathName = [pathName,'.txt'];
+            end
+            fid = fopen(pathName);
+            if (fid==-1)
+                error(['Unable to open data file ', fileName, '!']);
+            end
+            
+            a = fgetl(fid); % Heading line
+            a = fgetl(fid);
+            A = textscan(a,'%s%f');
+            version = A{2};
+            a = fgetl(fid);
+            A = textscan(a,'%s%d%d%d');
+            [Nx,Ny,Nf] = deal(A{2:4});
+            Nang = Nx*Ny;
+            a = fgetl(fid);
+            A = textscan(a,'%s%s%s%s%s');
+            [grid,coor,pol,fU] = deal(A{2:5});
+            [gridType,coorType,polType,freqUnit] = deal(grid{1},coor{1},pol{1},fU{1});
+            a = fgetl(fid);
+            if strcmp(coorType,'power')
+                MATin = fscanf(fid,'%f%f%f%f%f',[5, Nang*Nf]).';
+            else
+                MATin = fscanf(fid,'%f%f%f%f%f%f%f',[7, Nx*Ny*Nf]).';
+                E2 = reshape(MATin(:,6),Nang,Nf) + 1i.*reshape(MATin(:,7),Nang,Nf);
+            end
+            x = MATin(1:Nang,1);
+            y = MATin(1:Nang,2);
+            freq = unique(MATin(:,3)).';
+            E1 = reshape(MATin(:,4),Nang,Nf) + 1i.*reshape(MATin(:,5),Nang,Nf);
+            
+            FF = FarField(x,y,E1,E2,freq,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+
+            fclose(fid);
         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)

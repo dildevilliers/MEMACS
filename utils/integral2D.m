@@ -31,7 +31,7 @@ monY = all(diffY>0);
 mon = monX && monY;
 assert(mon,'X and Y must contain monotonically increasing elements')
 % Test for uniform
-eps = 1e-10;
+eps = 1e-7;
 unX = all(abs(diffX - median(diffX)) < eps);
 unY = all(abs(diffY - median(diffY)) < eps);
 un = unX && unY;
