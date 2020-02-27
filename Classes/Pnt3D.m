@@ -10,6 +10,14 @@ classdef Pnt3D
         x double {mustBeReal, mustBeFinite} = 0 % x value in m
         y double {mustBeReal, mustBeFinite} = 0 % y value in m
         z double {mustBeReal, mustBeFinite} = 0 % z value in m
+%         th % polar angle in radians
+%         ph % azimuth angle in radians
+%         el % elevation angle in radians
+%         r  % distance from origin
+%         rho % distance from z-axis
+    end
+    
+    properties (Dependent = true)
         th % polar angle in radians
         ph % azimuth angle in radians
         el % elevation angle in radians
@@ -51,29 +59,47 @@ classdef Pnt3D
                 obj.y = (X+eps(realmin))./(X+eps(realmin)).*(Z+eps(realmin))./(Z+eps(realmin)).*Y;
                 obj.z = (X+eps(realmin))./(X+eps(realmin)).*(Y+eps(realmin))./(Y+eps(realmin)).*Z;
             end
-            obj = obj.setProps;
         end
+        
+        function ph = get.ph(obj)
+            ph = cart2sph(obj.x,obj.y,obj.z);
+        end
+        
+        function el = get.el(obj)
+            [~,el] = cart2sph(obj.x,obj.y,obj.z);
+        end
+        
+        function r = get.r(obj)
+            [~,~,r] = cart2sph(obj.x,obj.y,obj.z);
+        end
+        
+        function th = get.th(obj)
+            th = pi/2 - obj.el;
+        end
+        
+        function rho = get.rho(obj)
+            rho = hypot(obj.x,obj.y);
+        end
+        
+        
         
         %% Property setters
         function obj = setX(obj,x)
             %SETX  Set the x-value of the object
             % obj = setX(obj,x)
             obj.x = (obj.z+eps(realmin))./(obj.z+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*x;
-            obj = obj.setProps;
         end
         
         function obj = setY(obj,y)
             %SETY  Set the y-value of the object
             % obj = setY(obj,y)
             obj.y = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.z+eps(realmin))./(obj.z+eps(realmin)).*y;
-            obj = obj.setProps;
         end
         
         function obj = setZ(obj,z)
             %SETZ  Set the z-value of the object
             % obj = setZ(obj,z)
             obj.z = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*z;
-            obj = obj.setProps;
         end
         
          %% Object operations
@@ -141,14 +167,12 @@ classdef Pnt3D
             obj.x = obj.x+obj2.x;
             obj.y = obj.y+obj2.y;
             obj.z = obj.z+obj2.z;
-            obj = obj.setProps;
         end
         
         function obj = minus(obj,obj2)
             obj.x = obj.x-obj2.x;
             obj.y = obj.y-obj2.y;
             obj.z = obj.z-obj2.z;
-            obj = obj.setProps;
         end
         
         function S = size(obj,posReturn)
@@ -205,7 +229,6 @@ classdef Pnt3D
             obj.x = obj.x.*scaleVal(1);
             obj.y = obj.y.*scaleVal(2);
             obj.z = obj.z.*scaleVal(3);
-            obj = obj.setProps;
         end
         
         function D = distanceCart(obj1,obj2)
@@ -304,7 +327,7 @@ classdef Pnt3D
             %   File : testScript_Pnt3D.m
             %
             % Example
-            %   % Defined in a shifted and roated coordinate system, and
+            %   % Defined in a shifted and rotated coordinate system, and
             %   % plotted in the global coordinate system
             %   [x,y] = deal(1:5);
             %   z = 0;
@@ -321,18 +344,34 @@ classdef Pnt3D
             if nargin == 2
                 coor_base = CoordinateSystem();
             end
-            % Move points to new coordinate origin reference 
-            U = pointMatrix(obj) - coor_new.origin.pointMatrix;
-            % Rotate the points in the origin reference
-            Q = dirCosine(coor_new,coor_base);
-            Uprime = Q\U;
-            % Move to new coordinate base 
-            Uprime = Uprime + coor_base.origin.pointMatrix;
+            
+            cG = CoordinateSystem;
+            % Go from base to global
+            if ~isequal(coor_base,cG)
+                Ubase = pointMatrix(obj);
+                % Rotate the points in the origin reference
+                Q = dirCosine(cG,coor_base);
+                Uprime = Q\Ubase;
+                % Move to new coordinate base
+                Uglob = Uprime + coor_base.origin.pointMatrix;
+            else
+                Uglob = pointMatrix(obj);
+            end
+            % Go from global to coorNew
+            if ~isequal(coor_new,cG)
+                % Move points to new coordinate origin reference
+                U = Uglob - coor_new.origin.pointMatrix;
+                % Rotate the points in the origin reference
+                Q = dirCosine(coor_new,cG);
+                Uprime = Q\U;
+            else
+                Uprime = Uglob;
+            end
+            
             % Make the object
             obj.x = reshape(Uprime(1,:),size(obj));
             obj.y = reshape(Uprime(2,:),size(obj));
             obj.z = reshape(Uprime(3,:),size(obj));
-            obj = obj.setProps;
         end
 
         %% Plotting
@@ -642,7 +681,6 @@ classdef Pnt3D
             obj.x = reshape(Xp(1,:),size(obj));
             obj.y = reshape(Xp(2,:),size(obj));
             obj.z = reshape(Xp(3,:),size(obj));
-            obj = obj.setProps;
         end
     end
     
@@ -726,12 +764,6 @@ classdef Pnt3D
     end
     
     methods (Access = private)
-        function obj = setProps(obj)
-            [obj.ph,obj.el,obj.r] = cart2sph(obj.x,obj.y,obj.z);
-            obj.th = pi/2 - obj.el;
-            obj.rho = hypot(obj.x,obj.y);
-        end
-        
         % This method is not used yet, but might be handy later
         function [objE1,objE2] = expandScalars(obj1,obj2)
             S1 = size(obj1);

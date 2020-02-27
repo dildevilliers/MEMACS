@@ -1620,12 +1620,9 @@ classdef FarField
             % obj = setRangeSph(obj,xType,yType) sets the x- and y-ranges
             % of the object to xType = {('sym') | 'pos'}; yType = {('180') | '360'}
             % Depending on the gridType, different representations of the y
-            % range result.  In some cases the base grid is changed -
-            % specifically when the required transformation results in a
+            % range result.  Currently, the base grid is removed, because 
+            % often the required transformation results in a
             % different number of grid points to accommodate the new poles.
-            % This is avoided as far as possible, and only happens when the
-            % full sphere is represented and when changing between yRange
-            % 180 and 360 (and back);
             % 
             % Inputs
             % - obj: FarField object
@@ -1633,7 +1630,7 @@ classdef FarField
             % - yType: char array {('180') | '360'}
             %
             % Outputs
-            % - obj:    Farfield object with new range and possible new base
+            % - obj:    Farfield object with new range 
             %
             % Dependencies
             % -
@@ -2183,7 +2180,7 @@ classdef FarField
         end
         
         %% Plotting methods
-        function [] = plot(obj,varargin)
+        function plot(obj,varargin)
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -2667,7 +2664,7 @@ classdef FarField
             
         end
         
-        function [ax] = plotJones(FF1,FF2,varargin)
+        function plotJones(FF1,FF2,varargin)
             % PLOTJONES Plots the Jones matrix type representation FarFields
             
             % function [ax] = plotJones(FF1,FF2,varargin)
@@ -3400,7 +3397,9 @@ classdef FarField
                 for ff = 1:obj1.Nf
                     Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                 end
-                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,...
+                    'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
+                    'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
             else
                 % Perform the rotation of the field vectors
                 % Vector origin points before rotation
@@ -3455,7 +3454,9 @@ classdef FarField
                     for ff = 1:obj1.Nf
                         Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                     end
-                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,...
+                        'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
+                        'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
                 else
                     FFsph = FFsph.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
                 end
@@ -3681,7 +3682,37 @@ classdef FarField
         function obj = getFi(obj1,freqIndex)
             % GETFI Returns an object only containing the results in
             % freqIndex.
-            
+            %
+            % obj = getFi(obj1,freqIndex) returns a new object which
+            % which only has the frequency points specified in the freqIndex
+            % input.
+            % 
+            % Inputs
+            % - obj1: FarField object
+            % - freqIndex: Integer array of frequency indexes of interest
+            %
+            % Outputs
+            % - obj:  Sub-sampled FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  freq = linspace(1,2,21).*1e9;
+            %  for ff = 1:length(freq)
+            %      F(ff) = FarField;
+            %      F(ff) = F(ff).setFreq(freq(ff));
+            %  end
+            %  F1 = F.catFreq;
+            %  F2 = F1.getFi(10)
+
             % Returns an object only containing the results in freqIndex
             obj = obj1;
             obj.E1 = obj1.E1(:,freqIndex);
@@ -3699,7 +3730,36 @@ classdef FarField
         end
         
         function obj = catFreq(objIn)
-           % CATFREQ Concatenates the frequencies in the input array  
+            % CATFREQ Concatenates the frequencies in the input array
+            %
+            % obj = catFreq(objIn) returns a new object which
+            % concatenates the input array of FarField objects, which 
+            % should all have different frequencies, into one object with a
+            % range of frequencies.
+            % 
+            % Inputs
+            % - objIn: Input array of FarField objects
+            %
+            % Outputs
+            % - obj:  Concatenated FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  freq = linspace(1,2,21).*1e9;
+            %  for ff = 1:length(freq)
+            %      F(ff) = FarField;
+            %      F(ff) = F(ff).setFreq(freq(ff));
+            %  end
+            %  F1 = F.catFreq;
             
            [~,xEqual,yEqual] = isGridEqual(objIn);
            assert(all(xEqual)&&all(yEqual),'Input grids must be equal to concatenate frequencies')
@@ -3725,7 +3785,62 @@ classdef FarField
            freqCat = cell2mat(freqCat);
            PradCat = cell2mat(PradCat);
            radEffCat = cell2mat(radEffCat);
-           obj = FarField(objIn(1).x,objIn(1).y,E1Cat,E2Cat,freqCat,PradCat,radEffCat,objIn(1).auxParamStruct,'E3',E3Cat);
+           % Update the first element of the input array for the output
+           % All the other information parameters already checked
+           objIn(1).E1 = E1Cat;
+           objIn(1).E2 = E2Cat;
+           objIn(1).E3 = E3Cat;
+           objIn(1).freq = freqCat;
+           objIn(1).Prad = PradCat;
+           objIn(1).radEff = radEffCat;
+           if ~isempty(objIn(1).E1Base)
+               objIn(1) = objIn(1).setBaseFields;
+           end
+           obj = objIn(1);
+        end
+        
+        function obj = getGridIndex(obj1,gridIndex)
+            % GETGRIDINDEX Returns an object only containing the results in
+            % gridIndex.
+            %
+            % obj = getGridIndex(obj1,gridIndex) returns a new object which
+            % which only has the grid points specified in the gridIndex
+            % input.
+            % 
+            % Inputs
+            % - obj1: FarField object
+            % - gridIndex: Integer array of grid indexes of interest
+            %
+            % Outputs
+            % - obj:  Sub-sampled FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-27, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  F = FarField;
+            %  F1 = F.getGridIndex([1,2,3]);
+            %  F1
+            
+            obj = obj1;
+            obj.x = obj1.x(gridIndex);
+            obj.y = obj1.y(gridIndex);
+            obj.E1 = obj1.E1(gridIndex,:);
+            if ~isempty(obj1.E2), obj.E2 = obj1.E2(gridIndex,:); end
+            if ~isempty(obj1.E3), obj.E3 = obj1.E3(gridIndex,:); end
+            if ~isempty(obj1.xBase)
+                obj = obj.setBaseGrid;
+            end
+            if ~isempty(obj1.E1Base)
+                obj = obj.setBaseFields;
+            end
         end
         
         %% Symmetry handlers
@@ -6982,6 +7097,8 @@ classdef FarField
                 % Do nothing - already there
                 return;
             else
+                % Get original coordinate system
+                coorTypeHandle = str2func(['coor2',obj.coorType]);
                 % Set to standard base
                 obj = obj.rangeChangeCoorTrans;
                 
@@ -7005,6 +7122,8 @@ classdef FarField
                 end
                 % Sort
                 obj = obj.sortGrid;
+                % Reset coordinate Type
+                obj = coorTypeHandle(obj,false);
             end
         end
         

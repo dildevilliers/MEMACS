@@ -188,7 +188,7 @@ try
     FF = FarField.readFITS(inputStructL,'DirCos','Ludwig3','circular');
     FF1 = FarField.readFITS(inputStructEM,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[950e6,1670e6]);
     FF2 = FarField.readFITS(inputStructH,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[899e6,899e6]);
-    if 1
+    if 0
         figure, FF.plot('plotType','2D','showGrid',1)
         figure, plotJones(FF1(1),FF1(2))
         figure, plotJones(FF2(1),FF2(2))
@@ -302,7 +302,7 @@ gridTest = [gridLocal,gridProj,gridAstro];
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_sym180']);
 for ii = 1:length(gridTest)
     FF2 = FF1.changeGrid(gridTest{ii});
-    if showGridPlots && 1
+    if showGridPlots && 0
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
     FF3 = FF2.grid2PhTh;
@@ -350,7 +350,7 @@ clear FF1 FF2 FF3
 FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_trueview_spherical']);
 for ii = 1:length(gridTest)
     FF2 = FF1.changeGrid(gridTest{ii});
-    if showGridPlots && 1
+    if showGridPlots && 0
 %         figure, FF2.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
         figure, FF2.plot('plotType','2D','showGrid',1)
     end
@@ -537,7 +537,7 @@ else
 end
 
 % setRangeSph
-showGridShiftPlots = false;
+showGridShiftPlots = true;
 output = 'E1';
 outputType = 'phase';
 scaleMag = 'lin';
@@ -656,7 +656,7 @@ end
 
 
 %% Static methods
-FF = FarField.SimpleTaper(55, -12, -12, 1e9)
+FF = FarField.SimpleTaper(55, -12, -12, 1e9);
 
 
 

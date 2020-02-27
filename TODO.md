@@ -7,11 +7,13 @@
 # Farfield
 - [ ] finish SimpleTaper constructor, write help and testscript
 - [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
-- [ ] Fix rotate - used to work at some stage?  Only works for power coorType
+- [ ] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
+- [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
+- [ ] Sort out save and load to use a struct and not rely on the object itself
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] writeFITS (DdV)
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
-- [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
+- [ ] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
@@ -45,7 +47,6 @@
 - [ ] Gaussian/cosn/etc pattern constructor
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] Overlap integral calculator (DdV)
-- [ ] writeCSTffs
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
 - [ ] Fix 3D plot for negative y-(th)axis cases
@@ -66,6 +67,8 @@
 - [x] writeASCII added
 - [x] added constant property: version 
 - [x] readASCII added
+- [x] Fixed issue in catFreq
+- [x] Added getGridIndex method
 
 
 # Arrays
