@@ -375,7 +375,6 @@ classdef CoordinateSystem
            obj = rotGRASP(obj,Euler2GRASP(angEuler));
        end
        
-       
        %% Change of basis
        function Q = dirCosine(coor_new,coor_base)
            %DIRCOSINE calculates the direction cosine angles between coordinate systems
@@ -623,6 +622,50 @@ classdef CoordinateSystem
            coorOut.base = newBase;
        end
       
+       %% Output
+       function writeGRASPcor(obj,pathName)
+           %WRITEGRASPCOR write GRASP .cor file
+           % writeGRASPcor(obj,pathName) writes the standard GRASP .cor file at
+           % the pathName
+           %
+           % Inputs
+           % - obj:         CoordinateSystem object
+           % - pathName: The full path and name of the file to be read (can
+           %             be empty - gui prompt)
+           %
+           % Outputs
+           % - 
+           %
+           % Dependencies
+           % -
+           %
+           % Created: 2020-03-17, Dirk de Villiers
+           % Updated: 2020-03-17, Dirk de Villiers
+           %
+           % Tested : Matlab R2018b, Dirk de Villiers
+           %  Level : 2
+           %   File : testScript_CoordinateSystem.m
+           %
+           % Example
+           %   C0 = CoordinateSystem;
+           %   C0.writeGRASPcor
+           
+           if nargin < 2
+               pathName = input('Provide the ouput path and filename as path/name.cor: ');
+           end
+           
+           if ~strcmp(pathName(end-3:end),'.cor')
+               pathName = [pathName,'.cor'];
+           end
+           fid = fopen(pathName,'w');
+           fprintf(fid,'%s\n','MATLAB generated from CoordinateSystem object');
+           fprintf(fid,'%s\n','m');
+           fprintf(fid,'%1.10e\t%1.10e\t%1.10e\t\n',obj.origin.pointMatrix);
+           fprintf(fid,'%1.10e\t%1.10e\t%1.10e\t\n',obj.x_axis);
+           fprintf(fid,'%1.10e\t%1.10e\t%1.10e\t\n',obj.y_axis);
+           fclose(fid);
+       end
+       
        %% Plotting
        function plot(obj,scale)
            %PLOT plots the object in global coordinates
@@ -734,6 +777,79 @@ classdef CoordinateSystem
            % Make sure we have unit vectors
            obj.x_axis = obj.x_axis/norm(obj.x_axis);
            obj.y_axis = obj.y_axis/norm(obj.y_axis);
+       end
+   end
+   
+   methods (Static = true)
+       function obj = fromGRASPcor(pathName,base)
+           %FROMGRASPCOR read GRASP .cor file
+           % obj = fromGRASPcor(pathName) reads the standard GRASP .cor file
+           % and returns a CoordinateSystem object
+           %
+           % Inputs
+           % - pathName: The full path and name of the file to be read (can
+           %             be empty - gui prompt)
+           % - base:    CoordinateSystem object describing the base system
+           %            in which the current object is defined. Empty
+           %            implies global coordinates.
+           %
+           % Outputs
+           % - obj:  CoordinateSystem object
+           %
+           % Dependencies
+           % -
+           %
+           % Created: 2020-03-17, Dirk de Villiers
+           % Updated: 2020-03-17, Dirk de Villiers
+           %
+           % Tested : Matlab R2018b, Dirk de Villiers
+           %  Level : 2
+           %   File : testScript_CoordinateSystem.m
+           %
+           % Example
+           %   C0 = CoordinateSystem.fromGRASP;
+           %   C0.plot
+           
+           if nargin < 1
+               [name,path] = uigetfile('*.cor');
+               pathName = [path,name];
+           end
+           
+           if ~strcmp(pathName(end-3:end),'.cor')
+               pathName = [pathName,'.cor'];
+           end
+           fid = fopen(pathName);
+           
+           TITLE = fgetl(fid);
+           LENGTH_UNIT = fgetl(fid);
+           if strncmp(LENGTH_UNIT,'mm',2)
+               unit = 1e-3;
+           elseif strncmp(LENGTH_UNIT,'cm',2)
+               unit = 1e-2;
+           elseif strncmp(LENGTH_UNIT,'m',1)
+               unit = 1;
+           elseif strncmp(LENGTH_UNIT,'km',2)
+               unit = 1e3;
+           elseif strncmp(LENGTH_UNIT,'in',2)
+               unit = 0.0254;
+           elseif strncmp(LENGTH_UNIT,'ft',2)
+               unit = 0.3048;
+           end
+           ORIGIN = fgetl(fid);
+           X_AXIS = fgetl(fid);
+           Y_AXIS = fgetl(fid);
+           fclose(fid);
+           
+           o = sscanf(ORIGIN,'%f%f%f').*unit;
+           origin = Pnt3D(o(1),o(2),o(3));
+           x_axis = sscanf(X_AXIS,'%f%f%f');
+           y_axis = sscanf(Y_AXIS,'%f%f%f');
+           
+           if nargin < 2
+               obj = CoordinateSystem(origin,x_axis,y_axis);
+           elseif nargin == 2
+               obj = CoordinateSystem(origin,x_axis,y_axis,base);
+           end
        end
    end
 end
