@@ -10,12 +10,12 @@ classdef CoordinateSystem
     end
    
     properties (SetAccess = private)
-        x_axis = [1;0;0] % x-axis direction unit vector
-        y_axis = [0;1;0] % y-axis direction unit vector
+        x_axis(3,1) double = [1;0;0] % x-axis direction unit vector
+        y_axis(3,1) double = [0;1;0] % y-axis direction unit vector
     end
     
     properties (Dependent = true)
-        z_axis          % z-axis direction unit vector
+        z_axis(3,1) double         % z-axis direction unit vector
     end
     
     methods
@@ -82,7 +82,7 @@ classdef CoordinateSystem
            nY = norm(obj.y_axis);
            z = cross(obj.x_axis,obj.y_axis)/(nX*nY);
            if abs(norm(z)-1) > 1e-10
-               error('x_axis and y_axis must be orthogonal');
+               error('axes must be orthonormal');
            end
            % Set the z-axis direction
            % Normalise the unit vectors
@@ -848,6 +848,38 @@ classdef CoordinateSystem
            if nargin < 2
                obj = CoordinateSystem(origin,x_axis,y_axis);
            elseif nargin == 2
+               obj = CoordinateSystem(origin,x_axis,y_axis,base);
+           end
+       end
+   
+       function obj = fromYZ(origin,y_axis,z_axis,base)
+           %FROMYZ creates the object from y- and z-axis
+           % See constructor for help - input format:
+           % obj = fromYZ(origin,y_axis,z_axis,base)
+           
+           % Help out with normalization...
+           y_axis = y_axis./norm(y_axis);
+           z_axis = z_axis./norm(z_axis);
+           x_axis = cross(y_axis,z_axis);
+           if nargin < 4
+               obj = CoordinateSystem(origin,x_axis,y_axis);
+           else
+               obj = CoordinateSystem(origin,x_axis,y_axis,base);
+           end
+       end
+       
+       function obj = fromXZ(origin,x_axis,z_axis,base)
+           %FROMXZ creates the object from x- and z-axis
+           % See constructor for help - input format:
+           % obj = fromYZ(origin,x_axis,z_axis,base)
+           
+           % Help out with normalization...
+           x_axis = x_axis./norm(x_axis);
+           z_axis = z_axis./norm(z_axis);
+           y_axis = cross(z_axis,x_axis);
+           if nargin < 4
+               obj = CoordinateSystem(origin,x_axis,y_axis);
+           else
                obj = CoordinateSystem(origin,x_axis,y_axis,base);
            end
        end

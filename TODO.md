@@ -70,6 +70,12 @@
 - [x] Fixed issue in catFreq
 - [x] Added getGridIndex method
 
+# Pnt3D
+- [x] Added the fuse and split functions
+
+# CoordinateSystem
+- [x] Added the fromYZ and fromXZ constructors
+
 
 # Arrays
 ## General

@@ -7,9 +7,9 @@ classdef Pnt3D
    % CoordinateSystem bases. Several plotting functions are provided.
    
     properties (SetAccess = private)
-        x double {mustBeReal, mustBeFinite} = 0 % x value in m
-        y double {mustBeReal, mustBeFinite} = 0 % y value in m
-        z double {mustBeReal, mustBeFinite} = 0 % z value in m
+        x double {mustBeReal} = 0 % x value in m
+        y double {mustBeReal} = 0 % y value in m
+        z double {mustBeReal} = 0 % z value in m
 %         th % polar angle in radians
 %         ph % azimuth angle in radians
 %         el % elevation angle in radians
@@ -81,24 +81,25 @@ classdef Pnt3D
             rho = hypot(obj.x,obj.y);
         end
         
-        
-        
         %% Property setters
         function obj = setX(obj,x)
             %SETX  Set the x-value of the object
             % obj = setX(obj,x)
+            assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
             obj.x = (obj.z+eps(realmin))./(obj.z+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*x;
         end
         
         function obj = setY(obj,y)
             %SETY  Set the y-value of the object
             % obj = setY(obj,y)
+            assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
             obj.y = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.z+eps(realmin))./(obj.z+eps(realmin)).*y;
         end
         
         function obj = setZ(obj,z)
             %SETZ  Set the z-value of the object
             % obj = setZ(obj,z)
+            assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
             obj.z = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*z;
         end
         
@@ -130,6 +131,7 @@ classdef Pnt3D
             %   p = Pnt3D(x,y,z);
             %   p1 = p.getNpts([1;3])
             
+            assert(numel(obj) == 1,'Can only get N points for a single object - not a vector of objects')
             obj = Pnt3D(obj.x(I),obj.y(I),obj.z(I));
         end
         
@@ -159,37 +161,62 @@ classdef Pnt3D
             %   p = Pnt3D(x,y,z);
             %   X = p.pointMatrix
             
+            assert(numel(obj) == 1,'Can only get point matrix for a single object - not a vector of objects')
             X = [obj.x(:),obj.y(:),obj.z(:)].';
         end
         
         %% Overloaded methods
         function obj = plus(obj,obj2)
-            obj.x = obj.x+obj2.x;
-            obj.y = obj.y+obj2.y;
-            obj.z = obj.z+obj2.z;
+            if numel(obj) == 1 && numel(obj2) == 1
+                obj.x = obj.x+obj2.x;
+                obj.y = obj.y+obj2.y;
+                obj.z = obj.z+obj2.z;
+            else
+                assert(numel(obj)==numel(obj2),'Pnt3D object matrices must be the same size')
+                o1 = obj.fuse;
+                o2 = obj2.fuse;
+                op = o1 + o2;
+                obj = op.split;
+            end
         end
         
         function obj = minus(obj,obj2)
-            obj.x = obj.x-obj2.x;
-            obj.y = obj.y-obj2.y;
-            obj.z = obj.z-obj2.z;
+            if numel(obj) == 1 && numel(obj2) == 1
+                obj.x = obj.x-obj2.x;
+                obj.y = obj.y-obj2.y;
+                obj.z = obj.z-obj2.z;
+            else
+                assert(numel(obj)==numel(obj2),'Pnt3D object matrices must be the same size')
+                o1 = obj.fuse;
+                o2 = obj2.fuse;
+                op = o1 - o2;
+                obj = op.split;
+            end
         end
         
         function S = size(obj,posReturn)
             if nargin == 1, posReturn = []; end
             if isempty(posReturn)
-                S = size(obj.x);
+                if numel(obj) > 1
+                    S = builtin('size',obj);
+                else
+                    S = size(obj.x);
+                end
             else
-                S = size(obj.x,posReturn);
+                if numel(obj) > 1
+                    S = builtin('size',obj,posReturn);
+                else
+                    S = size(obj.x,posReturn);
+                end
             end
         end
-        
-        function B = isequal(obj1,obj2)
-            tol = eps;
-            D = obj1-obj2;
-            B = all(all([abs(D.x),abs(D.y),abs(D.z)] < tol));
-            B = B && all(size(obj1) == size(obj2));
-        end
+         
+%         function B = isequal(obj1,obj2)
+%             tol = eps;
+%             D = obj1-obj2;
+%             B = all(all([abs(D.x),abs(D.y),abs(D.z)] < tol));
+%             B = B && all(size(obj1) == size(obj2));
+%         end
 
         %% Object element operations    
         function obj = scale(obj,scaleVal)
@@ -452,7 +479,7 @@ classdef Pnt3D
                 if Nv == 1
                     V = repmat(V,1,length(x1));
                 else
-                    assert(max(obj.size) == Nv,'There should be the same number of vectors as points')
+                    assert(max(size(obj.x)) == Nv,'There should be the same number of vectors as points')
                 end
             else
                 x1 = repmat(obj.x(:).',1,Nv);
@@ -532,8 +559,8 @@ classdef Pnt3D
             lineWidth = parseobj.Results.lineWidth;
             
             % Check the input sizes
-            No1 = max(obj1.size);
-            No2 = max(obj2.size);
+            No1 = max(size(obj1.x));
+            No2 = max(size(obj2.x));
             if ~isscalar(obj1) && ~isscalar(obj2)
                 assert(numel(obj1.x) == numel(obj2.x),'The two points objects should be the same size')
             end
@@ -640,6 +667,78 @@ classdef Pnt3D
             xlabel('x (m)')
             ylabel('y (m)')
             zlabel('z (m)')
+        end
+        
+        %% Splitting and fusing
+        function obj = split(obj1)
+            %SPLIT splits the single object in a vector
+            % obj = split(obj1) takes the input object, which in general
+            % has a vector of point values, and splits it into a similar
+            % size vector of objects - each with a single element
+            %
+            % Inputs
+            % - obj1:  Pnt3D object
+            %
+            % Outputs
+            % - obj:  Vector of Pnt3D objects
+            %
+            % Dependencies
+            % - 
+            %
+            % Created: 2020-03-18, Dirk de Villiers
+            % Updated: 2020-03-18, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b, Dirk de Villiers
+            %  Level : 1 
+            %   File : 
+            %
+            % Example
+            %  x = [1,2,3;4,5,6];
+            %  p = Pnt3D(x,0,0)
+            %  p1 = p.split
+            
+            obj(numel(obj1.x)) = Pnt3D;
+            for pp = 1:numel(obj)
+                obj(pp) = Pnt3D(obj1.x(pp),obj1.y(pp),obj1.z(pp));
+            end
+            obj = reshape(obj,size(obj1.x));
+        end
+        
+        function obj = fuse(obj1)
+            %FUSE fuses the matrix of objects into one
+            % obj = fuse(obj1) fuses the matrix of single element objects
+            % into one object with a matrix of elements
+            %
+            % Inputs
+            % - obj1:  Matrix of Pnt3D objects
+            %
+            % Outputs
+            % - obj:  Pnt3D object with a matrix of elements
+            %
+            % Dependencies
+            % - 
+            %
+            % Created: 2020-03-18, Dirk de Villiers
+            % Updated: 2020-03-18, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b, Dirk de Villiers
+            %  Level : 1 
+            %   File : 
+            %
+            % Example
+            %  x = [1,2,3;4,5,6];
+            %  for rr = 1:2
+            %   for cc = 1:3
+            %     p(rr,cc) = Pnt3D(x(rr,cc),0,0);
+            %   end
+            %  end
+            %  p1 = p.fuse
+            
+            xi = reshape([obj1.x],size(obj1));
+            yi = reshape([obj1.y],size(obj1));
+            zi = reshape([obj1.z],size(obj1));
+            assert(numel(xi) == numel(obj1),'Each object in the input array may only have a single element');
+            obj = Pnt3D(xi,yi,zi);
         end
         
         %% Deprecated
