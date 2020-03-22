@@ -72,6 +72,7 @@
 
 # Pnt3D
 - [x] Added the fuse and split functions
+- [x] Updated constructor to take vector input
 
 # CoordinateSystem
 - [x] Added the fromYZ and fromXZ constructors

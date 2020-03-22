@@ -53,20 +53,22 @@ classdef CoordinateSystem
            %   C = CoordinateSystem(Pnt3D(1,2,3),[1;0;0],[0;-2;0],[])
            %   C.plot
            
-           if nargin == 0
-           elseif nargin == 1
-               obj.origin = origin;
-           elseif nargin == 2
-               obj.origin = origin;
+           if nargin > 0
+               if ~isempty(origin)
+                   obj.origin = origin;
+               end
+           end
+           if nargin > 1
+               nX = norm(x_axis);
+               x_axis = x_axis/nX;
                obj.x_axis = x_axis;
-           elseif nargin == 3
-               obj.origin = origin;
-               obj.x_axis = x_axis;
+           end
+           if nargin > 2
+               nY = norm(y_axis);
+               y_axis = y_axis/nY;
                obj.y_axis = y_axis;
-           else
-               obj.origin = origin;
-               obj.x_axis = x_axis;
-               obj.y_axis = y_axis;
+           end
+           if nargin > 3
                if isempty(base)
                    obj.base = [];
                else
@@ -77,16 +79,7 @@ classdef CoordinateSystem
                    end
                end
            end
-           % Check for valid inputs
-           nX = norm(obj.x_axis);
-           nY = norm(obj.y_axis);
-           z = cross(obj.x_axis,obj.y_axis)/(nX*nY);
-           if abs(norm(z)-1) > 1e-10
-               error('axes must be orthonormal');
-           end
-           % Set the z-axis direction
-           % Normalise the unit vectors
-           obj = obj.normAxis;
+           obj.checkValid
        end
        
        %% Setters
@@ -773,10 +766,12 @@ classdef CoordinateSystem
    end
    
    methods (Access = private)
-       function obj = normAxis(obj)
-           % Make sure we have unit vectors
-           obj.x_axis = obj.x_axis/norm(obj.x_axis);
-           obj.y_axis = obj.y_axis/norm(obj.y_axis);
+       function checkValid(obj)
+           % Check for valid inputs
+           z = cross(obj.x_axis,obj.y_axis)/(norm(obj.x_axis)*norm(obj.y_axis));
+           if abs(norm(z)-1) > 1e-10
+               error('axes must be orthogonal');
+           end
        end
    end
    

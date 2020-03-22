@@ -7,9 +7,9 @@ classdef Pnt3D
    % CoordinateSystem bases. Several plotting functions are provided.
    
     properties (SetAccess = private)
-        x double {mustBeReal} = 0 % x value in m
-        y double {mustBeReal} = 0 % y value in m
-        z double {mustBeReal} = 0 % z value in m
+        x double = 0 % x value in m
+        y double = 0 % y value in m
+        z double = 0 % z value in m
 %         th % polar angle in radians
 %         ph % azimuth angle in radians
 %         el % elevation angle in radians
@@ -28,11 +28,12 @@ classdef Pnt3D
     methods
         function obj = Pnt3D(X,Y,Z)
             % PNT3D class constructor
-            % obj = Pnt3D(X,Y,Z) Can be empty, which retunr a point at the
-            % origin.
+            % obj = Pnt3D(X,Y,Z) Can be empty, which return a point at the
+            % origin.  If just one input is provided, it must have 3 rows,
+            % which are interpreted as [x;y;z]
             %
             % Inputs
-            % - X:  Matrix of x-values in m (0)
+            % - X:  Matrix of x-values in m (0) (or [x;y;z] in m)
             % - Y:  Matrix of y-values in m (0)
             % - Z:  Matrix of z-values in m (0)
             %
@@ -53,7 +54,20 @@ classdef Pnt3D
             %   p = Pnt3D([1:3],[2:2:6],4)
             %   p.plot
             
-            if nargin == 3
+            if nargin == 1
+                assert(size(X,1)==3,'One input requires 3 rows')
+                shapeVect = size(X);
+                if numel(shapeVect) > 2
+                    shapeVect = shapeVect(2:end);
+                    obj.x = reshape(X(1,:),shapeVect);
+                    obj.y = reshape(X(2,:),shapeVect);
+                    obj.z = reshape(X(3,:),shapeVect);
+                else
+                    obj.x = X(1,:);
+                    obj.y = X(2,:);
+                    obj.z = X(3,:);
+                end
+            elseif nargin == 3
                 % Get all the same size
                 obj.x = (Y+eps(realmin))./(Y+eps(realmin)).*(Z+eps(realmin))./(Z+eps(realmin)).*X;
                 obj.y = (X+eps(realmin))./(X+eps(realmin)).*(Z+eps(realmin))./(Z+eps(realmin)).*Y;
@@ -860,6 +874,7 @@ classdef Pnt3D
             [X,Y] = pol2cart(PH,RHO,Z);
             obj = Pnt3D(X,Y,Z);
         end
+    
     end
     
     methods (Access = private)
