@@ -73,6 +73,7 @@
 # Pnt3D
 - [x] Added the fuse and split functions
 - [x] Updated constructor to take vector input
+- [x] fixed plot to handle the vector input (not very hardened, but works for basic cases)
 
 # CoordinateSystem
 - [x] Added the fromYZ and fromXZ constructors

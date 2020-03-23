@@ -622,7 +622,7 @@ classdef Pnt3D
             % - []
             %
             % Created: 2019-05-07, Dirk de Villiers
-            % Updated: 2019-05-07, Dirk de Villiers
+            % Updated: 2020-03-23, Dirk de Villiers
             %
             % Tested : Matlab R2018b, Dirk de Villiers
             %  Level : 2
@@ -640,7 +640,7 @@ classdef Pnt3D
             parseobj = inputParser;
             parseobj.FunctionName = 'plot';
             
-            typeValidationObj = @(x) validateattributes(x,{'Pnt3D'},{'numel',1},'plot','obj',1);
+            typeValidationObj = @(x) validateattributes(x,{'Pnt3D'},{},'plot','obj',1);
             addRequired(parseobj,'obj',typeValidationObj);
             
             typeValidationMarker = @(x) validateattributes(x,{'char'},{},'plot','marker');
@@ -673,6 +673,8 @@ classdef Pnt3D
             lineStyle = parseobj.Results.lineStyle;
             lineColor = parseobj.Results.lineColor;
             lineWidth = parseobj.Results.lineWidth;
+            
+            if numel(obj) > 1, obj = obj.fuse; end
             
             plot3(obj.x(:),obj.y(:),obj.z(:),'linestyle',lineStyle,...
                 'color',lineColor,'lineWidth',lineWidth,...
