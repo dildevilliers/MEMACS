@@ -224,7 +224,22 @@ classdef Pnt3D
                 end
             end
         end
-         
+        
+        function obj = unique(obj)
+            if numel(obj) == 1 
+                xyz = obj.pointMatrix;
+                xyzu = unique(xyz.','rows','stable');
+                obj.x = xyzu(:,1).';
+                obj.y = xyzu(:,2).';
+                obj.z = xyzu(:,3).';
+            else
+                assert(numel(obj)==numel(obj2),'Pnt3D object matrices must be the same size')
+                o1 = obj.fuse;
+                op = o1.unique;
+                obj = op.split;
+            end
+        end
+        
 %         function B = isequal(obj1,obj2)
 %             tol = eps;
 %             D = obj1-obj2;

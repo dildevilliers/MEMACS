@@ -6,11 +6,12 @@
 
 # Farfield
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
+- [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
+- [ ] Sort out save and load to use a struct and not rely on the object itself
 - [ ] finish SimpleTaper constructor, write help and testscript
 - [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
-- [ ] Sort out save and load to use a struct and not rely on the object itself
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] writeFITS (DdV)
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
@@ -72,6 +73,7 @@
 - [x] Added getGridIndex method
 
 # Pnt3D
+- [ ] concat - must work for fused and split versions and all mixtures between them
 - [x] Added the fuse and split functions
 - [x] Updated constructor to take vector input
 - [x] fixed plot to handle the vector input (not very hardened, but works for basic cases)

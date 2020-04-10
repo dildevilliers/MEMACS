@@ -622,7 +622,7 @@ classdef CoordinateSystem
            % the pathName
            %
            % Inputs
-           % - obj:         CoordinateSystem object
+           % - obj:      CoordinateSystem object
            % - pathName: The full path and name of the file to be read (can
            %             be empty - gui prompt)
            %
