@@ -1005,7 +1005,7 @@ classdef FarField
             % -
             %
             % Created: 2019, Dirk de Villiers
-            % Updated: 2019-08-09, Dirk de Villiers
+            % Updated: 2020-05-18, Dirk de Villiers
             %
             % Tested : Matlab R2018b
             %  Level : 2
@@ -4122,9 +4122,9 @@ classdef FarField
                 Dth(:,ff) = Dn(1+BORcomp,:).';
                 
                 BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
-                BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand);
+                BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
             end
-            % Build a suitable FarField class
+            % Build a suitable FarField object
             if BORcomp == 0
                 [PH,TH] = meshgrid(0,th_vect);
                 Eth = Bth;

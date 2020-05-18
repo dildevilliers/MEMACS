@@ -71,6 +71,7 @@
 - [x] readASCII added
 - [x] Fixed issue in catFreq
 - [x] Added getGridIndex method
+- [x] Added integration rule optional argument for pradInt
 
 # Pnt3D
 - [ ] concat - must work for fused and split versions and all mixtures between them
