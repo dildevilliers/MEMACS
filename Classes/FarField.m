@@ -918,16 +918,85 @@ classdef FarField
             end
         end
         
+        function [apEff] = getApEff(obj,apArea)
+            % GETAPEFF Get the aperture efficiency of the beam
+            %
+            % [apEff] = getApEff(obj,apArea) calculates the aperture
+            % efficiency of a well-defined beam pattern pointing close to the
+            % z-direction.  Simply uses the maximum directivity and current 
+            % power in the object. Does not do power integration since
+            % these beams are often not specified over a full sphere. Handy
+            % for use with reflector antenna results read from simulators.
+            % Calculates the raw value from the provided grid as well as an
+            % a second order interpolant through the closest few points.
+            % 
+            % Inputs
+            % - obj: FarField object (defined on regular grid)
+            % - apArea: Is the aperture area of the antenna in m^2 (1)
+            %
+            % Outputs
+            % - apEff:  per unit aperture efficiency
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-04-10, Dirk de Villiers
+            % Updated: 2019-04-10, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   Dm = 18;
+            %   apArea = pi.*(Dm/2)^2;
+            %   apEff = F.getApEff(apArea);
+
+            % Find peak directivity
+            D = obj.getDirectivity;
+            [dMax,iPeak] = max(D);
+            apEff.raw = dMax.*(obj.c0./obj.freq).^2./(4.*pi.*apArea);
+            
+            % TODO: quadratic fit below 
+%             if strcmp(obj.gridType,'PhTh')
+%                 for ff = 1:obj.Nf
+%                     % Estimate the grid step
+%                     [~,stepy] = gridStep(obj);
+%                     % Find where the theta peak is
+%                     thPeak = obj.y(iPeak);
+%                     iClose = find(obj.y < (thPeak + 3*stepy));
+%                     % Get the grid, and remove the redundant pole values
+%                     x1 = obj.ph(iClose);
+%                     x2 = obj.th(iClose);
+%                     d = D(iClose,ff);
+%                     x1(x2 == 0) = 0;
+%                     X = [x1,x2];
+%                     [X,iU] = unique(X,'rows');
+%                     d = d(iU);
+%                     
+%                     [u,v] = PhTh2DirCos(X(:,1),X(:,2));
+%                     lm = linRegModFit([u,v],d,'purequadratic');
+%                     
+%                 end
+%             keyboard
+%             else
+%                 apEff.interp = nan;
+%             end
+            
+        end
+            
         %% Field normalization
-        function P = pradInt(obj)
+        function P = pradInt(obj,intRule)
             % PRADINT  Calculates the total power in the field
             %
-            % P = pradInt(obj) calculates the total power in the field over
+            % P = pradInt(obj,intRule) calculates the total power in the field over
             % the full available grid.  Will not return the actual radiated
             % power if the grid does not cover the full sphere.
             % 
             % Inputs
             % - obj: FarField object
+            % - intRule: Optional integration rule {'trap','simp',('auto')}
             %
             % Outputs
             % - P:  Radiated power in Watt
@@ -945,6 +1014,8 @@ classdef FarField
             % Example
             %   F = FarField;
             %   P = F.pradInt
+            
+            if nargin < 2, intRule = 'auto'; end
             
             symFact = 2^(sum(abs([obj.symXY,obj.symXZ,obj.symYZ])));
             
@@ -968,7 +1039,7 @@ classdef FarField
             for ff = 1:obj.Nf
                 if strcmp(obj.symmetryBOR,'none')
                     integrand = reshape(U(:,ff),ny,nx).*abs(JacFuncTh(TH));
-                    P(ff) = integral2D(PH,TH,integrand);
+                    P(ff) = integral2D(PH,TH,integrand,intRule);
                 else
                     Nth = ny;
                     th_vect = obj.y(1:Nth);
@@ -977,7 +1048,7 @@ classdef FarField
                     elseif strcmp(obj.symmetryBOR,'BOR1')
                         integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*abs(JacFuncTh(th_vect));
                     end
-                    P(ff) = pi*integral1D(th_vect,integrand);
+                    P(ff) = pi*integral1D(th_vect,integrand,intRule);
                     symFact = 1;    % Just to be sure...
                 end
             end
@@ -2200,7 +2271,9 @@ classdef FarField
             %   -- scalePhase:  {('deg') | 'rad'}, only used for phase plots
             %   -- freqUnit:    {('GHz') | 'Hz' | 'kHz' | 'MHz' | 'THz'}
             %   -- cutConstant: determines along which axis to cut in 1D plots {('x') | 'y'} 
-            %   -- cutValue:    Any value in the available angle range for 1D cuts range in rad (0)
+            %   -- cutValue:    Any value in the available angle range for
+            %                   1D cuts range in rad (0). Can be inf, then
+            %                   all cuts on a regular grid will be plotted.
             %   -- step:        Plot step size in deg. Can be empty - then the available data will
             %                   be used and no surface will be plotted.  If
             %                   not, a griddata interpolant will be made.
@@ -2400,6 +2473,7 @@ classdef FarField
                         xi = Xi(:);
                         yi = Yi(:);
                     case {'cartesian','polar'}
+                        assert(~isinf(cutValue),'expect finite cutValue if the grid is not regular/plaid/uniform')
                         switch cutConstant
                             case 'x'
                                 yi = yivect;
@@ -2410,13 +2484,46 @@ classdef FarField
                         end
                 end
                 [Zi] = interpolateGrid(obj,output,xi,yi,freqIndex,hemisphere);
-            else
+            else  % Just use what we have - select the nearest one for 1D cases. cutValue = inf plots them all
                 Xi = reshape(obj.x,NyPlot,NxPlot);
                 Yi = reshape(obj.y,NyPlot,NxPlot);
-                xi = obj.x;
-                yi = obj.y;
                 Zi = Z;
                 Zi(~valAng) = NaN;
+                Zi = reshape(Zi,NyPlot,NxPlot);
+                switch plotType
+                    case {'3D','2D'}
+                        xi = obj.x;
+                        yi = obj.y;
+                    case {'cartesian','polar'}
+                        switch cutConstant
+                            case 'x'
+                                if ~isinf(cutValue)
+                                    compVect = Xi(1,:);
+                                    [~,iC] = min(abs(compVect - cutValue));
+                                    yi = Yi(:,iC);
+                                    xi = Xi(:,iC);
+                                    Zi = Zi(:,iC);
+                                    cutValue = xi(1);  % Update in case it is not perfect any more
+                                else
+                                    xi = Xi;
+                                    yi = Yi(:,1);
+                                    cutValue = [];
+                                end
+                            case 'y'
+                                if ~isinf(cutValue)
+                                    compVect = Yi(:,1);
+                                    [~,iC] = min(abs(compVect - cutValue));
+                                    yi = Yi(iC,:);
+                                    xi = Xi(iC,:);
+                                    Zi = Zi(iC,:);
+                                    cutValue = yi(1);  % Update in case it is not perfect any more
+                                else
+                                    xi = Xi(1,:);
+                                    yi = Yi;
+                                    cutValue = [];
+                                end
+                        end
+                end
             end
             
             % Assign axis names
@@ -2645,7 +2752,10 @@ classdef FarField
                     if ~strcmp(obj.gridType,'DirCos')
                         cutValue = rad2deg(cutValue);
                     end
-                    titText = [obj.coorType, ', ',obj.polType, ' polarisation; Freq = ',num2str(freqPlot),' ', freqUnitPlot,'; ',cutName, ' = ',num2str(cutValue), ' ',axisUnit];
+                    titText = [obj.coorType, ', ',obj.polType, ' polarisation; Freq = ',num2str(freqPlot),' ', freqUnitPlot];
+                    if ~isempty(cutValue)
+                        titText = [titText,'; ',cutName, ' = ',num2str(cutValue), ' ',axisUnit];
+                    end
                     
                     % Final bookkeeping to seperate the two options
                     hold on
