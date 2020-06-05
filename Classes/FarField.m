@@ -956,7 +956,7 @@ classdef FarField
             % Find peak directivity
             D = obj.getDirectivity;
             [dMax,iPeak] = max(D);
-            apEff.raw = dMax.*(obj.c0./obj.freq).^2./(4.*pi.*apArea);
+            apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
             
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
@@ -3267,7 +3267,8 @@ classdef FarField
                     XVal = reshape(xVal,NyVal,NxVal);
                     YVal = reshape(yVal,NyVal,NxVal);
                     ZVal = reshape(zVal,NyVal,NxVal);
-                    Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
+%                     Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
+                    Zf = griddedInterpolant(XVal',YVal',ZVal.','cubic');
                 catch ME
                     % Grid did not work... Go to scatter
                 end
