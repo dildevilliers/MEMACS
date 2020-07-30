@@ -1,8 +1,8 @@
 function Xd = rotGRASP(X,angGRASP)
 
 % function Xd = rotGRASP(X,angGRASP)
-% Returns the GRASP angle (angGRASP) rotated vector Xd = [x';y';z'] of the input
-% vector X = [x;y;z]
+% Returns the GRASP angle (angGRASP = [theta,phi,psi]) rotated vector 
+% Xd = [x';y';z'] of the input vector X = [x;y;z]
 % Vectors can be rows of equal length
 
 coor_base = CoordinateSystem();     % Work from global coordinate system
