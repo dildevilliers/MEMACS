@@ -139,7 +139,7 @@ classdef CoordinateSystem
            % -
            %
            % Created: 2019-05-09, Dirk de Villiers
-           % Updated: 2019-05-09, Dirk de Villiers
+           % Updated: 2020-08-02, Dirk de Villiers
            %
            % Tested : Matlab R2018b, Dirk de Villiers
            %  Level : 2
@@ -154,10 +154,12 @@ classdef CoordinateSystem
            if nargin == 2
                tol = 1e-10;
            end
-           BO = isequal(coor1.origin,coor2.origin);
-           Bx = all(abs(coor1.x_axis - coor2.x_axis) < tol);
-           By = all(abs(coor1.y_axis - coor2.y_axis) < tol);
-           B = BO && Bx && By;
+%            BO = isequal(coor1.origin,coor2.origin);
+%            Bx = all(abs(coor1.x_axis - coor2.x_axis) < tol);
+%            By = all(abs(coor1.y_axis - coor2.y_axis) < tol);
+%            B = BO && Bx && By;
+           % Use the short circuiting to speed up
+           B = all(abs(coor1.x_axis - coor2.x_axis) < tol) && all(abs(coor1.y_axis - coor2.y_axis) < tol) && isequal(coor1.origin,coor2.origin);
        end
        
        %% Translation
