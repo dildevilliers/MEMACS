@@ -4,7 +4,7 @@ function I = integral1D(X,Y,rule)
 % the optional argument rule = ['trap'] or 'simpson'
 % X and Y can only be 1D vectors of the same size
 
-if nargin < 3
+if nargin < 3 || strcmp(rule,'auto')
     % If we have a midpoint - use simpson
     if mod(length(Y),2) == 0
         rule = 'trap';
@@ -23,7 +23,16 @@ switch rule
 %         if mod(length(X),2) == 0
 %             warning('Simpsons rule not great for even number of points...')
 %         end
-        I = simpsons(Y,min(X),max(X));
+        % Need uniform grid for Simpson's rule...
+        d0 = diff(X(1:2));
+        if any(abs(diff(X) - d0) > d0/1000)
+            Xs = linspace(min(X),max(X),length(X));
+            Ys = interp1(X,Y,Xs,'spline');
+        else
+            Xs = X;
+            Ys = Y;
+        end
+        I = simpsons(Ys,min(Xs),max(Xs));
     otherwise
         error(['Unknown rule: ',rule])
 end

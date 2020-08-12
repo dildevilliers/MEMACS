@@ -71,7 +71,7 @@ classdef FarField
         coorOrientation % Coordinate system indicating the orientation
         angBackRotate   % Required Euler rotation angles to align the antenna to to North,Zenith system
         
-        auxParamStruct     % Structure containing all the nam-value pair parameters
+        auxParamStruct     % Structure containing all the name-value pair parameters
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -103,6 +103,7 @@ classdef FarField
         projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
         astroGrids = {'Horiz','RAdec','GalLongLat'};
         localGrids = {'PhTh','AzEl','ElAz'};
+        version = 0.4;
     end
     
     methods
@@ -917,16 +918,85 @@ classdef FarField
             end
         end
         
+        function [apEff] = getApEff(obj,apArea)
+            % GETAPEFF Get the aperture efficiency of the beam
+            %
+            % [apEff] = getApEff(obj,apArea) calculates the aperture
+            % efficiency of a well-defined beam pattern pointing close to the
+            % z-direction.  Simply uses the maximum directivity and current 
+            % power in the object. Does not do power integration since
+            % these beams are often not specified over a full sphere. Handy
+            % for use with reflector antenna results read from simulators.
+            % Calculates the raw value from the provided grid as well as an
+            % a second order interpolant through the closest few points.
+            % 
+            % Inputs
+            % - obj: FarField object (defined on regular grid)
+            % - apArea: Is the aperture area of the antenna in m^2 (1)
+            %
+            % Outputs
+            % - apEff:  per unit aperture efficiency
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-04-10, Dirk de Villiers
+            % Updated: 2019-04-10, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   Dm = 18;
+            %   apArea = pi.*(Dm/2)^2;
+            %   apEff = F.getApEff(apArea);
+
+            % Find peak directivity
+            D = obj.getDirectivity;
+            [dMax,iPeak] = max(D);
+            apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            
+            % TODO: quadratic fit below 
+%             if strcmp(obj.gridType,'PhTh')
+%                 for ff = 1:obj.Nf
+%                     % Estimate the grid step
+%                     [~,stepy] = gridStep(obj);
+%                     % Find where the theta peak is
+%                     thPeak = obj.y(iPeak);
+%                     iClose = find(obj.y < (thPeak + 3*stepy));
+%                     % Get the grid, and remove the redundant pole values
+%                     x1 = obj.ph(iClose);
+%                     x2 = obj.th(iClose);
+%                     d = D(iClose,ff);
+%                     x1(x2 == 0) = 0;
+%                     X = [x1,x2];
+%                     [X,iU] = unique(X,'rows');
+%                     d = d(iU);
+%                     
+%                     [u,v] = PhTh2DirCos(X(:,1),X(:,2));
+%                     lm = linRegModFit([u,v],d,'purequadratic');
+%                     
+%                 end
+%             keyboard
+%             else
+%                 apEff.interp = nan;
+%             end
+            
+        end
+            
         %% Field normalization
-        function P = pradInt(obj)
+        function P = pradInt(obj,intRule)
             % PRADINT  Calculates the total power in the field
             %
-            % P = pradInt(obj) calculates the total power in the field over
+            % P = pradInt(obj,intRule) calculates the total power in the field over
             % the full available grid.  Will not return the actual radiated
             % power if the grid does not cover the full sphere.
             % 
             % Inputs
             % - obj: FarField object
+            % - intRule: Optional integration rule {'trap','simp',('auto')}
             %
             % Outputs
             % - P:  Radiated power in Watt
@@ -935,7 +1005,7 @@ classdef FarField
             % -
             %
             % Created: 2019, Dirk de Villiers
-            % Updated: 2019-08-09, Dirk de Villiers
+            % Updated: 2020-05-18, Dirk de Villiers
             %
             % Tested : Matlab R2018b
             %  Level : 2
@@ -944,6 +1014,8 @@ classdef FarField
             % Example
             %   F = FarField;
             %   P = F.pradInt
+            
+            if nargin < 2, intRule = 'auto'; end
             
             symFact = 2^(sum(abs([obj.symXY,obj.symXZ,obj.symYZ])));
             
@@ -967,7 +1039,7 @@ classdef FarField
             for ff = 1:obj.Nf
                 if strcmp(obj.symmetryBOR,'none')
                     integrand = reshape(U(:,ff),ny,nx).*abs(JacFuncTh(TH));
-                    P(ff) = integral2D(PH,TH,integrand);
+                    P(ff) = integral2D(PH,TH,integrand,intRule);
                 else
                     Nth = ny;
                     th_vect = obj.y(1:Nth);
@@ -976,7 +1048,7 @@ classdef FarField
                     elseif strcmp(obj.symmetryBOR,'BOR1')
                         integrand = (U(1:Nth,ff) + U(Nth+1:end,ff)).*abs(JacFuncTh(th_vect));
                     end
-                    P(ff) = pi*integral1D(th_vect,integrand);
+                    P(ff) = pi*integral1D(th_vect,integrand,intRule);
                     symFact = 1;    % Just to be sure...
                 end
             end
@@ -1619,12 +1691,9 @@ classdef FarField
             % obj = setRangeSph(obj,xType,yType) sets the x- and y-ranges
             % of the object to xType = {('sym') | 'pos'}; yType = {('180') | '360'}
             % Depending on the gridType, different representations of the y
-            % range result.  In some cases the base grid is changed -
-            % specifically when the required transformation results in a
+            % range result.  Currently, the base grid is removed, because 
+            % often the required transformation results in a
             % different number of grid points to accommodate the new poles.
-            % This is avoided as far as possible, and only happens when the
-            % full sphere is represented and when changing between yRange
-            % 180 and 360 (and back);
             % 
             % Inputs
             % - obj: FarField object
@@ -1632,7 +1701,7 @@ classdef FarField
             % - yType: char array {('180') | '360'}
             %
             % Outputs
-            % - obj:    Farfield object with new range and possible new base
+            % - obj:    Farfield object with new range 
             %
             % Dependencies
             % -
@@ -2182,7 +2251,7 @@ classdef FarField
         end
         
         %% Plotting methods
-        function [] = plot(obj,varargin)
+        function plot(obj,varargin)
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -2202,7 +2271,9 @@ classdef FarField
             %   -- scalePhase:  {('deg') | 'rad'}, only used for phase plots
             %   -- freqUnit:    {('GHz') | 'Hz' | 'kHz' | 'MHz' | 'THz'}
             %   -- cutConstant: determines along which axis to cut in 1D plots {('x') | 'y'} 
-            %   -- cutValue:    Any value in the available angle range for 1D cuts range in rad (0)
+            %   -- cutValue:    Any value in the available angle range for
+            %                   1D cuts range in rad (0). Can be inf, then
+            %                   all cuts on a regular grid will be plotted.
             %   -- step:        Plot step size in deg. Can be empty - then the available data will
             %                   be used and no surface will be plotted.  If
             %                   not, a griddata interpolant will be made.
@@ -2402,6 +2473,7 @@ classdef FarField
                         xi = Xi(:);
                         yi = Yi(:);
                     case {'cartesian','polar'}
+                        assert(~isinf(cutValue),'expect finite cutValue if the grid is not regular/plaid/uniform')
                         switch cutConstant
                             case 'x'
                                 yi = yivect;
@@ -2412,13 +2484,46 @@ classdef FarField
                         end
                 end
                 [Zi] = interpolateGrid(obj,output,xi,yi,freqIndex,hemisphere);
-            else
+            else  % Just use what we have - select the nearest one for 1D cases. cutValue = inf plots them all
                 Xi = reshape(obj.x,NyPlot,NxPlot);
                 Yi = reshape(obj.y,NyPlot,NxPlot);
-                xi = obj.x;
-                yi = obj.y;
                 Zi = Z;
                 Zi(~valAng) = NaN;
+                Zi = reshape(Zi,NyPlot,NxPlot);
+                switch plotType
+                    case {'3D','2D'}
+                        xi = obj.x;
+                        yi = obj.y;
+                    case {'cartesian','polar'}
+                        switch cutConstant
+                            case 'x'
+                                if ~isinf(cutValue)
+                                    compVect = Xi(1,:);
+                                    [~,iC] = min(abs(compVect - cutValue));
+                                    yi = Yi(:,iC);
+                                    xi = Xi(:,iC);
+                                    Zi = Zi(:,iC);
+                                    cutValue = xi(1);  % Update in case it is not perfect any more
+                                else
+                                    xi = Xi;
+                                    yi = Yi(:,1);
+                                    cutValue = [];
+                                end
+                            case 'y'
+                                if ~isinf(cutValue)
+                                    compVect = Yi(:,1);
+                                    [~,iC] = min(abs(compVect - cutValue));
+                                    yi = Yi(iC,:);
+                                    xi = Xi(iC,:);
+                                    Zi = Zi(iC,:);
+                                    cutValue = yi(1);  % Update in case it is not perfect any more
+                                else
+                                    xi = Xi(1,:);
+                                    yi = Yi;
+                                    cutValue = [];
+                                end
+                        end
+                end
             end
             
             % Assign axis names
@@ -2647,7 +2752,10 @@ classdef FarField
                     if ~strcmp(obj.gridType,'DirCos')
                         cutValue = rad2deg(cutValue);
                     end
-                    titText = [obj.coorType, ', ',obj.polType, ' polarisation; Freq = ',num2str(freqPlot),' ', freqUnitPlot,'; ',cutName, ' = ',num2str(cutValue), ' ',axisUnit];
+                    titText = [obj.coorType, ', ',obj.polType, ' polarisation; Freq = ',num2str(freqPlot),' ', freqUnitPlot];
+                    if ~isempty(cutValue)
+                        titText = [titText,'; ',cutName, ' = ',num2str(cutValue), ' ',axisUnit];
+                    end
                     
                     % Final bookkeeping to seperate the two options
                     hold on
@@ -2666,7 +2774,7 @@ classdef FarField
             
         end
         
-        function [ax] = plotJones(FF1,FF2,varargin)
+        function plotJones(FF1,FF2,varargin)
             % PLOTJONES Plots the Jones matrix type representation FarFields
             
             % function [ax] = plotJones(FF1,FF2,varargin)
@@ -3159,7 +3267,8 @@ classdef FarField
                     XVal = reshape(xVal,NyVal,NxVal);
                     YVal = reshape(yVal,NyVal,NxVal);
                     ZVal = reshape(zVal,NyVal,NxVal);
-                    Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
+%                     Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
+                    Zf = griddedInterpolant(XVal',YVal',ZVal.','cubic');
                 catch ME
                     % Grid did not work... Go to scatter
                 end
@@ -3399,7 +3508,9 @@ classdef FarField
                 for ff = 1:obj1.Nf
                     Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                 end
-                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+                FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,...
+                    'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
+                    'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
             else
                 % Perform the rotation of the field vectors
                 % Vector origin points before rotation
@@ -3454,7 +3565,9 @@ classdef FarField
                     for ff = 1:obj1.Nf
                         Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
                     end
-                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR);
+                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,...
+                        'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
+                        'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
                 else
                     FFsph = FFsph.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
                 end
@@ -3680,7 +3793,37 @@ classdef FarField
         function obj = getFi(obj1,freqIndex)
             % GETFI Returns an object only containing the results in
             % freqIndex.
-            
+            %
+            % obj = getFi(obj1,freqIndex) returns a new object which
+            % which only has the frequency points specified in the freqIndex
+            % input.
+            % 
+            % Inputs
+            % - obj1: FarField object
+            % - freqIndex: Integer array of frequency indexes of interest
+            %
+            % Outputs
+            % - obj:  Sub-sampled FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  freq = linspace(1,2,21).*1e9;
+            %  for ff = 1:length(freq)
+            %      F(ff) = FarField;
+            %      F(ff) = F(ff).setFreq(freq(ff));
+            %  end
+            %  F1 = F.catFreq;
+            %  F2 = F1.getFi(10)
+
             % Returns an object only containing the results in freqIndex
             obj = obj1;
             obj.E1 = obj1.E1(:,freqIndex);
@@ -3698,7 +3841,36 @@ classdef FarField
         end
         
         function obj = catFreq(objIn)
-           % CATFREQ Concatenates the frequencies in the input array  
+            % CATFREQ Concatenates the frequencies in the input array
+            %
+            % obj = catFreq(objIn) returns a new object which
+            % concatenates the input array of FarField objects, which 
+            % should all have different frequencies, into one object with a
+            % range of frequencies.
+            % 
+            % Inputs
+            % - objIn: Input array of FarField objects
+            %
+            % Outputs
+            % - obj:  Concatenated FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  freq = linspace(1,2,21).*1e9;
+            %  for ff = 1:length(freq)
+            %      F(ff) = FarField;
+            %      F(ff) = F(ff).setFreq(freq(ff));
+            %  end
+            %  F1 = F.catFreq;
             
            [~,xEqual,yEqual] = isGridEqual(objIn);
            assert(all(xEqual)&&all(yEqual),'Input grids must be equal to concatenate frequencies')
@@ -3724,7 +3896,62 @@ classdef FarField
            freqCat = cell2mat(freqCat);
            PradCat = cell2mat(PradCat);
            radEffCat = cell2mat(radEffCat);
-           obj = FarField(objIn(1).x,objIn(1).y,E1Cat,E2Cat,freqCat,PradCat,radEffCat,objIn(1).auxParamStruct,'E3',E3Cat);
+           % Update the first element of the input array for the output
+           % All the other information parameters already checked
+           objIn(1).E1 = E1Cat;
+           objIn(1).E2 = E2Cat;
+           objIn(1).E3 = E3Cat;
+           objIn(1).freq = freqCat;
+           objIn(1).Prad = PradCat;
+           objIn(1).radEff = radEffCat;
+           if ~isempty(objIn(1).E1Base)
+               objIn(1) = objIn(1).setBaseFields;
+           end
+           obj = objIn(1);
+        end
+        
+        function obj = getGridIndex(obj1,gridIndex)
+            % GETGRIDINDEX Returns an object only containing the results in
+            % gridIndex.
+            %
+            % obj = getGridIndex(obj1,gridIndex) returns a new object which
+            % which only has the grid points specified in the gridIndex
+            % input.
+            % 
+            % Inputs
+            % - obj1: FarField object
+            % - gridIndex: Integer array of grid indexes of interest
+            %
+            % Outputs
+            % - obj:  Sub-sampled FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-27, Dirk de Villiers
+            % Updated: 2020-02-27, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  F = FarField;
+            %  F1 = F.getGridIndex([1,2,3]);
+            %  F1
+            
+            obj = obj1;
+            obj.x = obj1.x(gridIndex);
+            obj.y = obj1.y(gridIndex);
+            obj.E1 = obj1.E1(gridIndex,:);
+            if ~isempty(obj1.E2), obj.E2 = obj1.E2(gridIndex,:); end
+            if ~isempty(obj1.E3), obj.E3 = obj1.E3(gridIndex,:); end
+            if ~isempty(obj1.xBase)
+                obj = obj.setBaseGrid;
+            end
+            if ~isempty(obj1.E1Base)
+                obj = obj.setBaseFields;
+            end
         end
         
         %% Symmetry handlers
@@ -3896,9 +4123,9 @@ classdef FarField
                 Dth(:,ff) = Dn(1+BORcomp,:).';
                 
                 BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
-                BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand);
+                BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
             end
-            % Build a suitable FarField class
+            % Build a suitable FarField object
             if BORcomp == 0
                 [PH,TH] = meshgrid(0,th_vect);
                 Eth = Bth;
@@ -4243,6 +4470,56 @@ classdef FarField
                 end
             end
             
+            fclose(fid);
+        end
+        
+        function writeASCII(obj,pathName)
+            % WRITEASCII Write a FarField object to an ASCII .txt file
+            % writeASCII(obj,pathName) writes a FarField object to an ASCII
+            % .txt file. The whole cube is output as one file with columns
+            % [x,y,f,E1real,E1imag,E2real,E2imag]. Some information about
+            % the format is provided in the heading
+            % 
+            % Inputs
+            % - obj:    FarField object
+            % - pathName: The full path and name of the target file
+            % 
+            % Outputs
+            % - 
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-13, Dirk de Villiers
+            % Updated: 2020-02-14, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b, Dirk de Villiers
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField;
+            %   F.writeASCII('c:\Temp\FFwrite.txt');
+            
+            if strcmp(pathName(end-4:end),'.txt'), pathName = pathName(1:end-4); end
+            
+            fid = fopen([pathName,'.txt.'],'w+');
+            fprintf(fid,'%s\n','Field pattern data written by MATLAB FarField class');
+            fprintf(fid,'%s\t%2.1f\n','version:',obj.version);
+            fprintf(fid,'%s\t%i\t%i\t%i\n','Nx,Ny,Nf:',obj.Nx,obj.Ny,obj.Nf);
+            fprintf(fid,'%s\t%s\t%s\t%s\t%s\n','grid/coor/pol/freqUnit:',obj.gridType,obj.coorType,obj.polType,obj.freqUnit);
+            MATout = [repmat(obj.x,obj.Nf,1),repmat(obj.y,obj.Nf,1),reshape(repmat(obj.freq,obj.Nang,1),obj.Nang*obj.Nf,1),...
+                real(obj.E1(:)),imag(obj.E1(:))];
+            if strcmp(obj.coorType,'power')
+                fprintf(fid,'%s\t%s\t%s\t%s\t%s\n',...
+                    strrep(obj.xname,'\',''),strrep(obj.yname,'\',''),'Freq',[obj.E1name,'_real'],[obj.E1name,'_imag']);
+            else
+                fprintf(fid,'%s\t%s\t%s\t%s\t%s\t%s\t%s\n',...
+                    strrep(obj.xname,'\',''),strrep(obj.yname,'\',''),'Freq',[obj.E1name,'_real'],[obj.E1name,'_imag'],...
+                    [obj.E2name,'_real'],[obj.E2name,'_imag']);
+                MATout = [MATout,real(obj.E2(:)),imag(obj.E2(:))];
+            end
+            fprintf(fid,'%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\t%1.8e\n',MATout.');
             fclose(fid);
         end
         
@@ -5269,13 +5546,13 @@ classdef FarField
             typeValidator_pathName = @(x) isa(x,'char');
             parseobj.addRequired('pathname',typeValidator_pathName);
             
-            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readNFSscan');
             parseobj.addParameter('r',1,typeValidation_scalar);
             
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readNFSscan');
             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
             
-            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readNFSscan');
             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
             
             typeValidation_time = @(x) isa(x,'datetime');
@@ -5430,11 +5707,20 @@ classdef FarField
             FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            FF = FF.sortGrid;
         end
         
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
             % READFITS Create a FarField object from a FITS image file.
-            
+            %
+            % FF = readFITS(inputStruct,gridType,coorType,polType,varargin) 
+            % loads a FarField object from a .FITS image file. Only a
+            % limited number of internal formats are supported - see format
+            % notes below.
+            % Can have several optional arguments describing the local 
+            % field and symmetry as name value pairs. 
+            %
+            % FITS data format:
             % Expect the data format as: data([Nx,Ny,Nf,Ne,Nc,Np])
             %   Nx - number of x values
             %   Ny - number of y values
@@ -5444,17 +5730,63 @@ classdef FarField
             %   Np - number of complex data parts [1 | 2] (if this is just
             %   1, the other complex component is expected from another
             %   fits file - see inputStruct.type)
-            % inputStruct is a struct of important input parameters,
-            % containing a subset of:
-            %   .pathName1 - the path and name of the first component (required)
-            %   .pathName2 - the path and name of the second component (optional)
-            %   .type1 - the type of the first component {('real') | 'imag' | 'mag' | 'phase'} (optional)
-            %   .type2 - the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
-            %   .scale1 - the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
-            %   .scale2 - the scale of the second component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
-            %   .scaleFuncGrid - can be a function handle or scaling factor
-            %   for the grid. if it is an array with 2 elements, the first
-            %   is used for x, and the second for y
+            %   This method will try to get information about the grid from
+            %   the information in the FITS keywords, and overwrite the
+            %   provided input values if any information is found in the
+            %   file.  
+            %
+            % Inputs
+            % - inputStruct: A struct of important input parameters,
+            %                containing a subset of:
+            %   .pathName1:  the path and name of the first component (required)
+            %   .pathName2:  the path and name of the second component (optional)
+            %                The above pathNames can be cell arrays of
+            %                equal length to indicate the field components
+            %                (first element E1 and second is E2)
+            %   .type1:      the type of the first component {('real') | 'imag' | 'mag' | 'phase'} (optional)
+            %   .type2:      the type of the second component {('real') | 'imag' | 'mag' | 'phase'} (optional)
+            %   .scale1:     the scale of the first component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
+            %   .scale2:     the scale of the second component {('lin') | 'dB' | ('rad') | 'deg'} (optional)
+            %   .scaleFuncGrid: can be a function handle or scaling factor
+            %                   for the grid. if it is an array with 2 
+            %                   elements, the first is used for x, and the second for y
+            % - gridType:   See FarField help for details
+            % - coorType:   See FarField help for details
+            % - polType:   See FarField help for details
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- xRange:      Two element vector of the x range limits
+            %   -- yRange:      Two element vector of the y range limits
+            %   -- fRange:      Two element vector of the frequency range limits
+            %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
+            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2019-09-06, Dirk de Villiers
+            % Updated: 2020-02-07, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   [name,path] = uigetfile('*.fits','Click on repo\data\SimPatterns\FITS\MeerKAT_Holo_small.fits for this example');
+            %   inputStructH.pathName1 = [path,name];
+            %   inputStructH.scaleFuncGrid = @sind;
+            %   FF = FarField.readFITS(inputStructH,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[899e6,899e6]);
+            %   FF(1).plot('plotType','2D','showGrid',1)
             
             % ToDo: This is very hard to generalise - learn as we go and
             % get more variations I guess
@@ -5497,11 +5829,14 @@ classdef FarField
             
             parseobj.addParameter('freqUnit','Hz');
             
-            % ToDo - add keyboard functionality to read the second
+            % TODO - add keyboard functionality to read the second
             % component as well as type/scale
             if nargin == 0 || isempty(inputStruct)
                 [name,path] = uigetfile('*.fits','Component 1:');
                 inputStruct.pathName1 = [path,name];
+                gridType = input('Input the gridType string:');
+                coorType = input('Input the coorType string:');
+                polType = input('Input the polType string:');
             end
             parseobj.parse(inputStruct,gridType,coorType,polType,varargin{:})
             
@@ -5525,6 +5860,11 @@ classdef FarField
             eta0 = 3.767303134749689e+02;
             
             pathName1 = inputStruct.pathName1;
+            if ~iscell(pathName1)
+                pathName1 = {pathName1};
+            end
+            Ni = length(pathName1);  % Number of different field components in different files
+            assert(Ni <= 2,'Expecting a maximum of two elements in the pathName1 cell array');
             
             % Set some defaults
             [type1,scale1] = deal('real','lin');
@@ -5538,6 +5878,10 @@ classdef FarField
             end
             if isfield(inputStruct,'pathName2') && ~isempty(inputStruct.pathName2)
                 pathName2 = inputStruct.pathName2;
+                if ~iscell(pathName2)
+                    pathName2 = {pathName2};
+                end
+                assert(Ni==length(pathName2),'The input path cell arrays must be the same length')
             end
             if isfield(inputStruct,'type2') && ~isempty(inputStruct.type2)
                 type2 = inputStruct.type2;
@@ -5583,31 +5927,56 @@ classdef FarField
             end
             
             % sort out extensions
-            [~,~,ext1] = fileparts(pathName1);
-            if isempty(ext1), pathName1 = [pathName1,'.fits']; end
-            if ~isempty(pathName2)
-                [~,~,ext2] = fileparts(pathName2);
-                if isempty(ext2), pathName2 = [pathName2,'.fits']; end
+            for ee = 1:Ni
+                [~,~,ext1] = fileparts(pathName1{ee});
+                if isempty(ext1), pathName1{ee} = [pathName1{ee},'.fits']; end
+                if ~isempty(pathName2)
+                    [~,~,ext2] = fileparts(pathName2{ee});
+                    if isempty(ext2), pathName2{ee} = [pathName2{ee},'.fits']; end
+                end
             end
             
             % Read the info and data and process the fields
-            info1 = fitsinfo(pathName1);
-            [xvect1,yvect1,fvect1] = fitsGrid(info1,xRange,yRange,fRange);
+            % Not doing many checks now to make sure the different field
+            % components are the same grids etc - it might crash or give
+            % nonsense if not...
+            for ee = 1:Ni
+                info1 = fitsinfo(pathName1{ee});
+                data1{ee} = fitsread(pathName1{ee});
+                if ee == 2
+                    [xvect1temp,yvect1temp,fvect1temp] = fitsGrid(info1,xRange,yRange,fRange);
+                    assert(all(xvect1==xvect1temp) && all(yvect1==yvect1temp)&& all(fvect1==fvect1temp),'The different files must be defined on the same grid');
+                else
+                    [xvect1,yvect1,fvect1] = fitsGrid(info1,xRange,yRange,fRange);
+                end
+            end
             if isa(scaleFuncGrid,'function_handle')
                 [X,Y] = meshgrid(scaleFuncGrid(xvect1),scaleFuncGrid(yvect1));
             else
                 [X,Y] = meshgrid(scaleFuncGrid.*xvect1,scaleFuncGrid.*yvect1);
             end
             [Nx,Ny,Nf] = deal(numel(xvect1),numel(yvect1),numel(fvect1));
-            data1 = fitsread(pathName1);
             
             % Ne = number of fields; Nc = number of components; Np = number
             % of complex parts
-            [~,~,~,Ne,Nc,Np] = size(data1(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+            for ee = 1:Ni
+                if ee == 2
+                    [~,~,~,NeTemp,NcTemp,NpTemp] = size(data1{ee}(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+                    assert(NeTemp==Ne && NcTemp==Nc && NpTemp == Np,'The different files must be defined on the same grid');
+                    assert(Nc == 1,'Cannot have two input files and two field components in them.  Either provide one file with both, or two files with one each')
+                else
+                    [~,~,~,Ne,Nc,Np] = size(data1{ee}(1,1,1,:,:,:)); % Can be more than one field in here - column 4 represents number of patterns. 
+                end
+            end
+            
             % E-field naming: EXy; X = component, y = complex part
-            E1a = (data1(:,:,:,:,1,:));
+            E1a = (data1{1}(:,:,:,:,1,:));
             [E1b,E2a,E2b] = deal([]);
-            if Nc > 1, E2a = (data1(:,:,:,:,2,:)); end
+            if Nc == 2
+                E2a = (data1{1}(:,:,:,:,2,:)); 
+            elseif Ni == 2 
+                E2a = (data1{2}(:,:,:,:,1,:)); 
+            end
             % Sort out type and scale
             switch scale1
                 case 'dB10'
@@ -5619,35 +5988,47 @@ classdef FarField
             end
             % Get the second complex parameter
             if ~isempty(pathName2) && Np == 1
-                info2 = fitsinfo(pathName2);
-                [xvect2,yvect2,fvect2] = fitsGrid(info2,xRange,yRange,fRange);
-                data2 = fitsread(pathName2);
-                assert(all(xvect1 == xvect2)&&all(yvect1 == yvect2)&&all(fvect1 == fvect2)&&all(size(data1)==size(data2)),'The two patterns must have identical grids and number of fields')
-                E1b = (data2(:,:,:,:,1));
-                if Nc > 1, E2b = (data2(:,:,:,:,2)); end
+                for ee = 1:Ni
+                    info2 = fitsinfo(pathName2{ee});
+                    [xvect2,yvect2,fvect2] = fitsGrid(info2,xRange,yRange,fRange);
+                    data2{ee} = fitsread(pathName2{ee});
+                    assert(all(xvect1 == xvect2)&&all(yvect1 == yvect2)&&all(fvect1 == fvect2)&&all(size(data1{ee})==size(data2{ee})),'The two patterns must have identical grids and number of fields')
+                end
+                E1b = (data2{1}(:,:,:,:,1));
+                if Nc == 2
+                    E2b = (data2{1}(:,:,:,:,2)); 
+                elseif Ni == 2
+                    E2b = (data2{2}(:,:,:,:,1)); 
+                end
             elseif Np == 2
-                E1b = data1(:,:,:,:,1,2);
-                if Nc > 1, E2b = data1(:,:,:,:,2,2); end
+                E1b = data1{1}(:,:,:,:,1,2);
+                if Nc == 2
+                    E2b = data1{1}(:,:,:,:,2,2); 
+                elseif Ni == 2
+                    E2b = data1{2}(:,:,:,:,1,2); 
+                end
             end
             E1 = E1a(:,:,:,:,1,1);
-            if Nc > 1, E2 = E2a(:,:,:,:,1,1); end
+            if Nc == 2 || Ni == 2
+                E2 = E2a(:,:,:,:,1,1); 
+            end
             
             % Handle the complex number types
             switch type2
                 case 'imag'
                     if ~isempty(E1b), E1 = E1 + 1i.*E1b; end
-                    if Nc > 1
+                    if Nc == 2 || Ni == 2
                         if ~isempty(E2b), E2 = E2 + 1i.*E2b; end
                     end
                 case 'phase'
                     if strcmp(scale2,'deg')
                         E1b = deg2rad(E1b);
-                        if Nc > 1
+                        if Nc == 2 || Ni == 2
                             if ~isempty(E2b), E2b = deg2rad(E2b); end
                         end
                     end
                     if ~isempty(E1b), E1 = E1.*exp(1i.*E1b); end
-                    if Nc > 1
+                    if Nc == 2 || Ni == 2
                         if ~isempty(E2b), E2 = E2.*exp(1i.*E2b); end
                     end
             end
@@ -5676,7 +6057,8 @@ classdef FarField
                     startValX  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL1'),2));
                     startPosX = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX1'),2));
                     delX = cell2mat(keywords(strcmp(keywords(:,1),'CDELT1'),2));
-                    xvect = (0:delX:(Nx-1)*delX) + startValX - (startPosX-mod(Nx,2))*delX;
+%                     xvect = (0:delX:(Nx-1)*delX) + startValX - (startPosX-mod(Nx,2))*delX;
+                    xvect = ((1:Nx) - startPosX).*delX + startValX;
                 else
                     xvect = linspace(xRange(1),xRange(2),Nx);
                 end
@@ -5684,7 +6066,8 @@ classdef FarField
                     startValY  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL2'),2));
                     startPosY = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX2'),2));
                     delY = cell2mat(keywords(strcmp(keywords(:,1),'CDELT2'),2));
-                    yvect = (0:delY:(Ny-1)*delY) + startValY - (startPosY-mod(Ny,2))*delY;
+%                     yvect = (0:delY:(Ny-1)*delY) + startValY - (startPosY-mod(Ny,2))*delY;
+                    yvect = ((1:Ny) - startPosY).*delY + startValY;
                 else
                     yvect = linspace(yRange(1),yRange(2),Ny);
                 end
@@ -5692,11 +6075,117 @@ classdef FarField
                     startValF  = cell2mat(keywords(strcmp(keywords(:,1),'CRVAL3'),2));
                     startPosF = cell2mat(keywords(strcmp(keywords(:,1),'CRPIX3'),2));
                     delF = cell2mat(keywords(strcmp(keywords(:,1),'CDELT3'),2));
-                    fvect = (0:delF:(Nf-1)*delF) + startValF - (startPosF-mod(Nf,2))*delF;
+%                     fvect = (0:delF:(Nf-1)*delF) + startValF - (startPosF-mod(Nf,2))*delF;
+                    fvect = ((1:Nf) - startPosF).*delF + startValF;
                 else
                     fvect = linspace(fRange(1),fRange(2),Nf);
                 end
             end
+        end
+        
+        function FF = readASCII(pathName,varargin)
+            % READASCII reads a FarField object from a .txt file
+            %
+            % FF = readASCII(pathName,varargin) loads a FarField object
+            % from the .txt file at pathName. Can have several optional
+            % arguments describing the local field as name value pairs. 
+            % The file format is governed by what is in FarField.writeASCII
+            % 
+            % Inputs
+            % - pathName: Full path and filename string. Can be empty -
+            %               then gui will request an ffs file
+            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+            %   acceptable keywords are
+            %   -- r:           See FarField constructor help for details
+            %   -- orientation: See FarField constructor help for details
+            %   -- earthLocation: See FarField constructor help for details
+            %   -- time:        See FarField constructor help for details
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-02-14, Dirk de Villiers
+            % Updated: 2020-02-14, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField.readASCII;
+            %   F.plot('plotType','2D','showGrid',1)
+            
+            parseobj = inputParser;
+            parseobj.FunctionName = 'readASCII';
+            
+            typeValidator_pathName = @(x) isa(x,'char');
+            parseobj.addRequired('pathname',typeValidator_pathName);
+            
+            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readASCII');
+            parseobj.addParameter('r',1,typeValidation_scalar);
+            
+            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readASCII');
+            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+            
+            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readASCII');
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+            
+            typeValidation_time = @(x) isa(x,'datetime');
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+            
+            if nargin == 0
+                [name,path] = uigetfile('*.txt');
+                pathName = [path,name];
+            end
+            parseobj.parse(pathName,varargin{:})
+            
+            pathName = parseobj.Results.pathname;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            % Open the data file
+            if ~strcmp(pathName(end-3:end),'.txt')
+                pathName = [pathName,'.txt'];
+            end
+            fid = fopen(pathName);
+            if (fid==-1)
+                error(['Unable to open data file ', fileName, '!']);
+            end
+            
+            a = fgetl(fid); % Heading line
+            a = fgetl(fid);
+            A = textscan(a,'%s%f');
+            version = A{2};
+            a = fgetl(fid);
+            A = textscan(a,'%s%d%d%d');
+            [Nx,Ny,Nf] = deal(A{2:4});
+            Nang = Nx*Ny;
+            a = fgetl(fid);
+            A = textscan(a,'%s%s%s%s%s');
+            [grid,coor,pol,fU] = deal(A{2:5});
+            [gridType,coorType,polType,freqUnit] = deal(grid{1},coor{1},pol{1},fU{1});
+            a = fgetl(fid);
+            if strcmp(coorType,'power')
+                MATin = fscanf(fid,'%f%f%f%f%f',[5, Nang*Nf]).';
+            else
+                MATin = fscanf(fid,'%f%f%f%f%f%f%f',[7, Nx*Ny*Nf]).';
+                E2 = reshape(MATin(:,6),Nang,Nf) + 1i.*reshape(MATin(:,7),Nang,Nf);
+            end
+            x = MATin(1:Nang,1);
+            y = MATin(1:Nang,2);
+            freq = unique(MATin(:,3)).';
+            E1 = reshape(MATin(:,4),Nang,Nf) + 1i.*reshape(MATin(:,5),Nang,Nf);
+            
+            FF = FarField(x,y,E1,E2,freq,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+
+            fclose(fid);
         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
@@ -5786,30 +6275,31 @@ classdef FarField
             if isscalar(U)
                 U = U./(4.*pi).*ones(size(ph));
             end
+            Emag = sqrt(U./r^2.*2*eta0); % E-field magnitude
             %From power pattern and polarization parameters, generate E1 and E2 accordingly
             if strcmp(symmetryBOR,'none')
                 coorType = 'Ludwig3';
                 switch fieldPol
                     case 'linearX' % linearly polarised along X-axis
                         polType = 'linear';
-                        E1  = sqrt(U./r^2.*2*eta0);
+                        E1  = Emag;
                         E2  = zeros(size(U));
                     case 'linearY' % linearly polarised along Y-axis
                         polType = 'linear';
                         E1  = zeros(size(U));
-                        E2  = sqrt(U./r^2.*2*eta0);
+                        E2  = Emag;
                     case 'circularLH'  % Lefthand Circular polarization
                         polType = 'circular';
-                        E1  = sqrt(U./r^2.*2*eta0);
+                        E1  = Emag;
                         E2  = zeros(size(U));
                     case 'circularRH'  % Righthand Circular polarization
                         polType = 'circular';
                         E1  = zeros(size(U));
-                        E2  = sqrt(U./r^2.*2*eta0);
+                        E2  = Emag;
                     case 'power' % Only real power pattern of interest
                         polType = 'none';
                         coorType = 'power';
-                        E1 = sqrt(U./r^2.*2*eta0);
+                        E1 = Emag;
                         E2 = [];
                     otherwise
                         error('fieldPol input string unrecognised')
@@ -5934,6 +6424,127 @@ classdef FarField
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
+        
+        % Analytic pattern functions
+        function FF = SimpleTaper(varargin)
+            % SIMPLETAPER creates a simple tapered pattern
+            %
+            %
+            
+            % Parsing through the inputs
+            parseobj = inputParser;
+            parseobj.FunctionName = 'SimpleTaper';
+            
+            typeValidation_taper = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','ncols',1},'SimpleTaper');
+            parseobj.addOptional('taperAng_deg',55,typeValidation_taper);
+            parseobj.addOptional('taper_zx_dB',-12,typeValidation_taper);
+            parseobj.addOptional('taper_zy_dB',-12,typeValidation_taper);
+            
+            parseobj.addOptional('freq',1e9);
+            
+            typeValidation_Ngrid = @(x) validateattributes(x,{'numeric'},{'integer','finite','positive','scalar'},'SimpleTaper');
+            parseobj.addOptional('Nx',73,typeValidation_Ngrid);
+            parseobj.addOptional('Ny',37,typeValidation_Ngrid);
+            
+            typeValidation_lims = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan'},'SimpleTaper');
+            parseobj.addParameter('xLims',[],typeValidation_lims);
+            parseobj.addParameter('yLims',[],typeValidation_lims);
+            
+            expected_fieldPol = {'linearX','linearY','circularLH','circularRH','power'};
+            parseobj.addParameter('fieldPol','linearY', @(x) any(validatestring(x,expected_fieldPol)));
+            
+            parseobj.addParameter('gridType','PhTh');
+            parseobj.addParameter('freqUnit','Hz');
+            
+            parseobj.addParameter('r',1);
+            parseobj.addParameter('orientation',[0,0,0]);
+            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300]);
+            parseobj.addParameter('time',datetime(2018,7,22,0,0,0));
+            
+            parseobj.parse(varargin{:})
+            
+            taperAng_deg = parseobj.Results.taperAng_deg;
+            taper_zx_dB = parseobj.Results.taper_zx_dB;
+            taper_zy_dB = parseobj.Results.taper_zy_dB;
+            freq = parseobj.Results.freq;
+            Nx = parseobj.Results.Nx;
+            Ny = parseobj.Results.Ny;
+            xLims = parseobj.Results.xLims;
+            yLims = parseobj.Results.yLims;
+            fieldPol = parseobj.Results.fieldPol;
+            gridType = parseobj.Results.gridType;
+            freqUnit = parseobj.Results.freqUnit;
+            r = parseobj.Results.r;
+            orientation = parseobj.Results.orientation;
+            earthLocation = parseobj.Results.earthLocation;
+            time = parseobj.Results.time;
+            
+            % Build the grid 
+            [x,y] = FarField.buildGrid(Nx,Ny,xLims,yLims,gridType,r);
+                
+            % Get the grid in PhTh
+            if strcmp(gridType,'PhTh')
+                ph = x;
+                th = y;
+            else
+                PhThHandle = str2func([gridType,'2DirCos']);
+                [u,v,w] = PhThHandle(x,y);
+                [ph,th] = DirCos2PhTh(u,v,w);
+            end
+
+            % Define the field pattern
+            A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2);
+            A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2);
+            
+            % Also build full pattern for power integration if needed
+            if ~isempty(xLims) || ~isempty(yLims) || strcmp(gridType,'Mollweide')
+                [phF,thF] = FarField.buildGrid(181,361,[],[],'PhTh');
+                % Only non-empty if needed
+                A0F = 10.^((taper_zx_dB./20).*(thF./deg2rad(taperAng_deg)).^2);
+                A90F = 10.^((taper_zy_dB./20).*(thF./deg2rad(taperAng_deg)).^2);
+                % Force linear X for power calculation
+                E1F = A0F.*cos(phF);
+                E2F = -A90F.*sin(phF);
+                FFpow = FarField(phF,thF,E1F,E2F,freq,...
+                    'coorType','spherical','polType','linear','gridType','PhTh','freqUnit',freqUnit);
+                Pr = FFpow.Prad;
+            else
+                Pr = [];
+            end
+            
+            % TODO: Extract the following as an external function
+            coorType = 'spherical';
+            switch fieldPol
+                case 'linearX' % linearly polarised along X-axis
+                    polType = 'linear';
+                    E1  = A0.*cos(ph);
+                    E2  = -A90.*sin(ph);
+                case 'linearY' % linearly polarised along Y-axis
+                    polType = 'linear';
+                    E1  = A0.*sin(ph);
+                    E2  = A90.*cos(ph);
+                case 'circularLH'  % Lefthand Circular polarization
+                    polType = 'circular';
+                    error('circular polarisation TODO')
+                case 'circularRH'  % Righthand Circular polarization
+                    polType = 'circular';
+                    error('circular polarisation TODO')
+                case 'power' % Only real power pattern of interest
+                    polType = 'none';
+                    coorType = 'power';
+                    E1 = sqrt((A0.*sin(ph)).^2 + (A90.*cos(ph)).^2);    % TODO check this
+                    E2 = [];
+                otherwise
+                    error('fieldPol input string unrecognised')
+            end
+            
+            [symmetryXZ,symmetryYZ,symmetryXY,symmetryBOR] = deal('none');
+            FF = FarField(x,y,E1,E2,freq,Pr,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+            FF = FF.setPower(2*pi./FarField.eta0);
+        end
     end
     
     methods (Access = private)
@@ -6044,7 +6655,7 @@ classdef FarField
             [FF1,FF2] = deal(obj1,obj2);
         end
         
-        %% Grid getters
+        %% Grid getters and builders
         function [u, v, w] = getDirCos(obj)
             % GETDIRCOS Get DirCos grid.
             
@@ -6346,7 +6957,6 @@ classdef FarField
             end
         end
         
-        
         %% Polarization type getters
         function [E1lin, E2lin, E3lin] = getElin(obj)
             % GETELIN Get linear polarization.
@@ -6599,6 +7209,8 @@ classdef FarField
                 % Do nothing - already there
                 return;
             else
+                % Get original coordinate system
+                coorTypeHandle = str2func(['coor2',obj.coorType]);
                 % Set to standard base
                 obj = obj.rangeChangeCoorTrans;
                 
@@ -6622,6 +7234,8 @@ classdef FarField
                 end
                 % Sort
                 obj = obj.sortGrid;
+                % Reset coordinate Type
+                obj = coorTypeHandle(obj,false);
             end
         end
         
@@ -6923,6 +7537,50 @@ classdef FarField
                 stepy = diff(obj.yRange)/(N-1);
             end
         end
+    end
+    
+    methods (Static = true)
+        function [x,y] = buildGrid(Nx,Ny,xLims,yLims,gridType,r)
+            % BUILDGRID builds an x-y grid
+            %
+            % [x,y] = buildGrid(Nx,Ny,xLims,yLims,gridType,r)
+            % All inputs to be provided except r, which defaults to 1
+            % xLims and yLims can be ampty, which implies to full sphere
+            % will be created
+            
+            if nargin < 6
+                r = 1;
+            end
+            
+            [X,Y] = meshgrid(linspace(0,1,Nx),linspace(0,1,Ny));
+            x = X(:);
+            y = Y(:);
+            switch gridType
+                case 'PhTh'
+                    if isempty(xLims), xLims = deg2rad([0,360]); end
+                    if isempty(yLims), yLims = deg2rad([0,180]); end
+                case [{'AzEl','ElAz'},FarField.astroGrids]
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'DirCos'
+                    if isempty(xLims), xLims = [-1,1]; end
+                    if isempty(yLims), yLims = [-1,1]; end
+                case 'TrueView'
+                    if isempty(xLims), xLims = deg2rad([-180,180]); end
+                    if isempty(yLims), yLims = deg2rad([-180,180]); end
+                case 'ArcSin'
+                    if isempty(xLims), xLims = deg2rad([-90,90]); end
+                    if isempty(yLims), yLims = deg2rad([-90,90]); end
+                case 'Mollweide'
+                    if isempty(xLims), xLims = [-1,1].*2.*sqrt(2).*r; end
+                    if isempty(yLims), yLims = [-1,1].*sqrt(2).*r; end
+            end
+            assert(numel(xLims) == 2,'xLims must be a vector of length 2')
+            assert(numel(yLims) == 2,'yLims must be a vector of length 2')
+            x = x.*diff(xLims) + xLims(1);
+            y = y.*diff(yLims) + yLims(1);
+        end
+        
     end
     
 end

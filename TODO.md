@@ -5,14 +5,22 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [ ] Fix rotate - used to work at some stage?  Only works for power coorType
+- [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
+- [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
+- [ ] Sort out save and load to use a struct and not rely on the object itself
+- [ ] finish SimpleTaper constructor, write help and testscript
+- [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
+- [ ] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
+- [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
+- [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
+- [ ] writeFITS (DdV)
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
-- [ ] Make a angular sub-sampler (getFi for angles). Should take logical indexes or an index stepper or an approximate step size
+- [ ] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
-- [ ] readFITS (DdV)
+- [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
+- [ ] cannot plot DirCos version of an astrogrids base object due to empty obj.th
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
-- [ ] Speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
 - [ ] writeFEKOffe
@@ -35,15 +43,12 @@
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
-- [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] Fix FarField.rotate field components pole at th = 180 (DdV)
 - [ ] Field symmetries: XY plane (DdV)
 - [ ] Gaussian/cosn pattern fitter
 - [ ] Gaussian/cosn/etc pattern constructor
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
-- [ ] writeFITS (DdV)
 - [ ] Overlap integral calculator (DdV)
-- [ ] writeCSTffs
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
 - [ ] Fix 3D plot for negative y-(th)axis cases
@@ -59,6 +64,23 @@
 - [ ] Zernike expansion
 - [ ] Major Rework: Change angle base to degrees and not radians (for angular grids - not DirCos type grids)
 - [x] make a legacy struct constructor
+- [x] Small bug fix in readNFSscan
+- [x] readFITS fixed up a bit
+- [x] writeASCII added
+- [x] added constant property: version 
+- [x] readASCII added
+- [x] Fixed issue in catFreq
+- [x] Added getGridIndex method
+- [x] Added integration rule optional argument for pradInt
+
+# Pnt3D
+- [ ] concat - must work for fused and split versions and all mixtures between them
+- [x] Added the fuse and split functions
+- [x] Updated constructor to take vector input
+- [x] fixed plot to handle the vector input (not very hardened, but works for basic cases)
+
+# CoordinateSystem
+- [x] Added the fromYZ and fromXZ constructors
 
 
 # Arrays

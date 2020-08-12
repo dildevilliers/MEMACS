@@ -8,6 +8,10 @@ clearvars
 disp('-------------------------------------------------------------------')
 disp('...Testing CoordinateSystem...');
 
+fullPath = mfilename('fullpath');
+fullPath = strrep(fullPath,'\testScript_CoordinateSystem','');
+dataPath = [fullPath,'\..\data\'];
+
 %% Constructor - just run them through
 try
     C0 = CoordinateSystem;
@@ -181,11 +185,32 @@ catch contructor_errInfo
     plottersPass = false;
 end
 
+%% GRASP file read/write
+try
+    C0 = CoordinateSystem.fromGRASPcor([dataPath,'TestCoor']);
+    C0.plot
+    fromGRASPPass = true;
+    disp('Pass: fromGRASP')
+catch fromGRASP_errInfo
+    disp('FAIL: fromGRASP')
+    fromGRASPPass = false;
+end
+
+try
+    C1 = CoordinateSystem;
+    C1.writeGRASPcor([dataPath,'outTest']);
+    writeGRASPpass = true;
+    disp('Pass: writeGRASP')
+catch writeGRASP_errInfo
+    disp('FAIL: fromGRASP')
+    writeGRASPpass = true;
+end
+
 %% Final test
 CoordinateSystemPass = all([constructorPass,set2BasePass,translatePass,...
     isequalPass,rotXPass,rotYPass,rotZPass,rotGRASPPass,rotEulerPass,...
     dirCosinePass,getGRASPangBetweenCoorsPass,getEulerangBetweenCoorsPass,...
-    getInGlobalPass,redefineToOtherBasePass,plottersPass]);
+    getInGlobalPass,redefineToOtherBasePass,plottersPass,fromGRASPPass,writeGRASPpass]);
 
 if CoordinateSystemPass
     disp('Pass: CoordinateSystem');
