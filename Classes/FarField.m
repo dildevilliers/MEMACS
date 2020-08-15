@@ -4393,9 +4393,14 @@ classdef FarField
             
             % Dirk de Villiers
             % Created: 2019-04-22
+            % Edited: 2020-08-14
             
             assert(obj.isGridUniform,'Standard uniform grid required for GRASP cut write')
             assert(strcmp(obj.gridType,'PhTh'),'Grid type must be PhTh for GRASP cut write')
+            
+            if nargin < 2 || isempty(pathName)
+                pathName = uigetdir();
+            end
             
             % Sort out the data
             th_vect = unique(obj.th);
@@ -4482,7 +4487,8 @@ classdef FarField
             % 
             % Inputs
             % - obj:    FarField object
-            % - pathName: The full path and name of the target file
+            % - pathName: The full path and name of the target file. If
+            %             empty a gui input will be requested  
             % 
             % Outputs
             % - 
@@ -4491,7 +4497,7 @@ classdef FarField
             % -
             %
             % Created: 2020-02-13, Dirk de Villiers
-            % Updated: 2020-02-14, Dirk de Villiers
+            % Updated: 2020-08-14, Dirk de Villiers
             %
             % Tested : Matlab R2018b, Dirk de Villiers
             %  Level : 1
@@ -4500,6 +4506,10 @@ classdef FarField
             % Example
             %   F = FarField;
             %   F.writeASCII('c:\Temp\FFwrite.txt');
+            
+            if nargin < 2 || isempty(pathName)
+                pathName = uigetdir();
+            end
             
             if strcmp(pathName(end-4:end),'.txt'), pathName = pathName(1:end-4); end
             

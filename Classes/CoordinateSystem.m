@@ -58,12 +58,12 @@ classdef CoordinateSystem
                    obj.origin = origin;
                end
            end
-           if nargin > 1
+           if nargin > 1 && ~isempty(x_axis)
                nX = norm(x_axis);
                x_axis = x_axis/nX;
                obj.x_axis = x_axis;
            end
-           if nargin > 2
+           if nargin > 2 && ~isempty(y_axis)
                nY = norm(y_axis);
                y_axis = y_axis/nY;
                obj.y_axis = y_axis;
@@ -578,7 +578,8 @@ classdef CoordinateSystem
            %
            % Inputs
            % - obj:     CoordinateSystem object in some unwanted base
-           % - newBase: CoordinateSystem object of the new base
+           % - newBase: CoordinateSystem object of the new base (global
+           %            default)
            %
            % Outputs
            % - coorOut:  CoordinateSystem object in the new base
@@ -600,6 +601,8 @@ classdef CoordinateSystem
            % % C2, in global base, should be the same as C0, in C1 base
            % C2 = C0.redefineToOtherBase(CoordinateSystem);
            % C0.plot, hold on; C2.plot 
+           
+           if nargin < 2 || isempty(newBase), newBase = CoordinateSystem; end
            
            % First get both coordinate systems in the global base
            coorIn = obj.getInGlobal;
