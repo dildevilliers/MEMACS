@@ -196,7 +196,7 @@ try
     readFITSpass = readFITSpass && 1;
 catch readFITS_sepComp_errInfo
     readFITSpass = readFITSpass && 0;
-    keyboard
+%     keyboard
 end
 if readFITSpass
     disp('Pass: readFITS')
@@ -537,7 +537,7 @@ else
 end
 
 % setRangeSph
-showGridShiftPlots = true;
+showGridShiftPlots = false;
 output = 'E1';
 outputType = 'phase';
 scaleMag = 'lin';

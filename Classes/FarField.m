@@ -1885,11 +1885,15 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'spherical')
-                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+%                 obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                objBase = obj.grid2Base;    % Make sure the grid is in the base format
+                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
+                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
+                end
                 if isempty(obj.E1Base)
                     obj = obj.setBaseFields;    % Set E-fields base if none is present 
                 end
-                [obj.E1,obj.E2] = getEspherical(obj);
+                [obj.E1,obj.E2] = getEspherical(objBase);
                 obj.coorType = 'spherical';
             end
             if setStdGrid
@@ -1905,11 +1909,15 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig1')
-                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+%                 obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                objBase = obj.grid2Base;    % Make sure the grid is in the base format
+                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
+                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
+                end
                 if isempty(obj.E1Base)
                     obj = obj.setBaseFields;    % Set E-fields base if none is present 
                 end
-                [obj.E1,obj.E2] = getELudwig1(obj);
+                [obj.E1,obj.E2] = getELudwig1(objBase);
                 obj.coorType = 'Ludwig1';
             end
             if setStdGrid
@@ -1925,11 +1933,15 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2AE')
-                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+%                 obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                objBase = obj.grid2Base;    % Make sure the grid is in the base format
+                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
+                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
+                end
                 if isempty(obj.E1Base)
                     obj = obj.setBaseFields;    % Set E-fields base if none is present 
                 end
-                [obj.E1,obj.E2] = getELudwig2AE(obj);
+                [obj.E1,obj.E2] = getELudwig2AE(objBase);
                 obj.coorType = 'Ludwig2AE';
             end
             if setStdGrid
@@ -1945,11 +1957,15 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2EA')
-                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+%                 obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                objBase = obj.grid2Base;    % Make sure the grid is in the base format
+                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
+                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
+                end
                 if isempty(obj.E1Base)
                     obj = obj.setBaseFields;    % Set E-fields base if none is present 
                 end
-                [obj.E1,obj.E2] = getELudwig2EA(obj);
+                [obj.E1,obj.E2] = getELudwig2EA(objBase);
                 obj.coorType = 'Ludwig2EA';
             end
             if setStdGrid
@@ -1965,11 +1981,15 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig3')
-                obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+%                 obj = obj.reset2Base;   % Make sure the grid is in the base format, and the E-fields if they can
+                objBase = obj.grid2Base;    % Make sure the grid is in the base format
+                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
+                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
+                end
                 if isempty(obj.E1Base)
                     obj = obj.setBaseFields;    % Set E-fields base if none is present 
                 end
-                [obj.E1,obj.E2] = getELudwig3(obj);
+                [obj.E1,obj.E2] = getELudwig3(objBase);
                 obj.coorType = 'Ludwig3';
             end
             if setStdGrid
@@ -2101,8 +2121,9 @@ classdef FarField
             % TRANSFORMTYPES Transform the properties of obj to that of obj1.
             
             % Function to transform the format of obj to that of obj1 -
-            % that is the grid,coor, and pol Types of obj goes to those of
+            % that is the grid, coor, and pol Types of obj goes to those of
             % obj1.
+            
             objGridType = obj1.gridType;
             objCoorType = obj1.coorType;
             objPolType = obj1.polType;
@@ -2118,11 +2139,13 @@ classdef FarField
         function obj = reset2Base(obj)
             % RESET2BASE Hard reset the FarField object to the base format
             
-            if ~isempty(obj.xBase)
-                obj.x = obj.xBase;
-                obj.y = obj.yBase;
-                obj.gridType = obj.gridTypeBase;
-            end
+            obj = obj.grid2Base;
+            obj = obj.field2Base;
+        end
+        
+        function obj = field2Base(obj)
+            % FIELD2BASE sets the object fields to the base format
+            
             if ~isempty(obj.E1Base)
                 obj.E1 = obj.E1Base;
                 obj.E2 = obj.E2Base;
@@ -2133,21 +2156,12 @@ classdef FarField
         end
         
         function obj = grid2Base(obj)
-            % GRID2BASE Evaluate the current object (pol and coor) on the
-            % base grid.
+            % GRID2BASE sets the object grid to the base format
             
-            % Evaluate the current object (pol and coor) on the base grid
-            coorTypeIn = obj.coorType;
-            polTypeIn = obj.polType;
-            coorTypeH = str2func(['coor2',coorTypeIn]);
-            polTypeH = str2func(['pol2',polTypeIn]);
-            obj = obj.reset2Base;
-            % Keep the current coorType and polType
-            obj = coorTypeH(obj,false);
-            if strcmp(coorTypeIn,'power')
-                obj.polType = 'none';
-            else
-                obj = polTypeH(obj);
+            if ~isempty(obj.xBase)
+                obj.x = obj.xBase;
+                obj.y = obj.yBase;
+                obj.gridType = obj.gridTypeBase;
             end
         end
         
@@ -4736,7 +4750,7 @@ classdef FarField
                 case 2
                     swopE1E2 = true;
                     polType = 'circular';
-                    coorType = 'spherical';
+                    coorType = 'Ludwig3';
                 case 3
                     polType = 'linear';
                     coorType = 'Ludwig3';
@@ -4979,7 +4993,7 @@ classdef FarField
                     E2ff = E2;
                 case 2
                     polType = 'circular';
-                    coorType = 'spherical';
+                    coorType = 'Ludwig3';
                     E1ff = E2;
                     E2ff = E1;
                 case 3
@@ -6977,10 +6991,12 @@ classdef FarField
             coorTypeH = str2func(['coor2',coorTypeIn]);
             obj = obj.reset2Base; % This is done just to change the fields - don't care about the grid
             obj = coorTypeH(obj,false);
+            E3lin = [];
             switch obj.polType % Should be the same as the transformed object - can use obj or obj1
                 case 'linear'
                     E1lin = obj.E1;
                     E2lin = obj.E2;
+                    E3lin = obj.E3;
                 case 'circular'
                     Del = 2*1i;
                     E1lin = sqrt(2)./Del.*(1i.*obj.E1 + 1i.*obj.E2);
@@ -6991,7 +7007,6 @@ classdef FarField
                     E1lin = 1./Del.*(cos(PSI).*obj.E1 + sin(PSI).*obj.E2);
                     E2lin = 1./Del.*(-sin(PSI).*obj.E1 + cos(PSI).*obj.E2);
             end
-            E3lin = [];
         end
         
         function [Elh,Erh,E3circ] = getEcircular(obj)
