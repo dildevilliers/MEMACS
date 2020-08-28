@@ -4099,8 +4099,8 @@ classdef FarField
             ph_vect = unique(obj1.x);
             
             % Calculate the DFT in ph to get the BOR components
-            % STore th variation in columns and BOR components row-wise
-            [An,Bn,Cn,Dn] = deal(zeros(floor(Nph - 1)/2+1,Nth));
+            % Store th variation in columns and BOR components row-wise
+            [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth));
             [Ath,Bth,Cth,Dth] = deal(zeros(Nth,obj1.Nf));
             [BORpower] = deal(zeros(1,obj1.Nf));
             for ff = 1:obj1.Nf

@@ -5,6 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
 - [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
 - [ ] Sort out save and load to use a struct and not rely on the object itself
@@ -23,6 +24,7 @@
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
+- [ ] readSPH
 - [ ] writeFEKOffe
 - [ ] writeCSTffs
 - [ ] Pattern getters help files
@@ -43,14 +45,15 @@
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
-- [ ] Fix FarField.rotate field components pole at th = 180 (DdV)
-- [ ] Field symmetries: XY plane (DdV)
+- [ ] Fix FarField.rotate field components pole at th = 180 
+- [ ] Field symmetries: XY plane
 - [ ] Gaussian/cosn pattern fitter
 - [ ] Gaussian/cosn/etc pattern constructor
 - [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
-- [ ] Overlap integral calculator (DdV)
+- [ ] Overlap integral calculator 
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
+- [ ] Add semilog scaleMag option for plot (might be handy for error comparison)
 - [ ] Fix 3D plot for negative y-(th)axis cases
 - [ ] provide 3D plot for users without Antennas toolbox
 - [ ] Jones getter
