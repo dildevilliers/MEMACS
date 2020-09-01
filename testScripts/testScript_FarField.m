@@ -514,6 +514,28 @@ for gg = 1:length(gridVect)
 end
 clear FF1 FF2 FF3 FFd
 
+% Test order of coor2 and pol2
+coorVect = {'Ludwig3','Ludwig3','spherical'};
+polVect = {'linear','circular','linear'};
+fileNameVect = {'Lin','CP','PhTh'};
+cc = 1;
+for nn = 1:length(fileNameVect)
+    FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FFfeedRH_',fileNameVect{nn}]);
+    for cp = 1:length(coorVect)
+        FF2 = FF1.changeCoor(coorVect{cp});
+        FF2 = FF2.changePol(polVect{cp});
+        FF3 = FF1.changePol(polVect{cp});
+        FF3 = FF3.changeCoor(coorVect{cp});
+        FFd = FF2 - FF3;
+        normE = FFd.norm;
+        polCoorOrderTestVect(cc) = max(normE) < tol;
+        cc = cc + 1;
+    end
+end
+clear FF1 FF2 FF3 FFd
+
+polTransTestVect = [polTransTestVect,polCoorOrderTestVect];
+
 if all(polTransTestVect)
     disp('Pass: pol2*')
     polTransPass = true;

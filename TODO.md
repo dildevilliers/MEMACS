@@ -15,6 +15,8 @@
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] writeFITS (DdV)
+- [ ] readFITS testScript_Farfield is broken - data missing in all branches
+- [ ] Slant property is confusing.  Maybe incorparate natively with x/y linear pol?
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
@@ -24,6 +26,7 @@
 - [ ] fix roundGrid to always convert grid to PhTh, round in degrees, convert back
 - [ ] Delete redundant field points in the setSymmetry functions, don't just check for them (make it optional)
 - [ ] Fix plotPrincipleCuts for symmetric fields. Should mirror before plotting
+- [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] readSPH
 - [ ] writeFEKOffe
 - [ ] writeCSTffs
@@ -49,7 +52,6 @@
 - [ ] Field symmetries: XY plane
 - [ ] Gaussian/cosn pattern fitter
 - [ ] Gaussian/cosn/etc pattern constructor
-- [ ] 2/3D plots should automatically expand BOR0/1 symmetry fields before plotting
 - [ ] Overlap integral calculator 
 - [ ] Array pattern adder
 - [ ] plot on a spherical surface
@@ -75,6 +77,8 @@
 - [x] Fixed issue in catFreq
 - [x] Added getGridIndex method
 - [x] Added integration rule optional argument for pradInt
+- [x] Fixed GRASP circular pol reading coorType from spherical -> Ludwig3
+- [x] Fixed issue with order of pol2* and coor2*.  Can now do them in any order to get same result.
 
 # Pnt3D
 - [ ] concat - must work for fused and split versions and all mixtures between them

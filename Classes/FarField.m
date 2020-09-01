@@ -1844,6 +1844,7 @@ classdef FarField
             % requirements, so only one component (magnitude) is kept, and
             % therefore transforming back to another coorType from power is
             % not possible.
+            % 
             %
             % Inputs
             % - obj: FarField object
@@ -1885,14 +1886,11 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'spherical')
-                if isempty(obj.E1Base)
-                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
-                end
-                objBase = obj.grid2Base;    % Make sure the grid is in the base format
-                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
-                end
-                [obj.E1,obj.E2] = getEspherical(objBase);
+                [objBase,obj] = coor2setup(obj);
+                % Set back to original polType
+                [objBase.E1,objBase.E2] = getEspherical(objBase);
+                polFunc = str2func(['getE',obj.polType]);
+                [obj.E1,obj.E2] = polFunc(objBase);
                 obj.coorType = 'spherical';
             end
             if setStdGrid
@@ -1908,14 +1906,11 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig1')
-                if isempty(obj.E1Base)
-                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
-                end
-                objBase = obj.grid2Base;    % Make sure the grid is in the base format
-                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
-                end
-                [obj.E1,obj.E2] = getELudwig1(objBase);
+                [objBase,obj] = coor2setup(obj);
+                % Set back to original polType
+                [objBase.E1,objBase.E2] = getELudwig1(objBase);
+                polFunc = str2func(['getE',obj.polType]);
+                [obj.E1,obj.E2] = polFunc(objBase);
                 obj.coorType = 'Ludwig1';
             end
             if setStdGrid
@@ -1931,14 +1926,11 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2AE')
-                if isempty(obj.E1Base)
-                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
-                end
-                objBase = obj.grid2Base;    % Make sure the grid is in the base format
-                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
-                end
-                [obj.E1,obj.E2] = getELudwig2AE(objBase);
+                [objBase,obj] = coor2setup(obj);
+                % Set back to original polType
+                [objBase.E1,objBase.E2] = getELudwig2AE(objBase);
+                polFunc = str2func(['getE',obj.polType]);
+                [obj.E1,obj.E2] = polFunc(objBase);
                 obj.coorType = 'Ludwig2AE';
             end
             if setStdGrid
@@ -1954,14 +1946,11 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig2EA')
-                if isempty(obj.E1Base)
-                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
-                end
-                objBase = obj.grid2Base;    % Make sure the grid is in the base format
-                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
-                end
-                [obj.E1,obj.E2] = getELudwig2EA(objBase);
+                [objBase,obj] = coor2setup(obj);
+                % Set back to original polType
+                [objBase.E1,objBase.E2] = getELudwig2EA(objBase);
+                polFunc = str2func(['getE',obj.polType]);
+                [obj.E1,obj.E2] = polFunc(objBase);
                 obj.coorType = 'Ludwig2EA';
             end
             if setStdGrid
@@ -1977,14 +1966,11 @@ classdef FarField
             assert(~strcmp(obj.coorType,'power'),'Cannot change the coordinate system type of a power only pattern')
             if nargin < 2, setStdGrid = true; end
             if ~strcmp(obj.coorType,'Ludwig3')
-                if isempty(obj.E1Base)
-                    obj = obj.setBaseFields;    % Set E-fields base if none is present 
-                end
-                objBase = obj.grid2Base;    % Make sure the grid is in the base format
-                if isempty(objBase.polTypeBase) || strcmp(objBase.polTypeBase,objBase.polType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the polarisation type previously
-                end
-                [obj.E1,obj.E2] = getELudwig3(objBase);
+                [objBase,obj] = coor2setup(obj);
+                % Set back to original polType
+                [objBase.E1,objBase.E2] = getELudwig3(objBase);
+                polFunc = str2func(['getE',obj.polType]);
+                [obj.E1,obj.E2] = polFunc(objBase);
                 obj.coorType = 'Ludwig3';
             end
             if setStdGrid
@@ -2078,9 +2064,9 @@ classdef FarField
                 end
                 objBase = obj;
                 if isempty(objBase.coorTypeBase) || strcmp(objBase.coorTypeBase,objBase.coorType)
-                    objBase = objBase.field2Base;  % Only det fields to base if no changes were made to the coordinate type previously
+                    objBase = objBase.field2Base;  % Only set fields to base if no changes were made to the coordinate type previously
                 end
-                [obj.E1, obj.E2] = getElin(objBase);
+                [obj.E1, obj.E2] = getElinear(objBase);
                 obj.polType = 'linear';
             end
         end
@@ -2952,7 +2938,11 @@ classdef FarField
             
             % Estimate a nice step size
             thRange = (max(FF.y) - min(FF.y));
-            Nstep = round(sqrt(FF.Nang));
+            if strncmp(FF.symmetryBOR,'BOR',3)
+                Nstep = round(FF.Nang/2);
+            else
+                Nstep = round(sqrt(FF.Nang));
+            end
             Nstep = Nstep + 1-mod(Nstep,2);
             step = thRange/(Nstep-1);
             if strcmp(FF.gridType,'DirCos') || strcmp(FF.gridType,'ArcSin')
@@ -2991,6 +2981,11 @@ classdef FarField
                     Emain = 'XP_CO';
                     plotSec = false;
                     ylabText = ['|XP/CO| (dB)' ];
+            end
+            
+            % Expand symmetry (TODO: the rest of them...)
+            if strncmp(FF.symmetryBOR,'BOR',3)
+                FF = FF.expandBORpattern(45);
             end
             
             figure
@@ -4119,6 +4114,8 @@ classdef FarField
             th_vect = unique(obj1.y);
             ph_vect = unique(obj1.x);
             
+            % Must be in linear pol for BOR calculations
+            obj1 = obj1.pol2linear;
             % Calculate the DFT in ph to get the BOR components
             % Store th variation in columns and BOR components row-wise
             [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth));
@@ -6854,6 +6851,16 @@ classdef FarField
         end
         
         %% Coordinate system getters
+        function [objBase,obj] = coor2setup(obj)
+            % COOR2SETUP does shared setup for all coor2* functions
+            
+            if isempty(obj.E1Base)
+                obj = obj.setBaseFields;    % Set E-fields base if none is present
+            end
+            objBase = obj.reset2Base;       % Start from the base field, since polarization is handled as input pol -> linear -> input pol
+            objBase = objBase.pol2linear;   % Always do coor transformations in the base linear polarisation.  Set back to what it was externally.
+        end
+        
         function [Eth, Eph, Er] = getEspherical(obj)
             % GETESPHERICAL Get Espherical coordinates.
             
@@ -6867,7 +6874,8 @@ classdef FarField
                     Eth = obj.E1;
                     Eph = obj.E2;
                 case 'Ludwig1'
-                    Eth = cos(TH).*cos(PH).*obj.E1 + cos(TH).*sin(PH).*obj.E2 - sin(TH).*obj.E3;
+                    if isempty(obj.E3), E3_ = 0; else, E3_ = obj.E3; end
+                    Eth = cos(TH).*cos(PH).*obj.E1 + cos(TH).*sin(PH).*obj.E2 - sin(TH).*E3_;
                     Eph = -sin(PH).*obj.E1 + cos(PH).*obj.E2;
                 case 'Ludwig2AE'
                     cosEl = sqrt(1 - sin(TH).^2.*sin(PH).^2);
@@ -6989,15 +6997,11 @@ classdef FarField
         end
         
         %% Polarization type getters
-        function [E1lin, E2lin, E3lin] = getElin(obj)
+        function [E1lin, E2lin, E3lin] = getElinear(obj)
             % GETELIN Get linear polarization.
             
             % This is the base version of the polarization transformers.
             % Everything goes to and from here
-            coorTypeIn = obj.coorType;
-            coorTypeH = str2func(['coor2',coorTypeIn]);
-            obj = obj.reset2Base; % This is done just to change the fields - don't care about the grid
-            obj = coorTypeH(obj,false);
             E3lin = [];
             switch obj.polType % Should be the same as the transformed object - can use obj or obj1
                 case 'linear'
@@ -7025,7 +7029,7 @@ classdef FarField
                     Erh = obj.E2;
                     E3circ = obj.E3;
                 otherwise
-                    [E1lin, E2lin] = getElin(obj);
+                    [E1lin, E2lin] = getElinear(obj);
                     Elh = 1/sqrt(2).*(E1lin - 1i.*E2lin);
                     Erh = 1/sqrt(2).*(E1lin + 1i.*E2lin);
                     E3circ = [];
@@ -7041,7 +7045,7 @@ classdef FarField
                     Eco = obj.E2;
                     E3slant = obj.E3;
                 otherwise
-                    [E1lin, E2lin] = getElin(obj);
+                    [E1lin, E2lin] = getElinear(obj);
                     PSI = ones(size(obj.E1)).*obj.slant;
                     Exp = cos(PSI).*E1lin - sin(PSI).*E2lin;
                     Eco = sin(PSI).*E1lin + cos(PSI).*E2lin;
