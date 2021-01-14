@@ -2273,6 +2273,7 @@ classdef FarField
             %                   | 'AxialRatioInv', 'CO_XP' | 'XP_CO' | 'W' | 'U'}
             %   -- outputType:  {('mag') | 'phase' | 'real' | 'imag'}
             %   -- norm:        Boolean (false) to normalise output
+            %   -- normVal:     Value to normalise to (empty will select current graph maximum)
             %   -- dynamicRange_dB: A (positive) dB value for the magnitude plot dynamic range (40)
             %   -- scaleMag:    {('dB') | 'lin'}, only used for magnitude plots
             %   -- scalePhase:  {('deg') | 'rad'}, only used for phase plots
@@ -2327,11 +2328,14 @@ classdef FarField
             typeValidationnorm = @(x) validateattributes(x,{'logical','numeric'},{'binary','nonempty','numel',1},'plot','norm');
             addParameter(parseobj,'norm',false,typeValidationnorm );
             
+            typeValidationnorm = @(x) validateattributes(x,{'numeric'},{'real','numel',1},'plot','normVal');
+            addParameter(parseobj,'normVal',[],typeValidationnorm );
+            
             typeValidationDR = @(x) validateattributes(x,{'numeric'},{'real','positive','nonempty','numel',1},'plot','dynamicRange_dB');
             addParameter(parseobj,'dynamicRange_dB',40,typeValidationDR );
             
             expectedplotType = {'3D','2D','polar','cartesian'};
-            addParameter(parseobj,'plotType','3D', @(x) any(validatestring(x,expectedplotType)));
+            addParameter(parseobj,'plotType','2D', @(x) any(validatestring(x,expectedplotType)));
             
             expectedoutput = {'Directivity','Gain','E1','E2','E3','AxialRatio','AxialRatioInv','CO_XP','XP_CO','W','U'};
             addParameter(parseobj,'output','Directivity', @(x) any(validatestring(x,expectedoutput)));
@@ -2378,6 +2382,7 @@ classdef FarField
             output = parseobj.Results.output;
             outputType = parseobj.Results.outputType;
             norm = parseobj.Results.norm;
+            normVal = parseobj.Results.normVal;
             dynamicRange_dB = parseobj.Results.dynamicRange_dB;
             plotType = parseobj.Results.plotType;
             scaleMag = parseobj.Results.scaleMag;
@@ -2560,8 +2565,15 @@ classdef FarField
                 Zplot(~valAng) = NaN;
                 Ziplot = angle(Zi);
                 if norm
-                    Zplot = Zplot - max(Zplot);
-                    Ziplot = Ziplot - max(Ziplot);
+                    if isempty(normVal)
+                        Znorm = max(Zplot);
+                        Zinorm = max(Ziplot);
+                    else
+                        if strcmp(scalePhase,'deg'), normVal = deg2rad(normVal); end
+                        [Znorm,Zinorm] = deal(normVal);
+                    end
+                    Zplot = Zplot - Znorm;
+                    Ziplot = Ziplot - Zinorm;
                 end
                 unit = 'V/m (rad)';
                 if strcmp(scalePhase,'deg')
@@ -2596,8 +2608,17 @@ classdef FarField
                         error(['output: ' output,' not implemented in plot function'])
                 end
                 if norm
-                    Zplot = Zplot./max(Zplot);
-                    Ziplot = Ziplot./max(Ziplot);
+                    if isempty(normVal)
+                        Znorm = max(Zplot);
+                        Zinorm = max(Ziplot);
+                    else
+                        if strcmp(scaleMag,'dB')
+                            normVal = 10.^(normVal./dBscale);
+                        end
+                        [Znorm,Zinorm] = deal(normVal);
+                    end
+                    Zplot = Zplot./Znorm;
+                    Ziplot = Ziplot./Zinorm;
                 end
                 if strcmp(scaleMag,'dB')
                     dBHandle = str2func(['dB',num2str(dBscale)]);
@@ -3967,6 +3988,55 @@ classdef FarField
             end
             if ~isempty(obj1.E1Base)
                 obj = obj.setBaseFields;
+            end
+        end
+        
+        function obj = underSampleGrid(obj1,sampleFactor)
+            % UNDERSAMPLEGRID undersamples the grid by specified factor.
+            %
+            % obj = underSampleGrid(obj1,sampleFactor) returns a new object
+            % which is undersampled be the factor sampleFactor. It 
+            % it always returns the first and last points in x and y, and
+            % will internally vary the exact value of sampleFactor to allow
+            % this.  Can be very slow for non-uniform grids!
+            % 
+            % Inputs
+            % - obj1: FarField object
+            % - sampleFactor: Integer down-sampling factor
+            %
+            % Outputs
+            % - obj:  Sub-sampled FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2020-11-22, Dirk de Villiers
+            % Updated: 2020-11-22, Dirk de Villiers
+            %
+            % Tested : Matlab R2018b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  F = FarField;
+            %  F1 = F.underSampleGrid(2);
+            %  F1
+            
+            arguments
+                obj1 (1,1) FarField
+                sampleFactor (1,1) {mustBeNumeric,mustBeReal,mustBeInteger,mustBePositive} = 1
+            end
+
+            % Figure out the grid situation
+            if obj1.isGridUniform
+                % Set logical index vector
+                iGrid = false(obj1.Ny,1);
+                iGrid(1:sampleFactor:end) = true;
+                assert(iGrid(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
+                iGrid = repmat(iGrid,obj1.Nx,1);
+                obj = obj1.getGridIndex(iGrid);
+            else
+                error('Not implemented for non-uniform grids yet')
             end
         end
         

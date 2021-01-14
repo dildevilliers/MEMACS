@@ -5,6 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [-] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
 - [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
@@ -12,13 +13,13 @@
 - [ ] finish SimpleTaper constructor, write help and testscript
 - [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
 - [ ] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
+- [ ] Fix FarField.rotate field components pole at th = 180 
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] writeFITS (DdV)
 - [ ] readFITS testScript_Farfield is broken - data missing in all branches
-- [ ] Slant property is confusing.  Maybe incorparate natively with x/y linear pol?
+- [ ] Slant property is confusing.  Maybe incorporate natively with x/y linear pol?
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
-- [ ] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
@@ -48,7 +49,6 @@
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
-- [ ] Fix FarField.rotate field components pole at th = 180 
 - [ ] Field symmetries: XY plane
 - [ ] Gaussian/cosn pattern fitter
 - [ ] Gaussian/cosn/etc pattern constructor
@@ -87,6 +87,7 @@
 - [x] fixed plot to handle the vector input (not very hardened, but works for basic cases)
 
 # CoordinateSystem
+- [ ] Add local translate option
 - [x] Added the fromYZ and fromXZ constructors
 
 

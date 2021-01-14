@@ -208,6 +208,13 @@ classdef Pnt3D
             end
         end
         
+        function obj = mean(obj)
+            if length(obj) > 1, obj = fuse(obj); end
+            obj.x = mean(obj.x);
+            obj.y = mean(obj.y);
+            obj.z = mean(obj.z);
+        end
+        
         function S = size(obj,posReturn)
             if nargin == 1, posReturn = []; end
             if isempty(posReturn)

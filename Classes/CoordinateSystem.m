@@ -191,6 +191,7 @@ classdef CoordinateSystem
            % C0.plot, hold on
            % Cd.plot
            
+           if isa(delta,'Pnt3D'), delta = delta.pointMatrix; end
            obj.origin = addVect(obj.origin,delta);
        end
        
@@ -251,7 +252,7 @@ classdef CoordinateSystem
            %
            % Example
            % C0 = CoordinateSystem;
-           % Cr = C0.rotY(deg2rad(45));
+           % Cr = C0.roty(deg2rad(45));
            % C0.plot, hold on
            % Cr.plot 
            
