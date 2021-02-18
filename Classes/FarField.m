@@ -3947,6 +3947,44 @@ classdef FarField
            obj = objIn(1);
         end
         
+        function obj = splitFreq(objIn)
+            % SPLITFREQ Splits the input into an array by frequency
+            %
+            % obj = splitFreq(objIn) returns a new object which
+            % splits the input FarField object, into an array of objects
+            % which should all have (single) different frequencies. 
+            % 
+            % Inputs
+            % - objIn: Input FarField objects
+            %
+            % Outputs
+            % - obj:  Array of FarField objects
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2021, Dirk de Villiers
+            % Updated: 2021-02-18, Dirk de Villiers
+            %
+            % Tested : Matlab R2019b
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %  freq = linspace(1,2,21).*1e9;
+            %  for ff = 1:length(freq)
+            %      F(ff) = FarField;
+            %      F(ff) = F(ff).setFreq(freq(ff));
+            %  end
+            %  F1 = F.catFreq;
+            %  F2 = F1.splitFreq; 
+            
+            obj(1:objIn.Nf) = FarField;
+            for ff = 1:objIn.Nf
+                obj(ff) = objIn.getFi(ff);
+            end
+        end
+        
         function obj = getGridIndex(obj1,gridIndex)
             % GETGRIDINDEX Returns an object only containing the results in
             % gridIndex.
@@ -4013,7 +4051,7 @@ classdef FarField
             % Created: 2020-11-22, Dirk de Villiers
             % Updated: 2020-11-22, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2019b
             %  Level : 1
             %   File : 
             %
@@ -4029,12 +4067,21 @@ classdef FarField
 
             % Figure out the grid situation
             if obj1.isGridUniform
-                % Set logical index vector
-                iGrid = false(obj1.Ny,1);
-                iGrid(1:sampleFactor:end) = true;
-                assert(iGrid(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
-                iGrid = repmat(iGrid,obj1.Nx,1);
-                obj = obj1.getGridIndex(iGrid);
+                % Set logical index vectors
+                ix = false(1,obj1.Nx);
+                iy = false(1,obj1.Ny);
+                ix(1:sampleFactor:end) = true;
+                iy(1:sampleFactor:end) = true;
+                assert(ix(end) && iy(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
+                [Ix,Iy] = ndgrid(ix,iy);
+                I = transpose(Ix & Iy);
+                obj = obj1.getGridIndex(I(:));
+                
+%                 iGrid = false(obj1.Ny,1);
+%                 iGrid(1:sampleFactor:end) = true;
+%                 assert(iGrid(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
+%                 iGrid = repmat(iGrid,obj1.Nx,1);
+%                 obj = obj1.getGridIndex(iGrid);
             else
                 error('Not implemented for non-uniform grids yet')
             end
