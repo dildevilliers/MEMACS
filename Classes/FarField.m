@@ -117,7 +117,7 @@ classdef FarField
             % - y: column vector of th angles in rad, [Nang x 1]
             % - E1: First E-field pattern component, [Nang x Nf]
             % - E2: Second E-field pattern component, [Nang x Nf]
-            % - freq: Frequencies where the fields are defined in Hz (1e9), [1 x Nf]
+            % - freq: Frequencies where the fields are defined in *Hz - see freqUnit below, [1 x Nf]
             % - Prad: Radiated power at each frequency in W (4*pi/(2.*obj.eta0)), [1 x Nf]
             % - radEff: Radiation efficiency at each frequency (1), [1 x Nf]
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
@@ -3112,6 +3112,17 @@ classdef FarField
             grid on
             xlim([min(xplot),max(xplot)])
             ylim([min(yplot),max(yplot)])
+            
+            % Plot spherical grids on unit sphere
+            if any(strcmp(obj.gridType,obj.localGrids))
+                gridFunc = str2func([obj.gridType,'2DirCos']);
+                [u,v,w] = gridFunc(obj.x,obj.y);
+                figure
+                plot3(u,v,w,markerStyle)
+                axis equal
+                grid on
+                xlabel('u'), ylabel('v'), zlabel('w')
+            end
         end
         
         function plotGridBase(obj)
@@ -3371,7 +3382,7 @@ classdef FarField
             if strcmp(FF.symmetryBOR,'none')
                 FF = FF.getBORpattern;
             end
-            freq_vect = FF.freq;
+            freq_vect = FF.freqHz;
             lambda_vect = FF.c0./freq_vect;
             k_vect = 2*pi./lambda_vect;
             
@@ -4435,14 +4446,21 @@ classdef FarField
         function y = isGrid4pi(obj)
             % ISGRID4PI Check if the data is defined over a full sphere.
             
-            % Set to the PhTh coordinate system - this is how most data
-            % will be generated anyway.
-            % Very quick check - necessary but not always sufficient
-            phRange = max(obj.ph) - min(obj.ph);
-            thRange = max(obj.th) - min(obj.th);
             tol = 10^(-obj.nSigDig);
-            y = ((abs(round(rad2deg(phRange)) - (360/2^(sum(abs([obj.symXZ,obj.symYZ]))))) < tol) & (abs(round(rad2deg(thRange)) - 180/2^abs(obj.symXY)) < tol)) |...
-                ((abs(round(rad2deg(phRange)) - 180) < tol) & (abs(round(rad2deg(thRange)) - 360) < tol));
+            
+%             % Set to the PhTh coordinate system - this is how most data
+%             % will be generated anyway.
+%             % Very quick check - necessary but not always sufficient
+%             phRange = max(obj.ph) - min(obj.ph);
+%             thRange = max(obj.th) - min(obj.th);
+            
+%             y = ((abs(round(rad2deg(phRange)) - (360/2^(sum(abs([obj.symXZ,obj.symYZ]))))) < tol) & (abs(round(rad2deg(thRange)) - 180/2^abs(obj.symXY)) < tol)) |...
+%                 ((abs(round(rad2deg(phRange)) - 180) < tol) & (abs(round(rad2deg(thRange)) - 360) < tol));
+            
+            % Check on the unit sphere in cartesian
+            [u,v,w] = PhTh2DirCos(obj.ph,obj.th);
+            y = all(abs(abs([max(u),min(u)]) - 1) < tol) && all(abs(abs([max(v),min(v)]) - 1) < tol) && all(abs(abs([max(w),min(w)]) - 1) < tol);
+            
         end
         
         function y = isGridUniform(obj)
@@ -5762,10 +5780,12 @@ classdef FarField
             fgetl(fid); % Skip interpolation line
             a = fgetl(fid); % Get coordinate system line
             D = textscan(a,'%s%s%s%s%s%s%s%s%s');
+            th_minus_flag = false;
             switch D{3}{1}(1:end-1)
                 case 'Th-Phi'
                     gridType = 'PhTh';
                     dataMarker = 'Theta(deg)Phi(deg)';
+                    th_minus_flag = true;
                 case 'Az/El'
                     gridType = 'AzEl';
                     dataMarker = 'Azimuth(deg)Elevation(deg)';
@@ -5853,6 +5873,20 @@ classdef FarField
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
             FF = FF.sortGrid;
+            
+            % Looks like the negative theta values are returned with a sign
+            % error?!?!
+            th_minus_flag = th_minus_flag;
+            if th_minus_flag
+                tol = 0.1*deg2rad(360/FF.Ny);
+%                 ith0 = find(FF.th == 0 | abs(FF.th - pi) < tol);
+%                 ith0 = abs(abs(FF.th) - pi) < tol;
+                ith0 = FF.th < -tol;
+                [E1m,E2m] = deal(FF.E1,FF.E2);
+                E1m(ith0,:) = -FF.E1(ith0,:);
+                E2m(ith0,:) = -FF.E2(ith0,:);
+                FF = FF.setEfield([1:FF.Nang].',E1m,E2m);
+            end
         end
         
         function FF = readFITS(inputStruct,gridType,coorType,polType,varargin)
@@ -6332,6 +6366,8 @@ classdef FarField
 
             fclose(fid);
         end
+        
+        
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
             % FARFIELDFROMPOWERPATTERN Create a Farfield object from a
