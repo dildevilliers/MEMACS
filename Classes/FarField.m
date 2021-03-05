@@ -557,7 +557,7 @@ classdef FarField
             % It changes the base and tries to calculate a new power if the
             % pattern exists over a full sphere
             
-            assert(size(iSet,1) == obj.Nang,'iSet must have Nang rows')
+%             assert(size(iSet,1) == obj.Nang,'iSet must have Nang rows')
             assert(size(iSet,2) == obj.Nf || size(iSet,2) == 1,'iSet must have Nf or 1 columns')
             
             if nargin < 6, calcP = true; end
