@@ -4459,7 +4459,12 @@ classdef FarField
             
             % Check on the unit sphere in cartesian
             [u,v,w] = PhTh2DirCos(obj.ph,obj.th);
-            y = all(abs(abs([max(u),min(u)]) - 1) < tol) && all(abs(abs([max(v),min(v)]) - 1) < tol) && all(abs(abs([max(w),min(w)]) - 1) < tol);
+            rangeX = abs((max(u) - min(u)) - (2 - obj.symYZ)) < tol;
+            rangeY = abs((max(v) - min(v)) - (2 - obj.symXZ)) < tol;
+            rangeZ = abs((max(w) - min(w)) - (2 - obj.symXY)) < tol;
+            y = rangeX && rangeY && rangeZ;
+            
+%             y = all(abs(abs([max(u),min(u)]) - 1) < tol) && all(abs(abs([max(v),min(v)]) - 1) < tol) && all(abs(abs([max(w),min(w)]) - 1) < tol);
             
         end
         
