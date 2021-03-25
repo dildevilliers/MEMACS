@@ -36,6 +36,7 @@ classdef FarField
         symmetryYZ  % YZ plane symmetry type {'none','electric','magnetic'}
         symmetryXY  % XY plane symmetry type {'none','electric','magnetic'}
         symmetryBOR % BOR symmetry type {'none','BOR0','BOR1'}
+        viewOrientCase % View orientation case select (1: Observer faces AUT; 2: observer behind AUT; 3: observer behind AUT (inverted))
     end
     
     properties (Dependent = true)
@@ -70,8 +71,10 @@ classdef FarField
         baseTypeDifferent % Flag that indicates base grid and current grid are local and astro (or changed astro) (true) or both local/both astro (false)
         coorOrientation % Coordinate system indicating the orientation
         angBackRotate   % Required Euler rotation angles to align the antenna to to North,Zenith system
+        viewOrientMat   % Orientation tranformation matrix for the 3 cases in viewOrientCase
         
         auxParamStruct     % Structure containing all the name-value pair parameters
+        
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -229,6 +232,10 @@ classdef FarField
             typeValidation_time = @(x) isa(x,'datetime');
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
+            typeValidation_viewOrientCase = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'FarField','viewOrientCase');
+            parseobj.addParameter('viewOrientCase',1,typeValidation_viewOrientCase);
+            
+            
             parseobj.parse(varargin{:})
             
             obj.x = parseobj.Results.x;
@@ -310,6 +317,13 @@ classdef FarField
                 obj.time = inStruct.time;
             else
                 obj.time = parseobj.Results.time;
+            end
+            if isfield(inStruct,'viewOrientCase') && ~isempty(inStruct.viewOrientCase)
+                obj.viewOrientCase = inStruct.viewOrientCase;
+            else
+                viewOrientCase_ = parseobj.Results.viewOrientCase;
+                assert(any(viewOrientCase_ == [1,2,3]),['viewOrientCase must be in {1,2,3} but "',num2str(viewOrientCase_), '" is provided'])
+                obj.viewOrientCase = viewOrientCase_;
             end
             
             % Check input sizes
@@ -523,6 +537,18 @@ classdef FarField
         
         function angBackRotate = get.angBackRotate(obj)
             angBackRotate = getEulerangBetweenCoors(CoordinateSystem,obj.coorOrientation);
+        end
+        
+        function viewOrientMat = get.viewOrientMat(obj)
+            switch obj.viewOrientCase
+                case 1
+                    l = 1; m = 1;
+                case 2
+                    l = -1; m = 1;
+                case 3
+                    l = 1; m = -1;
+            end
+            viewOrientMat = diag([l,m,1]);
         end
         
         function auxParamStruct = get.auxParamStruct(obj)
@@ -1102,6 +1128,10 @@ classdef FarField
         end
         
         %% Grid transformation setters
+        function obj = setViewOrient(obj,viewCase)
+            obj.viewOrientCase = viewCase;
+        end
+        
         function obj = changeGrid(obj,gridTypeString)
             % CHANGEGRID Change the current FarField object grid.  
             %
@@ -2642,6 +2672,15 @@ classdef FarField
                     freqMult = 1e-12;
             end
             freqPlot = obj.freqHz(freqIndex)*freqMult;
+            
+            % Sort out plot orientation according to specified viewOrientCase
+            XYZi_prime = obj.viewOrientMat*[Xi(:).';Yi(:).';Zi(:).'];
+            Xi = reshape(XYZi_prime(1,:).',size(Xi,1),size(Xi,2));
+            Yi = reshape(XYZi_prime(2,:).',size(Yi,1),size(Yi,2));
+            % No need for Zi
+            XYZ_prime = obj.viewOrientMat*[X(:).';Y(:).';Zplot(:).'];
+            X = reshape(XYZ_prime(1,:).',size(X,1),size(X,2));
+            Y = reshape(XYZ_prime(2,:).',size(Y,1),size(Y,2));
             
             switch plotType
                 case '3D'
