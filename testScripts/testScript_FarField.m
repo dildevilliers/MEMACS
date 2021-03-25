@@ -145,9 +145,10 @@ NFSnameVect = {'az180el360','az360el180','th180ph360','th360ph180'};
 for nn = 1:length(NFSnameVect)
     fileName = ['NFSscan_',NFSnameVect{nn}];
     try
-        FF = FarField.readNFSscan([dataPathNFSscan,fileName]);
-        if 0
-            figure, FF.plot('plotType','2D','showGrid',1,'output','E1','outputType','real')
+        FF(nn) = FarField.readNFSscan([dataPathNFSscan,fileName]);
+        if 1
+            figure, FF(nn).plot('plotType','2D','showGrid',0,'output','E1','outputType','real','scaleMag','lin')
+            axis normal
         end
         readNFSscanPass = readNFSscanPass && 1;
     catch readNFSscan_errInfo
