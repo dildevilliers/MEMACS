@@ -5,7 +5,7 @@
 - [ ] include property for code version in all classes
 
 # Farfield
-- [-] Make a angular sub-sampler - input an approximate step size (does not interpolate)
+- [ ] Finish rotatePhi method. Could probably be generalised to other spherical systems. Check the '360' grid case.
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
 - [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
@@ -45,7 +45,6 @@
 - [ ] astronomical methods help files
 - [ ] File output help files
 - [ ] Farfield file reading methods help files
-- [ ] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [ ] expandBORpattern must also be able to handle phi=45deg cut with Ludwig3 Co-Xp fields.
 - [ ] Sort out all the CP BOR1 pattern stuff (farFieldFromPowerPattern, expandBORpattern, getBORpattern)
 - [ ] Make several example patterns using simple dipoles and powerPattern functions
@@ -79,6 +78,10 @@
 - [x] Added integration rule optional argument for pradInt
 - [x] Fixed GRASP circular pol reading coorType from spherical -> Ludwig3
 - [x] Fixed issue with order of pol2* and coor2*.  Can now do them in any order to get same result.
+- [x] Make a angular sub-sampler - input an approximate step size (does not interpolate)
+- [x] Extend isGrid4Pi to operate on all spherical grids directly for speed
+- [x] Fixed power issues in plus minus and times
+
 
 # Pnt3D
 - [ ] concat - must work for fused and split versions and all mixtures between them

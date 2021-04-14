@@ -3675,6 +3675,52 @@ classdef FarField
             obj = obj.setRangeSph(obj1.xRangeType);
             obj = obj.currentForm2Base();
         end
+
+        function obj = rotatePhi(obj,NPhiStep)
+            % ToDo help...
+            
+            mustBeInteger(NPhiStep)
+            assert(strcmp(obj.coorType,'spherical') && strcmp(obj.gridType,'PhTh') && obj.isGridUniform,'Must have a uniform grid in spherical coorType and PhTh gridType')
+            
+            xRangeTypeIn = obj.xRangeType;
+            NxIn = obj.Nx;
+            [stepx,~] = gridStep(obj);
+            delPh = stepx.*NPhiStep;
+            
+            % Rotation is just changing the x-grid here - by definition    
+            switch xRangeTypeIn
+                case 'sym'
+                    obj.x = wrap2pi(obj.x + delPh);
+                case 'pos'
+                    obj.x = wrap22pi(obj.x + delPh);    
+            end
+            % Insert missing cuts from full sphere fields with redundant
+            % edges
+            if obj.isGrid4pi && obj.Nx < NxIn
+                switch xRangeTypeIn
+                    case 'pos'
+                        if NPhiStep >= 0    
+                            phIn = 2*pi;
+                            phAdd = 0;
+                        else
+                            phIn = 0;
+                            phAdd = 2*pi;
+                        end
+                    case 'sym'
+                        if NPhiStep >= 0
+                            phIn = pi;
+                            phAdd = -pi;
+                        else
+                            phIn = -pi;
+                            phAdd = pi;
+                        end
+                end
+                iin = abs(obj.ph - phIn) < stepx*10^(-obj.nSigDig); 
+                xAdd = phAdd*ones(size(iin));
+                obj = obj.insertMissingCuts(iin,xAdd,obj.th);
+            end
+            obj = obj.sortGrid;
+        end
         
         function obj = shift(obj,shiftVect)
             % SHIFT Shifts the FarField by a specified distance.
@@ -3723,11 +3769,12 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            try
-                obj.Prad = obj.pradInt;
-            catch ME
-                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
-            end
+            obj.Prad = (sqrt(obj1.Prad) + sqrt(obj2.Prad)).^2;
+%             try
+%                 obj.Prad = obj.pradInt;
+%             catch ME
+%                 obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+%             end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -3749,11 +3796,12 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            try
-                obj.Prad = obj.pradInt;
-            catch ME
-                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
-            end
+            obj.Prad = (sqrt(obj1.Prad) - sqrt(obj2.Prad)).^2;
+%             try
+%                 obj.Prad = obj.pradInt;
+%             catch ME
+%                 obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+%             end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -3775,7 +3823,8 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            obj.Prad = obj.pradInt;
+             obj.Prad = (sqrt(obj1.Prad).*sqrt(obj2.Prad)).^2;
+%             obj.Prad = obj.pradInt;
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
