@@ -6,6 +6,7 @@
 
 # Farfield
 - [ ] Finish rotatePhi method. Could probably be generalised to other spherical systems. Check the '360' grid case.
+- [ ] Finish the resampleGrid method. Write help and testScript (for several cases). Speed up if the grid is in the base or already the same.
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
 - [ ] make light weight save/load option - just store the grid, fields, power as .mat (see below also)
@@ -20,7 +21,6 @@
 - [ ] readFITS testScript_Farfield is broken - data missing in all branches
 - [ ] Slant property is confusing.  Maybe incorporate natively with x/y linear pol?
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
-- [ ] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [ ] remove static method redundant validators - the main constructor should catch the errors
 - [ ] harden up E-field setters
 - [ ] cannot plot DirCos version of an astrogrids base object due to empty obj.th
@@ -81,6 +81,7 @@
 - [x] Make a angular sub-sampler - input an approximate step size (does not interpolate)
 - [x] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [x] Fixed power issues in plus minus and times
+- [x] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 
 
 # Pnt3D

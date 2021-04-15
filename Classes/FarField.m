@@ -102,7 +102,7 @@ classdef FarField
         eps0 = 8.854187817000001e-12;
         mu0 = 1.256637061435917e-06;
         eta0 = 3.767303134749689e+02;
-        nSigDig = 3;
+        nSigDig = 6;
         projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
         astroGrids = {'Horiz','RAdec','GalLongLat'};
         localGrids = {'PhTh','AzEl','ElAz'};
@@ -1368,7 +1368,6 @@ classdef FarField
                 nSigDig = obj.nSigDig;
             end
             obj = roundGrid(obj,nSigDig);
-%             [~,iSort] = sortrows([obj.x,obj.y],[1 2]);
             [~,iSort] = unique([obj.x,obj.y],'rows');
             obj.x = obj.x(iSort);
             obj.y = obj.y(iSort);
@@ -2285,6 +2284,33 @@ classdef FarField
             obj = setBase(obj);
             % Update the current form to the base form
             obj = reset2Base(obj);
+        end
+        
+        function obj = clearBase(obj)
+            % CLEARBASE Clear base grid and fields
+            
+            obj = obj.clearBaseGrid;
+            obj = obj.clearBaseFields;
+        end
+        
+        function obj = clearBaseGrid(obj)
+            % CLEARBASEGRID Clear base grid
+            
+            obj.xBase = [];
+            obj.yBase = [];
+            obj.gridTypeBase = [];
+            obj.phBase = [];
+            obj.thBase = [];
+        end
+        
+        function obj = clearBaseFields(obj)
+            % CLEARBASEFIELDS Clear the base fields
+            
+            obj.E1Base = [];
+            obj.E2Base = [];
+            obj.E3Base = [];
+            obj.coorTypeBase = [];
+            obj.polTypeBase = [];
         end
         
         %% Plotting methods
@@ -3398,6 +3424,33 @@ classdef FarField
             
         end
 
+        function obj = resampleGrid(obj,xi,yi)
+            % RESAMPLEGRID samples the fields on a new grid
+            
+            xi = xi(:);
+            yi = yi(:);
+            assert(length(xi)==length(yi),'xi and yi must have the same number of elements')
+            
+            % Sort out the farfield factor that is included in getEfield
+            % in the interpolation method
+            k = 2.*pi.*obj.freqHz./obj.c0;
+            FFfact = exp(-1i.*k.*obj.r)./obj.r;
+            
+            [E1_,E2_,E3_] = deal(zeros(length(xi),obj.Nf));
+            for ff = 1:obj.Nf
+                
+                E1_(:,ff) = obj.interpolateGrid('E1',xi,yi,'freqIndex',ff)./FFfact(ff);
+                if ~isempty(obj.E2), E2_(:,ff) = obj.interpolateGrid('E2',xi,yi,'freqIndex',ff)./FFfact(ff); else, E2_ = []; end
+                if ~isempty(obj.E3), E3_(:,ff) = obj.interpolateGrid('E3',xi,yi,'freqIndex',ff)./FFfact(ff); else, E3_ = []; end
+            end
+            obj.x = xi;
+            obj.y = yi;
+            
+            obj.E1 = E1_;
+            obj.E2 = E2_;
+            obj.E3 = E3_;
+        end
+        
         %% Phase centre/shifts/rotations of the field
         function [Z, Delta, delta0, eta_pd] = phaseCentreKildal(FF,pol,th_M)
             % PHASECENTREKILDAL Computes the phase centre and approximates
@@ -3676,18 +3729,26 @@ classdef FarField
             obj = obj.currentForm2Base();
         end
 
-        function obj = rotatePhi(obj,NPhiStep)
+        function obj = rotatePhi(obj,phiRot)
+            % ROTATEPHI rotates a spherical|PhTh field around z-axis by
+            % the specified angle
             % ToDo help...
             
-            mustBeInteger(NPhiStep)
             assert(strcmp(obj.coorType,'spherical') && strcmp(obj.gridType,'PhTh') && obj.isGridUniform,'Must have a uniform grid in spherical coorType and PhTh gridType')
             
             xRangeTypeIn = obj.xRangeType;
-            NxIn = obj.Nx;
+            yRangeTypeIn = obj.yRangeType;
             [stepx,~] = gridStep(obj);
-            delPh = stepx.*NPhiStep;
+            delPh = phiRot;
+            resampleFlag = mod(phiRot/stepx,1) > 10^(-obj.nSigDig);
+            obj = obj.setRangeSph(xRangeTypeIn,'180');
+            NxIn = obj.Nx; 
+            if resampleFlag
+                xIn = obj.x;
+                yIn = obj.y;
+            end
             
-            % Rotation is just changing the x-grid here - by definition    
+            % Rotation is just changing the x-grid here - by definition
             switch xRangeTypeIn
                 case 'sym'
                     obj.x = wrap2pi(obj.x + delPh);
@@ -3699,7 +3760,7 @@ classdef FarField
             if obj.isGrid4pi && obj.Nx < NxIn
                 switch xRangeTypeIn
                     case 'pos'
-                        if NPhiStep >= 0    
+                        if phiRot >= 0    
                             phIn = 2*pi;
                             phAdd = 0;
                         else
@@ -3707,7 +3768,7 @@ classdef FarField
                             phAdd = 2*pi;
                         end
                     case 'sym'
-                        if NPhiStep >= 0
+                        if phiRot >= 0
                             phIn = pi;
                             phAdd = -pi;
                         else
@@ -3719,7 +3780,10 @@ classdef FarField
                 xAdd = phAdd*ones(size(iin));
                 obj = obj.insertMissingCuts(iin,xAdd,obj.th);
             end
+            obj = obj.clearBase;      % Must change the base after the rotation, since we are changing the pattern not just projecting
             obj = obj.sortGrid;
+            if resampleFlag, obj = obj.resampleGrid(xIn,yIn); end
+            obj = obj.setRangeSph(xRangeTypeIn,yRangeTypeIn);
         end
         
         function obj = shift(obj,shiftVect)
@@ -6853,33 +6917,6 @@ classdef FarField
             obj.polTypeBase = obj.polType;
         end
         
-        function obj = clearBase(obj)
-            % CLEARBASE Clear base grid and fields
-            
-            obj = obj.clearBaseGrid;
-            obj = obj.clearBaseFields;
-        end
-        
-        function obj = clearBaseGrid(obj)
-            % CLEARBASEGRID Clear base grid
-            
-            obj.xBase = [];
-            obj.yBase = [];
-            obj.gridTypeBase = [];
-            obj.phBase = [];
-            obj.thBase = [];
-        end
-        
-        function obj = clearBaseFields(obj)
-            % CLEARBASEFIELDS Clear the base fields
-            
-            obj.E1Base = [];
-            obj.E2Base = [];
-            obj.E3Base = [];
-            obj.coorTypeBase = [];
-            obj.polTypeBase = [];
-        end
-        
         function [FF1,FF2,level] = mathSetup(obj1,obj2)
             % MATHSETUP returns 2 equal sampled FarFields for math
             % operations
@@ -7693,6 +7730,7 @@ classdef FarField
                         obj = obj.coor2power; % Not really sure when this will be used, so play safe
                 end
             end
+            obj = obj.clearBase; % clean out base again since it gets put in by previous functions. No base can be kept in general for range changers.
         end
         
         %% Other utilities
