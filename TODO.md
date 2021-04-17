@@ -5,6 +5,8 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] Finish readCutMat method - sort out multiple frequency cases and write testScript;
+- [ ] Make writeCutMat method
 - [ ] Finish rotatePhi method. Could probably be generalised to other spherical systems. Check the '360' grid case.
 - [ ] Finish the resampleGrid method. Write help and testScript (for several cases). Speed up if the grid is in the base or already the same.
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
