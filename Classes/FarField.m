@@ -5121,15 +5121,17 @@ classdef FarField
             % from the GRASP .cut file at pathName. Can have several optional
             % arguments describing the local field as name value pairs.
             % Not all GRASP functionality supported yet - can only handle
-            % polar ph-th grids (most often used anyway)
-            % 
+            % polar ph-th grids (most often used anyway).
+            % Can also read the .cutmat format used in house - in this case
+            % the extension must be included in pathName to avoid confusion.
+            %
             % Inputs
             % - pathName: Full path and filename string. Can be empty -
-            %               then gui will request a cut file
+            %               then gui will request a cut|cutmat file
             % - nr_freq:  Number of frequencies in the file
             % - nr_cuts:  Number of ph cuts in the file
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
-            %   acceptable keywords are  
+            %   acceptable keywords are
             %   -- freq:        See FarField constructor help for details
             %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
@@ -5148,9 +5150,9 @@ classdef FarField
             % -
             %
             % Created: 2019-04-22, Dirk de Villiers
-            % Updated: 2019-08-09, Dirk de Villiers
+            % Updated: 2021-04-19, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2020a
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -5197,7 +5199,7 @@ classdef FarField
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
             if nargin == 0
-                [name,path] = uigetfile('*.cut');
+                [name,path,filterindex] = uigetfile({'*.cut';'*.cutmat'});
                 pathName = [path,name];
                 nr_freq = input('Enter number of frequencies:');
                 nr_cuts = input('Enter number of cuts:');
@@ -5219,98 +5221,144 @@ classdef FarField
             time = parseobj.Results.time;
             
             %Open the data file
-            if ~strcmp(pathName(end-3:end),'.cut')
-                pathName = [pathName,'.cut'];
-            end
-            fid = fopen(pathName,'rt');
-            if (fid==-1)
-                error(['Unable to open data file ' fileName '!']);
-            end
-            
-            eta0 = 3.767303134749689e+02;
-            
-            %===================================================================
-            % Load data for pre-allocation
-            %===================================================================
-            % Skip over text line
-            dummy = fgetl(fid);
-%             form= '%*s %*s %*s %*s';
-%             dummy = textscan(fid, form, 1);
-            
-            % Read info line
-            form= '%f %f %f %f %f %f %f';
-            cut_info = textscan(fid, form, 1);
-            V_INI = cut_info{1};
-            V_INC = cut_info{2};
-            V_NUM = cut_info{3};
-            C = cut_info{4};
-            ICOMP = cut_info{5};
-            ICUT = cut_info{6};
-            % NCOMP = cut_info{7};
-            
-            % Preallocate
-            [th_deg,ph_deg] = deal(zeros(V_NUM*nr_cuts,1));
-            [E1,E2] = deal(zeros(V_NUM*nr_cuts,nr_freq));
-            
-            for ff = 1:nr_freq
-                for cc = 1:nr_cuts
-                    if ff == 1 % Only do once
-                        x_1cut = ones(V_NUM,1).*C;
-                        y_1cut = (V_INI:V_INC:(V_INC*(V_NUM - 1) + V_INI)).';
-                        
-                        if ICUT == 1
-                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
-                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
-                        elseif ICUT == 2
-                            th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
-                            ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
-                        end
+            [path,name,ext] = fileparts(pathName);
+            if ~strcmp(ext,'cut') && ~strcmp(ext,'cutmat')
+                % Prefer .cut as default
+                ext = '.cut';
+                filterindex = 1;
+                fid = fopen([path,'\',name,ext],'rt');
+                if (fid==-1)
+                    ext = '.cutmat';
+                    filterindex = 2;
+                    try
+                        fid = load([path,'\',name,ext],'-mat');
+                    catch ME
+                        error(['Unable to open file ' [path,'\',name,'.cut'] ' or ' [path,'\',name,'.cutmat'] ' !']);
                     end
-                    % Read cut data
-                    form= '%f %f %f %f';
-                    cut_data = textscan(fid, form, V_NUM);
-                    E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
-                    E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
-                    
-                    dummy = fgetl(fid); % step off previous line
-                    dummy = fgetl(fid); % step over header line
-                    form= '%f %f %f %f %f %f %f';
-                    cut_info = textscan(fid, form, 1);
-                    C = cut_info{4};
+                end
+                
+                %                 pathName = [pathName,'.cut'];
+            end
+            
+            %             fid = fopen(pathName,'rt');
+            %             if (fid==-1)
+            %                 error(['Unable to open data file ' fileName '!']);
+            %             end
+            
+            %             eta0 = 3.767303134749689e+02;
+            
+            if filterindex == 1
+                
+                %===================================================================
+                % Load data for pre-allocation
+                %===================================================================
+                % Skip over text line
+                dummy = fgetl(fid);
+                %             form= '%*s %*s %*s %*s';
+                %             dummy = textscan(fid, form, 1);
+                
+                % Read info line
+                form= '%f %f %f %f %f %f %f';
+                cut_info = textscan(fid, form, 1);
+                V_INI = cut_info{1};
+                V_INC = cut_info{2};
+                V_NUM = cut_info{3};
+                C = cut_info{4};
+                ICOMP = cut_info{5};
+                ICUT = cut_info{6};
+                % NCOMP = cut_info{7};
+                
+                % Preallocate
+                [th_deg,ph_deg] = deal(zeros(V_NUM*nr_cuts,1));
+                [E1,E2] = deal(zeros(V_NUM*nr_cuts,nr_freq));
+                
+                for ff = 1:nr_freq
+                    for cc = 1:nr_cuts
+                        if ff == 1 % Only do once
+                            x_1cut = ones(V_NUM,1).*C;
+                            y_1cut = (V_INI:V_INC:(V_INC*(V_NUM - 1) + V_INI)).';
+                            
+                            if ICUT == 1
+                                ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
+                                th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
+                            elseif ICUT == 2
+                                th_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = x_1cut;
+                                ph_deg(((cc-1)*V_NUM + 1):cc*V_NUM) = y_1cut;
+                            end
+                        end
+                        % Read cut data
+                        form= '%f %f %f %f';
+                        cut_data = textscan(fid, form, V_NUM);
+                        E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
+                        E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
+                        
+                        dummy = fgetl(fid); % step off previous line
+                        dummy = fgetl(fid); % step over header line
+                        form= '%f %f %f %f %f %f %f';
+                        cut_info = textscan(fid, form, 1);
+                        C = cut_info{4};
+                    end
+                end
+                fclose(fid);
+                
+                switch abs(ICOMP)
+                    case 1
+                        polType = 'linear';
+                        coorType = 'spherical';
+                        E1ff = E1;
+                        E2ff = E2;
+                    case 2
+                        polType = 'circular';
+                        coorType = 'Ludwig3';
+                        E1ff = E2;
+                        E2ff = E1;
+                    case 3
+                        polType = 'linear';
+                        coorType = 'Ludwig3';
+                        E1ff = E2;
+                        E2ff = E1;
+                    otherwise
+                        error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
+                end
+                gridType = 'PhTh';
+                
+                % Build the FF obj
+                x = deg2rad(ph_deg);
+                y = deg2rad(th_deg);
+                Prad = ones(1,nr_freq).*4*pi/(2*FarField.eta0);
+                if isscalar(freq)
+                    freq = repmat(freq,1,nr_freq);
+                end
+                
+            elseif filterindex == 2
+                y = deg2rad(fid.p(:,1));
+                x = deg2rad(fid.p(:,2));
+                E1ff = fid.p(:,3);
+                E2ff = fid.p(:,4);
+                if size(fid.p,2) > 4
+                    D = lin10(fid.p(:,5));
+                    W = 1./(2.*FarField.eta0).*(abs(E1ff).^2 + abs(E2ff).^2);
+                    U = r^2.*(W);
+                    Prad = 4*pi.*U./D;
+                    % Remove nans from power - possible at formally zero fields
+                    Prad = Prad(~isnan(Prad));
+                    Pmean = mean(Prad);
+                    if any(abs(Prad - Pmean)./Pmean > 10^(-3)), warning('Power inconsistant over angle - taking mean value'); end
+                    Prad = Pmean;
+                else
+                    Prad = ones(1,nr_freq).*4*pi/(2*FarField.eta0);
+                end
+                
+                polType = 'linear';
+                coorType = 'spherical';
+                gridType = 'PhTh';
+                if isfield(fid,'info')
+                    if isfield(fid.info,'polType'), polType = fid.info.polType; end
+                    if isfield(fid.info,'coorType'), coorType = fid.info.coorType; end
+                    if isfield(fid.info,'gridType'), gridType = fid.info.gridType; end
                 end
             end
-            fclose(fid);
-            
-            switch abs(ICOMP)
-                case 1
-                    polType = 'linear';
-                    coorType = 'spherical';
-                    E1ff = E1;
-                    E2ff = E2;
-                case 2
-                    polType = 'circular';
-                    coorType = 'Ludwig3';
-                    E1ff = E2;
-                    E2ff = E1;
-                case 3
-                    polType = 'linear';
-                    coorType = 'Ludwig3';
-                    E1ff = E2;
-                    E2ff = E1;
-                otherwise
-                    error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
-            end
-            gridType = 'PhTh';
-            
-            % Build the FF obj
-            x = deg2rad(ph_deg);
-            y = deg2rad(th_deg);
-            Prad = ones(1,nr_freq).*4*pi/(2*eta0);
             radEff = ones(1,nr_freq);
-            if isscalar(freq)
-                freq = repmat(freq,1,nr_freq);
-            end
-            
             FF = FarField(x,y,E1ff,E2ff,freq,Prad,radEff,...
                 'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
@@ -6524,130 +6572,130 @@ classdef FarField
             fclose(fid);
         end
         
-        function FF = readCutMat(pathName,varargin)
-            % READCUTMAT reads in a .cutmat (in house compressed) format
-            %
-            % FF = readCutMat(pathName,varargin) loads a FarField object
-            % from the .cutmat file at pathName. Can have several optional
-            % arguments describing the local field as name value pairs. 
-            % The file format is a Matlab .mat file with a single variable 
-            % p containing a matrix [th (deg),ph (deg),Eth ,Eph ,D (dB)]
-            % 
-            % Inputs
-            % - pathName: Full path and filename string. Can be empty -
-            %               then gui will request an ffs file
-            % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
-            %   acceptable keywords are
-            %   -- freq:        See FarField constructor help for details
-            %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
-            %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
-            %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
-            %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
-            %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
-            %   -- r:           See FarField constructor help for details
-            %   -- orientation: See FarField constructor help for details
-            %   -- earthLocation: See FarField constructor help for details
-            %   -- time:        See FarField constructor help for details
-            %
-            % Outputs
-            % - FF:    Farfield object
-            %
-            % Dependencies
-            % -
-            %
-            % Created: 2021-04-17, Dirk de Villiers
-            % Updated: 2021-04-17, Dirk de Villiers
-            %
-            % Tested : Matlab R2020a
-            %  Level : 1
-            %   File : 
-            %
-            % Example
-            %   F = FarField.readCutMat;
-            %   F.plot('plotType','2D','showGrid',1)
-            
-            parseobj = inputParser;
-            parseobj.FunctionName = 'readASCII';
-            
-            typeValidator_pathName = @(x) isa(x,'char');
-            parseobj.addRequired('pathName',typeValidator_pathName);
-            
-            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
-            parseobj.addParameter('freq',1,typeValidation_freq);
-            
-            expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
-            parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
-            
-            expected_polType = {'linear','circular','slant','none'};
-            parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType,'FarField','polType')));
-            
-            expected_symPlane = {'none','electric','magnetic'};
-            parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
-            parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
-            
-            expected_symBOR = {'none','BOR0','BOR1'};
-            parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
-            
-            typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readCutMat');
-            parseobj.addParameter('r',1,typeValidation_scalar);
-            
-            typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
-            parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
-            
-            typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
-            parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
-            
-            typeValidation_time = @(x) isa(x,'datetime');
-            parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
-            
-            if nargin == 0
-                [name,path] = uigetfile('*.cutmat');
-                pathName = [path,name];
-            end
-            parseobj.parse(pathName,varargin{:})
-            
-            pathName = parseobj.Results.pathName;
-            freq = parseobj.Results.freq;
-            freqUnit = parseobj.Results.freqUnit;
-            polType = parseobj.Results.polType;
-            symmetryXZ = parseobj.Results.symmetryXZ;
-            symmetryYZ = parseobj.Results.symmetryYZ;
-            symmetryXY = parseobj.Results.symmetryXY;
-            symmetryBOR = parseobj.Results.symmetryBOR;
-            r = parseobj.Results.r;
-            orientation = parseobj.Results.orientation;
-            earthLocation = parseobj.Results.earthLocation;
-            time = parseobj.Results.time;
-            
-            % Read the data file
-            if ~strcmp(pathName(end-6:end),'.cutmat')
-                pathName = [pathName,'.cutmat'];
-            end
-            load(pathName,'-mat');
-            
-            radEff = 1;
-            
-            th = deg2rad(p(:,1));
-            ph = deg2rad(p(:,2));
-            Eth = p(:,3);
-            Eph = p(:,4);
-            D = lin10(p(:,5));
-            W = 1./(2.*FarField.eta0).*(abs(Eth).^2 + abs(Eph).^2);
-            U = r^2.*(W);
-            Prad = 4*pi.*U./D;
-            
-            % Remove nans from power - possible at formally zero fields
-            Prad = Prad(~isnan(Prad));
-            
-            Pmean = mean(Prad);
-            if any(abs(Prad - Pmean)./Pmean > 10^(-3)), warning('Power inconsistant over angle - taking mean value'); end
-            
-            FF = FarField(ph,th,Eth,Eph,freq,Pmean,radEff,...
-                'coorType','spherical','polType',polType,'gridType','PhTh','freqUnit',freqUnit,...
-                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
-                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
-        end
+%         function FF = readCutMat(pathName,varargin)
+%             % READCUTMAT reads in a .cutmat (in house compressed) format
+%             %
+%             % FF = readCutMat(pathName,varargin) loads a FarField object
+%             % from the .cutmat file at pathName. Can have several optional
+%             % arguments describing the local field as name value pairs. 
+%             % The file format is a Matlab .mat file with a single variable 
+%             % p containing a matrix [th (deg),ph (deg),Eth ,Eph ,D (dB)]
+%             % 
+%             % Inputs
+%             % - pathName: Full path and filename string. Can be empty -
+%             %               then gui will request an ffs file
+%             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
+%             %   acceptable keywords are
+%             %   -- freq:        See FarField constructor help for details
+%             %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
+%             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
+%             %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
+%             %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
+%             %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
+%             %   -- r:           See FarField constructor help for details
+%             %   -- orientation: See FarField constructor help for details
+%             %   -- earthLocation: See FarField constructor help for details
+%             %   -- time:        See FarField constructor help for details
+%             %
+%             % Outputs
+%             % - FF:    Farfield object
+%             %
+%             % Dependencies
+%             % -
+%             %
+%             % Created: 2021-04-17, Dirk de Villiers
+%             % Updated: 2021-04-17, Dirk de Villiers
+%             %
+%             % Tested : Matlab R2020a
+%             %  Level : 1
+%             %   File : 
+%             %
+%             % Example
+%             %   F = FarField.readCutMat;
+%             %   F.plot('plotType','2D','showGrid',1)
+%             
+%             parseobj = inputParser;
+%             parseobj.FunctionName = 'readASCII';
+%             
+%             typeValidator_pathName = @(x) isa(x,'char');
+%             parseobj.addRequired('pathName',typeValidator_pathName);
+%             
+%             typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
+%             parseobj.addParameter('freq',1,typeValidation_freq);
+%             
+%             expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
+%             parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
+%             
+%             expected_polType = {'linear','circular','slant','none'};
+%             parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType,'FarField','polType')));
+%             
+%             expected_symPlane = {'none','electric','magnetic'};
+%             parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
+%             parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
+%             parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
+%             
+%             expected_symBOR = {'none','BOR0','BOR1'};
+%             parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
+%             
+%             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readCutMat');
+%             parseobj.addParameter('r',1,typeValidation_scalar);
+%             
+%             typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
+%             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+%             
+%             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
+%             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+%             
+%             typeValidation_time = @(x) isa(x,'datetime');
+%             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+%             
+%             if nargin == 0
+%                 [name,path] = uigetfile('*.cutmat');
+%                 pathName = [path,name];
+%             end
+%             parseobj.parse(pathName,varargin{:})
+%             
+%             pathName = parseobj.Results.pathName;
+%             freq = parseobj.Results.freq;
+%             freqUnit = parseobj.Results.freqUnit;
+%             polType = parseobj.Results.polType;
+%             symmetryXZ = parseobj.Results.symmetryXZ;
+%             symmetryYZ = parseobj.Results.symmetryYZ;
+%             symmetryXY = parseobj.Results.symmetryXY;
+%             symmetryBOR = parseobj.Results.symmetryBOR;
+%             r = parseobj.Results.r;
+%             orientation = parseobj.Results.orientation;
+%             earthLocation = parseobj.Results.earthLocation;
+%             time = parseobj.Results.time;
+%             
+%             % Read the data file
+%             if ~strcmp(pathName(end-6:end),'.cutmat')
+%                 pathName = [pathName,'.cutmat'];
+%             end
+%             load(pathName,'-mat');
+%             
+%             radEff = 1;
+%             
+%             th = deg2rad(p(:,1));
+%             ph = deg2rad(p(:,2));
+%             Eth = p(:,3);
+%             Eph = p(:,4);
+%             D = lin10(p(:,5));
+%             W = 1./(2.*FarField.eta0).*(abs(Eth).^2 + abs(Eph).^2);
+%             U = r^2.*(W);
+%             Prad = 4*pi.*U./D;
+%             
+%             % Remove nans from power - possible at formally zero fields
+%             Prad = Prad(~isnan(Prad));
+%             
+%             Pmean = mean(Prad);
+%             if any(abs(Prad - Pmean)./Pmean > 10^(-3)), warning('Power inconsistant over angle - taking mean value'); end
+%             
+%             FF = FarField(ph,th,Eth,Eph,freq,Pmean,radEff,...
+%                 'coorType','spherical','polType',polType,'gridType','PhTh','freqUnit',freqUnit,...
+%                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+%                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+%         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
             % FARFIELDFROMPOWERPATTERN Create a Farfield object from a
