@@ -18,6 +18,7 @@ dataPathCSTffs = [dataPath,'CSTffs\'];
 dataPathCSTtxt = [dataPath,'CSTtxt\'];
 dataPathNFSscan = [dataPath,'NFSscan\'];
 dataPathFITS = [dataPath,'FITS\'];
+dataPathFEKO = [dataPath,'FEKOffs\'];
 
 
 %% Constructors - just run them through
@@ -676,7 +677,49 @@ else
 end
 
 
+%% Phase centre/shifts/rotations of the field
 
+% rotatePhi
+FF0 = FarField.readFEKOffe([dataPathFEKO,'Dip0']);
+FF45 = FarField.readFEKOffe([dataPathFEKO,'Dip45']);
+FF0sec = FarField.readFEKOffe([dataPathFEKO,'Dip0sector']);
+FF45sec = FarField.readFEKOffe([dataPathFEKO,'Dip45sector']);
+
+xRangeTest = {'sym','pos'};
+yRangeTest = {'180','360'};
+
+tol = max(max([abs(FF45.E1);abs(FF45.E2);abs(FF45.E3)]))*1e-4;
+counter = 0;
+for xx = 1:length(xRangeTest)
+    for yy = 1:length(yRangeTest)
+        counter = counter+1;
+        FF0r = FF0.setRangeSph(xRangeTest{xx},yRangeTest{yy});
+        FF45r = FF45.setRangeSph(xRangeTest{xx},yRangeTest{yy});
+        FFrot = FF0r.rotatePhi(deg2rad(45));
+        
+        
+        rotatePhiTestVect(counter,:) = norm(FFrot - FF45r);
+        
+        if 0
+            figure
+            subplot 131, FF0r.plot('output','E1','outputType','real','scaleMag','lin','showgrid',1)
+            title('No rotation')
+            subplot 132, FF45r.plot('output','E1','outputType','real','scaleMag','lin','showgrid',1)
+            title('Reference')
+            subplot 133, FFrot.plot('output','E1','outputType','real','scaleMag','lin','showgrid',1)
+            title('Calculated: rotate')
+        end
+    end
+end
+clear FF0 FF45 FF0sec FF45sec
+
+if all(all(rotatePhiTestVect < tol))
+    disp('Pass: rotatePhi*')
+    rotatePhiPass = true;
+else
+    disp('FAIL: rotatePhi')
+    rotatePhiPass = false;
+end
 
 %% Static methods
 FF = FarField.SimpleTaper(55, -12, -12, 1e9);
@@ -689,6 +732,7 @@ FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffs
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
     getRangePass,setRangePass,...
+    rotatePhiPass,...
     ]);
 if FarFieldPass
     disp('Pass: FarField');

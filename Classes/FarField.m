@@ -3426,6 +3426,16 @@ classdef FarField
 
         function obj = resampleGrid(obj,xi,yi)
             % RESAMPLEGRID samples the fields on a new grid
+            %
+            % Created: 2021-04, Dirk de Villiers
+            % Updated: 2021-04, Dirk de Villiers
+            %
+            % Tested : Matlab R2020a
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            % ToDo
             
             xi = xi(:);
             yi = yi(:);
@@ -3550,7 +3560,9 @@ classdef FarField
             % the method in the case where only the rotated power pattern
             % is of interest.  The field values will be arbitrary, but the
             % power pattern (directivity etc.) will be correct.  Used often
-            % for noise temeperature calculations.
+            % for noise temperature calculations.
+            
+            warning('FarField.rotate is currently very unstable. Use with care and check results.')
             
             if nargin == 5
                 warning('onlyRotPowerPattern deprecated - use a coorType = power pattern instead, and pass 4 arguments only')
@@ -3730,9 +3742,34 @@ classdef FarField
         end
 
         function obj = rotatePhi(obj,phiRot)
-            % ROTATEPHI rotates a spherical|PhTh field around z-axis by
-            % the specified angle
-            % ToDo help...
+            % ROTATEPHI rotates a field around z-axis
+            %
+            % obj = rotatePhi(obj,phiRot) rotates a FarField around the 
+            % z-axis by the angle PhiRot. Only works for spherical and PhTh
+            % fields, on a uniform grid, but is much faster than a general 
+            % rotation.   
+            % 
+            % Inputs
+            % - obj:    FarField object (coorType = spherical; gridType = PhTh)
+            % - phiRot: Rotation angle in radians
+            %
+            % Outputs
+            % - obj:    FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2021-04-21, Dirk de Villiers
+            % Updated: 2021-04-21, Dirk de Villiers
+            %
+            % Tested : Matlab R2020a
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField;
+            %   Fr = F.rotatePhi(pi/4);
+            %   Fr.plot
             
             assert(strcmp(obj.coorType,'spherical') && strcmp(obj.gridType,'PhTh') && obj.isGridUniform,'Must have a uniform grid in spherical coorType and PhTh gridType')
             

@@ -7,7 +7,6 @@
 # Farfield
 - [ ] Finish readGRASPcut method - sort out multiple frequency cases for cutmat and write testScript;
 - [ ] Make writeCutMat method
-- [ ] Finish rotatePhi method. Could probably be generalised to other spherical systems. Check the '360' grid case.
 - [ ] Finish the resampleGrid method. Write help and testScript (for several cases). Speed up if the grid is in the base or already the same.
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
 - [ ] Sort out BOR1 efficiency calculations.  Should get them from the BOR expansion, and not from normalising with the total power. 
@@ -84,6 +83,7 @@
 - [x] Extend isGrid4Pi to operate on all spherical grids directly for speed
 - [x] Fixed power issues in plus minus and times
 - [x] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
+- [x] Finish rotatePhi method. 
 
 
 # Pnt3D
