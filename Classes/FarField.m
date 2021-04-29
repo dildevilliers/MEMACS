@@ -5206,8 +5206,10 @@ classdef FarField
             parseobj.addRequired('pathname',typeValidator_pathName);
             
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
-            parseobj.addRequired('nr_freq',typeValidation_scalar);
-            parseobj.addRequired('nr_cuts',typeValidation_scalar);
+%             parseobj.addRequired('nr_freq',typeValidation_scalar);
+%             parseobj.addRequired('nr_cuts',typeValidation_scalar);
+            parseobj.addOptional('nr_freq',1,typeValidation_scalar);
+            parseobj.addOptional('nr_cuts',[],typeValidation_scalar);
             
             typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
             parseobj.addOptional('freq',1,typeValidation_freq);
@@ -5241,7 +5243,8 @@ classdef FarField
                 nr_freq = input('Enter number of frequencies:');
                 nr_cuts = input('Enter number of cuts:');
             end
-            parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
+%             parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
+            parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
             nr_freq = parseobj.Results.nr_freq;

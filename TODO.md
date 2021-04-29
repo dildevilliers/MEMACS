@@ -6,6 +6,7 @@
 
 # Farfield
 - [ ] Finish readGRASPcut method - sort out multiple frequency cases for cutmat and write testScript;
+- [ ] Update readGRASPcut method to handle a default of 1 frequency point, and automatically calculating nr_cuts internally for .cut files
 - [ ] Make writeCutMat method
 - [ ] Finish the resampleGrid method. Write help and testScript (for several cases). Speed up if the grid is in the base or already the same.
 - [ ] Bug in minus. Strange results when different number of frequencies passed in objects. Issue in mathSetup
