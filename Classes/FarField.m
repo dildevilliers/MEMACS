@@ -5151,7 +5151,7 @@ classdef FarField
             end
         end
 
-        function FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin)
+        function FF = readGRASPcut(pathName,varargin)
             % READGRASPCUT Create a FarField object from a GRASP .cut file.
             %
             % FF = readGRASPcut(pathName,nr_freq,nr_cuts,varargin) loads a FarField object
