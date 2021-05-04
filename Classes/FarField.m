@@ -4240,7 +4240,8 @@ classdef FarField
             % 
             % Inputs
             % - obj1: FarField object
-            % - sampleFactor: Integer down-sampling factor
+            % - sampleFactor: Integer down-sampling factor. Scalar or 2
+            %                 element vector indicating x- and y-donw sampling
             %
             % Outputs
             % - obj:  Sub-sampled FarField object
@@ -4257,21 +4258,23 @@ classdef FarField
             %
             % Example
             %  F = FarField;
-            %  F1 = F.underSampleGrid(2);
+            %  F1 = F.underSampleGrid([1,2]);
             %  F1
             
             arguments
                 obj1 (1,1) FarField
-                sampleFactor (1,1) {mustBeNumeric,mustBeReal,mustBeInteger,mustBePositive} = 1
+                sampleFactor (1,:) {mustBeNumeric,mustBeReal,mustBeInteger,mustBePositive} = 1
             end
+            
+            if numel(sampleFactor) == 1, sampleFactor = [1,1].*sampleFactor; end
 
             % Figure out the grid situation
             if obj1.isGridUniform
                 % Set logical index vectors
                 ix = false(1,obj1.Nx);
                 iy = false(1,obj1.Ny);
-                ix(1:sampleFactor:end) = true;
-                iy(1:sampleFactor:end) = true;
+                ix(1:sampleFactor(1):end) = true;
+                iy(1:sampleFactor(2):end) = true;
                 assert(ix(end) && iy(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
                 [Ix,Iy] = ndgrid(ix,iy);
                 I = transpose(Ix & Iy);
