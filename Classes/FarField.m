@@ -2699,14 +2699,16 @@ classdef FarField
             end
             freqPlot = obj.freqHz(freqIndex)*freqMult;
             
-            % Sort out plot orientation according to specified viewOrientCase
-            XYZi_prime = obj.viewOrientMat*[Xi(:).';Yi(:).';Zi(:).'];
-            Xi = reshape(XYZi_prime(1,:).',size(Xi,1),size(Xi,2));
-            Yi = reshape(XYZi_prime(2,:).',size(Yi,1),size(Yi,2));
-            % No need for Zi
-            XYZ_prime = obj.viewOrientMat*[X(:).';Y(:).';Zplot(:).'];
-            X = reshape(XYZ_prime(1,:).',size(X,1),size(X,2));
-            Y = reshape(XYZ_prime(2,:).',size(Y,1),size(Y,2));
+            if any(strcmp(plotType,{'2D','3D'}))
+                % Sort out plot orientation according to specified viewOrientCase
+                XYZi_prime = obj.viewOrientMat*[Xi(:).';Yi(:).';Zi(:).'];
+                Xi = reshape(XYZi_prime(1,:).',size(Xi,1),size(Xi,2));
+                Yi = reshape(XYZi_prime(2,:).',size(Yi,1),size(Yi,2));
+                % No need for Zi
+                XYZ_prime = obj.viewOrientMat*[X(:).';Y(:).';Zplot(:).'];
+                X = reshape(XYZ_prime(1,:).',size(X,1),size(X,2));
+                Y = reshape(XYZ_prime(2,:).',size(Y,1),size(Y,2));
+            end
             
             switch plotType
                 case '3D'
