@@ -196,14 +196,15 @@ classdef CoordinateSystem
        end
        
        %% Rotation
-       function obj = rotx(obj,angleRadians)
+       function obj = rotx(obj,angleRadians,aroundGlobal)
            %ROTX rotates the object around the x-axis
-           % obj = rotx(obj,angleRadians) rotates the object around the
-           % x-axis by an angle of angleRadians in radians
+           % obj = rotx(obj,angleRadians,aroundGlobal) rotates the object around the
+           % local (or global) x-axis by an angle of angleRadians in radians
            %
            % Inputs
            % - obj:         CoordinateSystem object
            % - angRadians:  Rotation angle in radians
+           % - aroundGlobal:Flag to rotate around global x-axis (false)
            %
            % Outputs
            % - obj:  CoordinateSystem object
@@ -212,7 +213,7 @@ classdef CoordinateSystem
            % -
            %
            % Created: 2019-05-09, Dirk de Villiers
-           % Updated: 2019-05-09, Dirk de Villiers
+           % Updated: 2021-05-17, Dirk de Villiers
            %
            % Tested : Matlab R2018b, Dirk de Villiers
            %  Level : 2
@@ -224,18 +225,27 @@ classdef CoordinateSystem
            % C0.plot, hold on
            % Cr.plot
            
-           obj.x_axis = rotx(obj.x_axis,angleRadians);
-           obj.y_axis = rotx(obj.y_axis,angleRadians);
+           if nargin < 3 || isempty(aroundGlobal), aroundGlobal = false; end
+           
+           if aroundGlobal
+               obj.origin = rotx(obj.origin.pointMatrix,angleRadians);
+               obj.x_axis = rotx(obj.x_axis,angleRadians);
+               obj.y_axis = rotx(obj.y_axis,angleRadians);
+           else
+               obj.x_axis = rotGenVect(obj.x_axis,obj.x_axis,angleRadians);
+               obj.y_axis = rotGenVect(obj.y_axis,obj.x_axis,angleRadians);
+           end
        end
        
-       function obj = roty(obj,angleRadians)
+       function obj = roty(obj,angleRadians,aroundGlobal)
            %ROTY rotates the object around the y-axis
-           % obj = roty(obj,angleRadians) rotates the object around the
-           % y-axis by an angle of angleRadians in radians
+           % obj = roty(obj,angleRadians,aroundGlobal) rotates the object around the
+           % local (or global) y-axis by an angle of angleRadians in radians
            %
            % Inputs
            % - obj:         CoordinateSystem object
            % - angRadians:  Rotation angle in radians
+           % - aroundGlobal:Flag to rotate around global y-axis (false)
            %
            % Outputs
            % - obj:  CoordinateSystem object
@@ -244,7 +254,7 @@ classdef CoordinateSystem
            % -
            %
            % Created: 2019-05-09, Dirk de Villiers
-           % Updated: 2019-05-09, Dirk de Villiers
+           % Updated: 2021-05-17, Dirk de Villiers
            %
            % Tested : Matlab R2018b, Dirk de Villiers
            %  Level : 2
@@ -256,18 +266,27 @@ classdef CoordinateSystem
            % C0.plot, hold on
            % Cr.plot 
            
-           obj.x_axis = roty(obj.x_axis,angleRadians);
-           obj.y_axis = roty(obj.y_axis,angleRadians);
+           if nargin < 3 || isempty(aroundGlobal), aroundGlobal = false; end
+           
+           if aroundGlobal
+               obj.origin = roty(obj.origin.pointMatrix,angleRadians);
+               obj.x_axis = roty(obj.x_axis,angleRadians);
+               obj.y_axis = roty(obj.y_axis,angleRadians);
+           else
+               obj.x_axis = rotGenVect(obj.x_axis,obj.y_axis,angleRadians);
+               obj.y_axis = rotGenVect(obj.y_axis,obj.y_axis,angleRadians);
+           end
        end
        
-       function obj = rotz(obj,angleRadians)
+       function obj = rotz(obj,angleRadians,aroundGlobal)
            %ROTZ rotates the object around the z-axis
-           % obj = rotz(obj,angleRadians) rotates the object around the
-           % z-axis by an angle of angleRadians in radians
+           % obj = rotz(obj,angleRadians,aroundGlobal) rotates the object around the
+           % local (or global) z-axis by an angle of angleRadians in radians
            %
            % Inputs
            % - obj:         CoordinateSystem object
            % - angRadians:  Rotation angle in radians
+           % - aroundGlobal:Flag to rotate around global z-axis (false) 
            %
            % Outputs
            % - obj:  CoordinateSystem object
@@ -276,7 +295,7 @@ classdef CoordinateSystem
            % -
            %
            % Created: 2019-05-09, Dirk de Villiers
-           % Updated: 2019-05-09, Dirk de Villiers
+           % Updated: 2021-05-17, Dirk de Villiers
            %
            % Tested : Matlab R2018b, Dirk de Villiers
            %  Level : 2
@@ -288,8 +307,18 @@ classdef CoordinateSystem
            % C0.plot, hold on
            % Cr.plot 
            
-           obj.x_axis = rotz(obj.x_axis,angleRadians);
-           obj.y_axis = rotz(obj.y_axis,angleRadians);
+           if nargin < 3 || isempty(aroundGlobal), aroundGlobal = false; end
+           
+           if aroundGlobal
+               obj.origin = rotz(obj.origin.pointMatrix,angleRadians);
+               obj.x_axis = rotz(obj.x_axis,angleRadians);
+               obj.y_axis = rotz(obj.y_axis,angleRadians);
+           else
+               obj.x_axis = rotGenVect(obj.x_axis,obj.z_axis,angleRadians);
+               obj.y_axis = rotGenVect(obj.y_axis,obj.z_axis,angleRadians);
+           end
+           
+           
        end
        
        function obj = rotGRASP(obj,angGRASP)
@@ -369,6 +398,41 @@ classdef CoordinateSystem
                error('input vector must be of length 3');
            end
            obj = rotGRASP(obj,Euler2GRASP(angEuler));
+       end
+       
+       function obj = rotEulerProper(obj,angEuler)
+           %ROTEULERPROPER rotates the object in proper Euler angles
+           % obj = rotEulerProper(obj,angEuler) rotates the object in the
+           % Euler angles [alpha, beta, gamma] in radians. The
+           % implementation here rotates locally around z by (alpha), then
+           % around x by (beta), then around z by (gamma).
+           %
+           % Inputs
+           % - obj:         CoordinateSystem object
+           % - angEuler:    Rotation angle in radians [alpha,beta,gamma]
+           %
+           % Outputs
+           % - obj:  CoordinateSystem object
+           %
+           % Dependencies
+           % -
+           %
+           % Created: 2021-05-17, Dirk de Villiers
+           % Updated: 2021-05-17, Dirk de Villiers
+           %
+           % Tested : Matlab R2020a, Dirk de Villiers
+           %  Level : 1
+           %   File : 
+           %
+           % Example
+           % C0 = CoordinateSystem;
+           % Cr = C0.rotEulerProper(deg2rad([30,60,45]));
+           % C0.plot, hold on
+           % Cr.plot
+           
+           obj = obj.rotz(angEuler(1));
+           obj = obj.rotx(angEuler(2));
+           obj = obj.rotz(angEuler(3));
        end
        
        %% Change of basis
@@ -521,6 +585,51 @@ classdef CoordinateSystem
            % angEulerP = rad2deg(getEulerangBetweenCoors(Cr,C0))
            
            angEuler = GRASP2Euler(getGRASPangBetweenCoors(coor1,coor0));
+       end
+       
+       function angEuler = getEulerProperangBetweenCoors(coor1,coor0)
+           %GETEULERPROPERANGBETWEENCOORS calculates the proper Euler angles between coordinate systems
+           % Returns the Euler angles (in rad) required to rotate from
+           % coor0 to coor1.  That is coor1 = coor0.rotEulerProper([alpha,beta,gamma])
+           % For only one argument, the global system is assumed for coor0
+           %
+           % Inputs
+           % - coor0:   Base CoordinateSystem object
+           % - coor1:   Rotated CoordinateSystem object
+           %
+           % Outputs
+           % - angEuler:    [alpha,beta,gamma] Euler angles in radians to 
+           %                rotate from coor0 to coor1
+           %
+           % Dependencies
+           % -
+           %
+           % Created: 2021-05-17, Dirk de Villiers
+           % Updated: 2021-05-17, Dirk de Villiers
+           %
+           % Tested : Matlab R2020a, Dirk de Villiers
+           %  Level : 1
+           %   File : 
+           %
+           % Example
+           % C0 = CoordinateSystem;
+           % Cr = C0.rotEulerProper(deg2rad([30,60,45]));
+           % angEulerP = rad2deg(getEulerProperangBetweenCoors(Cr,C0))
+           
+           if nargin < 2, coor0 = CoordinateSystem; end
+           
+           % See the wikipedia page (Euler angles) for derivation
+           Z1 = dot(coor1.z_axis,coor0.x_axis);
+           Z2 = dot(coor1.z_axis,coor0.y_axis);
+           Z3 = dot(coor1.z_axis,coor0.z_axis);
+           Y3 = dot(coor1.y_axis,coor0.z_axis);
+           X3 = dot(coor1.x_axis,coor0.z_axis);
+           
+           alp = atan2(Z1,-Z2);
+           bet = acos(Z3);
+           gam = atan2(X3,Y3);
+           
+           angEuler = [alp,bet,gam];
        end
        
        function coorInGlobal = getInGlobal(obj)
