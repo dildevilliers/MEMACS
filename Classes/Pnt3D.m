@@ -247,6 +247,11 @@ classdef Pnt3D
             end
         end
         
+        function obj = transpose(obj)
+            obj.x = obj.x.';
+            obj.y = obj.y.';
+            obj.z = obj.z.';
+        end
 %         function B = isequal(obj1,obj2)
 %             tol = eps;
 %             D = obj1-obj2;
