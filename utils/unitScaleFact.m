@@ -1,7 +1,7 @@
 function scaleFact = unitScaleFact(unitText)
 % Very basic unitconversion - will not always work!
 
-if any(strcmp(unitText,{'Hz','m','F','H'}))
+if any(strcmp(unitText,{'Hz','F','H'})) || strcmp(unitText,'m')
     scaleFact = 1;
 else
     switch unitText(1)
