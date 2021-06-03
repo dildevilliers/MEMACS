@@ -2513,7 +2513,7 @@ classdef FarField
                 else
                     step = deg2rad(step);
                 end
-                if isscalar(step) == 1
+                if isscalar(step)
                     if step ~= 0
                         step = ones(1,2).*step;
                     else
@@ -2701,11 +2701,11 @@ classdef FarField
             
             if any(strcmp(plotType,{'2D','3D'}))
                 % Sort out plot orientation according to specified viewOrientCase
-                XYZi_prime = obj.viewOrientMat*[Xi(:).';Yi(:).';Zi(:).'];
+                XYZi_prime = real(obj.viewOrientMat*[Xi(:).';Yi(:).';Zi(:).']);     % Real is just safety belt
                 Xi = reshape(XYZi_prime(1,:).',size(Xi,1),size(Xi,2));
                 Yi = reshape(XYZi_prime(2,:).',size(Yi,1),size(Yi,2));
                 % No need for Zi
-                XYZ_prime = obj.viewOrientMat*[X(:).';Y(:).';Zplot(:).'];
+                XYZ_prime = real(obj.viewOrientMat*[X(:).';Y(:).';Zplot(:).']);      % Real is just safety belt
                 X = reshape(XYZ_prime(1,:).',size(X,1),size(X,2));
                 Y = reshape(XYZ_prime(2,:).',size(Y,1),size(Y,2));
             end
