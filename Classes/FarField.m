@@ -644,7 +644,6 @@ classdef FarField
             %   F = FarField;
             %   FFpattern = getFarFieldStruct(F);
             
-            FFpattern = struct.empty;
             if ~isempty(obj)
                 obj = obj.coor2spherical(true);
                 FFpattern.th = obj.y;
@@ -657,6 +656,8 @@ classdef FarField
                 FFpattern.Nf = obj.Nf;
                 FFpattern.Prad = obj.Prad;
                 FFpattern.radEff = obj.radEff;
+            else
+                FFpattern = struct.empty;
             end
         end
         
