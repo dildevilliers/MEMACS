@@ -644,17 +644,20 @@ classdef FarField
             %   F = FarField;
             %   FFpattern = getFarFieldStruct(F);
             
-            obj = obj.coor2spherical(true);
-            FFpattern.th = obj.y;
-            FFpattern.ph = obj.x;
-            FFpattern.Eth = obj.E1;
-            FFpattern.Eph = obj.E2;
-            FFpattern.freq = obj.freqHz;
-            FFpattern.Nth = obj.Ny;
-            FFpattern.Nph = obj.Nx;
-            FFpattern.Nf = obj.Nf;
-            FFpattern.Prad = obj.Prad;
-            FFpattern.radEff = obj.radEff;
+            FFpattern = struct.empty;
+            if ~isempty(obj)
+                obj = obj.coor2spherical(true);
+                FFpattern.th = obj.y;
+                FFpattern.ph = obj.x;
+                FFpattern.Eth = obj.E1;
+                FFpattern.Eph = obj.E2;
+                FFpattern.freq = obj.freqHz;
+                FFpattern.Nth = obj.Ny;
+                FFpattern.Nph = obj.Nx;
+                FFpattern.Nf = obj.Nf;
+                FFpattern.Prad = obj.Prad;
+                FFpattern.radEff = obj.radEff;
+            end
         end
         
         function [E1field, E2field, E3field] = getEfield(obj)
