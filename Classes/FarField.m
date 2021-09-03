@@ -540,7 +540,6 @@ classdef FarField
         end
         
         function viewOrientMat = get.viewOrientMat(obj)
-<<<<<<< HEAD
             if isempty(obj.viewOrientCase), obj.viewOrientCase = 1; end  % For backwards compatibility
             switch obj.viewOrientCase
                 case 1
@@ -549,19 +548,6 @@ classdef FarField
                     l = -1; m = 1;
                 case 3
                     l = 1; m = -1;
-=======
-            if isempty(obj.viewOrientCase)
-                l = 1; m = 1;
-            else
-                switch obj.viewOrientCase
-                    case 1
-                        l = 1; m = 1;
-                    case 2
-                        l = -1; m = 1;
-                    case 3
-                        l = 1; m = -1;
-                end
->>>>>>> 68836e42e6375d5888e248cce8bce904e5535453
             end
             viewOrientMat = diag([l,m,1]);
         end
