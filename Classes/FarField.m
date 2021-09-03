@@ -540,6 +540,7 @@ classdef FarField
         end
         
         function viewOrientMat = get.viewOrientMat(obj)
+<<<<<<< HEAD
             if isempty(obj.viewOrientCase), obj.viewOrientCase = 1; end  % For backwards compatibility
             switch obj.viewOrientCase
                 case 1
@@ -548,6 +549,19 @@ classdef FarField
                     l = -1; m = 1;
                 case 3
                     l = 1; m = -1;
+=======
+            if isempty(obj.viewOrientCase)
+                l = 1; m = 1;
+            else
+                switch obj.viewOrientCase
+                    case 1
+                        l = 1; m = 1;
+                    case 2
+                        l = -1; m = 1;
+                    case 3
+                        l = 1; m = -1;
+                end
+>>>>>>> 68836e42e6375d5888e248cce8bce904e5535453
             end
             viewOrientMat = diag([l,m,1]);
         end
@@ -645,17 +659,21 @@ classdef FarField
             %   F = FarField;
             %   FFpattern = getFarFieldStruct(F);
             
-            obj = obj.coor2spherical(true);
-            FFpattern.th = obj.y;
-            FFpattern.ph = obj.x;
-            FFpattern.Eth = obj.E1;
-            FFpattern.Eph = obj.E2;
-            FFpattern.freq = obj.freqHz;
-            FFpattern.Nth = obj.Ny;
-            FFpattern.Nph = obj.Nx;
-            FFpattern.Nf = obj.Nf;
-            FFpattern.Prad = obj.Prad;
-            FFpattern.radEff = obj.radEff;
+            if ~isempty(obj)
+                obj = obj.coor2spherical(true);
+                FFpattern.th = obj.y;
+                FFpattern.ph = obj.x;
+                FFpattern.Eth = obj.E1;
+                FFpattern.Eph = obj.E2;
+                FFpattern.freq = obj.freqHz;
+                FFpattern.Nth = obj.Ny;
+                FFpattern.Nph = obj.Nx;
+                FFpattern.Nf = obj.Nf;
+                FFpattern.Prad = obj.Prad;
+                FFpattern.radEff = obj.radEff;
+            else
+                FFpattern = struct.empty;
+            end
         end
         
         function [E1field, E2field, E3field] = getEfield(obj)
