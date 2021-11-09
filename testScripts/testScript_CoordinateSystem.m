@@ -221,3 +221,41 @@ end
 disp('-------------------------------------------------------------------')
 
 
+%% Test rotation around provided coordinate system
+figure
+C = CoordinateSystem(Pnt3D(1,0,5));
+C = C.roty(deg2rad(30));
+subplot 131
+C.plot
+subplot 132
+C.plot
+subplot 133
+C.plot
+
+G = CoordinateSystem(Pnt3D(-1,0,-5));
+G = G.rotz(deg2rad(45));
+subplot 131
+G.plot
+subplot 132
+G.plot
+subplot 133
+G.plot
+
+
+rotAng = 10:10:350;
+for ii = 1:length(rotAng)
+    Cx = C.rotx(deg2rad(rotAng(ii)),G);
+    subplot 131
+    Cx.plot
+
+    Cy = C.roty(deg2rad(rotAng(ii)),G);
+    subplot 132
+    Cy.plot
+
+    Cz = C.rotz(deg2rad(rotAng(ii)),G);
+    subplot 133
+    Cz.plot
+end
+
+
+
