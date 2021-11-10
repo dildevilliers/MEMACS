@@ -396,8 +396,9 @@ classdef CoordinateSystem
                obj.y_axis = rotGenVect(obj.y_axis,rotRef.z_axis,angleRadians);
                obj = obj.redefineToOtherBase(base0);
            else
-               obj.x_axis = rotGenVect(obj.x_axis,obj.z_axis,angleRadians);
-               obj.y_axis = rotGenVect(obj.y_axis,obj.z_axis,angleRadians);
+               z_axis0 = obj.z_axis;  % Store this first, so the next line does not change it
+               obj.x_axis = rotGenVect(obj.x_axis,z_axis0,angleRadians);
+               obj.y_axis = rotGenVect(obj.y_axis,z_axis0,angleRadians);
            end
        end
        
