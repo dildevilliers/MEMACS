@@ -53,6 +53,7 @@ classdef CoordinateSystem
            %   C = CoordinateSystem(Pnt3D(1,2,3),[1;0;0],[0;-2;0],[])
            %   C.plot
            
+           checkFlag = false;
            if nargin > 0
                if ~isempty(origin)
                    obj.origin = origin;
@@ -62,11 +63,13 @@ classdef CoordinateSystem
                nX = norm(x_axis);
                x_axis = x_axis/nX;
                obj.x_axis = x_axis;
+               checkFlag = true;
            end
            if nargin > 2 && ~isempty(y_axis)
                nY = norm(y_axis);
                y_axis = y_axis/nY;
                obj.y_axis = y_axis;
+               checkFlag = true;
            end
            if nargin > 3
                if isempty(base)
@@ -79,7 +82,7 @@ classdef CoordinateSystem
                    end
                end
            end
-           obj.checkValid
+           if checkFlag, obj.checkValid; end    % Dont do this always: for speed
        end
        
        %% Setters
@@ -155,11 +158,12 @@ classdef CoordinateSystem
                tol = 1e-10;
            end
 %            BO = isequal(coor1.origin,coor2.origin);
+%            BO = all(abs(coor1.origin.pointMatrix - coor2.origin.pointMatrix) < tol);
 %            Bx = all(abs(coor1.x_axis - coor2.x_axis) < tol);
 %            By = all(abs(coor1.y_axis - coor2.y_axis) < tol);
 %            B = BO && Bx && By;
            % Use the short circuiting to speed up
-           B = all(abs(coor1.x_axis - coor2.x_axis) < tol) && all(abs(coor1.y_axis - coor2.y_axis) < tol) && isequal(coor1.origin,coor2.origin);
+           B = all(abs(coor1.x_axis - coor2.x_axis) < tol) && all(abs(coor1.y_axis - coor2.y_axis) < tol) && all(abs(coor1.origin.pointMatrix - coor2.origin.pointMatrix) < tol);
        end
        
        %% Translation
