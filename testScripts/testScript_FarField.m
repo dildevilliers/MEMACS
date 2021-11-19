@@ -190,7 +190,7 @@ try
     FF = FarField.readFITS(inputStructL,'DirCos','Ludwig3','circular');
     FF1 = FarField.readFITS(inputStructEM,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[950e6,1670e6]);
     FF2 = FarField.readFITS(inputStructH,'DirCos','Ludwig3','linear','xRange',[-3,3],'yRange',[-3,3],'fRange',[899e6,899e6]);
-    if 0
+    if 1
         figure, FF.plot('plotType','2D','showGrid',1)
         figure, plotJones(FF1(1),FF1(2))
         figure, plotJones(FF2(1),FF2(2))
