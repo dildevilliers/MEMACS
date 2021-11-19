@@ -20,7 +20,6 @@
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
 - [ ] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [ ] writeFITS (DdV)
-- [ ] readFITS testScript_Farfield is broken - data missing in all branches
 - [ ] Slant property is confusing.  Maybe incorporate natively with x/y linear pol?
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] remove static method redundant validators - the main constructor should catch the errors
@@ -85,6 +84,7 @@
 - [x] Fixed power issues in plus minus and times
 - [x] Make a clearer version of currentForm2Base - a method to sample the current field on a grid (resample?)
 - [x] Finish rotatePhi method. 
+- [x] readFITS testScript_Farfield is broken - data missing in all branches
 
 
 # Pnt3D
