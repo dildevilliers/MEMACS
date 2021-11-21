@@ -4897,7 +4897,8 @@ classdef FarField
         function FF = readGRASPgrd(pathName,varargin)
             % READGRASPGRD Create a FarField object from a GRASP .grd file. 
             %
-            % FF = readGRASPgrd(pathName,varargin) loads a FarField object
+            % FF = readGRASPgrd(pathName,varargin): assumes gridFormat = SphericalGrid
+            % FF = readGRASPgrd(pathName,gridFormat,varargin) loads a FarField object
             % from the GRASP .grd file at pathName. Can have several optional
             % arguments describing the local field as name value pairs.
             % Not all GRASP functionality supported yet...
@@ -4905,6 +4906,8 @@ classdef FarField
             % Inputs
             % - pathName: Full path and filename string. Can be empty -
             %               then gui will request an grd file
+            % - gridFormat: Optional argument to specify which type of
+            %               GRASP grid was requested {('SphericalGrid'),'PlanarGrid','SurfaceGrid','CylindricalGrid'}
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
             %   acceptable keywords are  
             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
@@ -4923,9 +4926,9 @@ classdef FarField
             % -
             %
             % Created: 2019-06-10, Dirk de Villiers
-            % Updated: 2019-08-09, Dirk de Villiers
+            % Updated: 2021-11-21, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2021a
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -4940,6 +4943,9 @@ classdef FarField
             
             typeValidator_pathName = @(x) isa(x,'char');
             parseobj.addRequired('pathname',typeValidator_pathName);
+            
+            expected_gridFormat = {'SphericalGrid','PlanarGrid','SurfaceGrid','CylindricalGrid'};
+            parseobj.addOptional('gridFormat','SphericalGrid', @(x) any(validatestring(x, expected_gridFormat)))
             
             expected_symPlane = {'none','electric','magnetic'};
             parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
@@ -4968,6 +4974,7 @@ classdef FarField
             parseobj.parse(pathName,varargin{:})
             
             pathName = parseobj.Results.pathname;
+            gridFormat = parseobj.Results.gridFormat;
             symmetryXZ = parseobj.Results.symmetryXZ;
             symmetryYZ = parseobj.Results.symmetryYZ;
             symmetryXY = parseobj.Results.symmetryXY;
@@ -5046,7 +5053,7 @@ classdef FarField
                 else
                     IS = 1;
                     JS = 1;
-                    IE = NX;
+                    [IE,IN] = deal(NX);
                     JE = NY;
                 end
                 if ff == 1  % Just build the grid once - assume they are all the same (ToDo: build a check later)
@@ -5061,19 +5068,26 @@ classdef FarField
                     YCEN = DY*IY(ff);
                     X = XCEN + XS+DX.*((IS:IE) - 1);
                     Y = YCEN + YS+DY.*((JS:JE) - 1);
+                    % Initialise the field variables
+                    [E1,E2] = deal(zeros(NX*NY,NSET));
                 end
                 
                 if NCOMP == 2
                     form = '%f %f %f %f';
                     fieldData = textscan(fid, form, NX*NY);
-                    E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
-                    E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
+%                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
+%                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
+                    E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
+                    E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
                 elseif NCOMP == 3
                     form = '%f %f %f %f %f %f';
                     fieldData = textscan(fid, form, NX*NY);
-                    E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
-                    E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
-                    E3 = [E3,(fieldData{5} + 1i.*fieldData{6})];
+%                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
+%                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
+%                     E3 = [E3,(fieldData{5} + 1i.*fieldData{6})];
+                    E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
+                    E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
+                    E3(:,ff) = fieldData{5} + 1i.*fieldData{6};
                 end
                 % Dummy read
                 a = fgetl(fid);
@@ -5086,49 +5100,51 @@ classdef FarField
             x = Xmat(:);
             y = Ymat(:);
             swopE1E2 = false;
-            switch ICOMP
-                case 1
-                    polType = 'linear';
-                    coorType = 'spherical';
-                case 2
-                    swopE1E2 = true;
-                    polType = 'circular';
-                    coorType = 'Ludwig3';
-                case 3
-                    polType = 'linear';
-                    coorType = 'Ludwig3';
+            returnStruct = false;   % Flag to return a struct with the data and not a FarField object
+            switch gridFormat
+                case 'SphericalGrid'
+                    switch ICOMP
+                        case 1
+                            polType = 'linear';
+                            coorType = 'spherical';
+                        case 2
+                            swopE1E2 = true;
+                            polType = 'circular';
+                            coorType = 'Ludwig3';
+                        case 3
+                            polType = 'linear';
+                            coorType = 'Ludwig3';
+                        otherwise
+                            returnStruct = true;
+%                             error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
+                    end
+                    swopXY = false;
+                    switch IGRID
+                        case 1
+                            gridType = 'DirCos';
+                            [xScale,yScale] = deal(1);
+                        case 9
+                            gridType = 'AzEl';
+                            [xScale,yScale] = deal(pi/180);
+                        case 5
+                            gridType = 'TrueView';
+                            xScale = -pi/180;
+                            yScale = -xScale;
+                        case 10
+                            swopXY = true;
+                            gridType = 'ElAz';
+                            [xScale,yScale] = deal(pi/180);
+                        case 7
+                            gridType = 'PhTh';
+                            [xScale,yScale] = deal(pi/180);
+                        otherwise
+                            returnStruct = true;
+%                             error(['IGRID ',num2str(IGRID),' case not implemented yet'])
+                    end
                 otherwise
-                    error(['ICOMP ',num2str(ICOMP),' case not implemented yet'])
-            end
-            swopXY = false;
-            switch IGRID
-                case 1
-                    gridType = 'DirCos';
-                    [xScale,yScale] = deal(1);
-                case 9
-                    gridType = 'AzEl';
-                    [xScale,yScale] = deal(pi/180);
-                case 5
-                    gridType = 'TrueView';
-                    xScale = -pi/180;
-                    yScale = -xScale;
-                case 10
-                    swopXY = true;
-                    gridType = 'ElAz';
-                    [xScale,yScale] = deal(pi/180);
-                case 7
-                    gridType = 'PhTh';
-                    [xScale,yScale] = deal(pi/180);
-                otherwise
-                    error(['IGRID ',num2str(IGRID),' case not implemented yet'])
+                    returnStruct = true;
             end
             
-            if swopXY
-                % Swop definitions to be consistent with GRASP
-                xt = x;
-                x = y;
-                y = xt;
-            end
             
             % Fix the shapes of the field data
             for ff = 1:NSET
@@ -5141,23 +5157,44 @@ classdef FarField
                     E3(:,ff) = e3(:);
                 end
             end
-            if swopE1E2
-                % Swop definitions to be consistent with GRASP
-                Et = E1;
-                E1 = E2;
-                E2 = Et;
-            end
+            
+            if returnStruct
+                FF = struct('gridFormat',gridFormat,...
+                    'NSET',NSET,'ICOMP',ICOMP,'NCOMP',NCOMP,'IGRID',IGRID,...
+                    'IX',IX,'IY',IY,...
+                    'XS',XS,'YS',YS,'XE',XE,'YE',YE,...
+                    'DX',DX,'DY',DY,'XCEN',XCEN,'YCEN',YCEN,...
+                    'NX',NX,'NY',NY,'KLIMIT',KLIMIT,...
+                    'IS',IS,'IN',IN,...
+                    'X',X,'Y',Y,...
+                    'F1',E1,'F2',E2,'F3',E3);
+                warning('FarField object not returned, since one or more of the .grd parameters not yet implemented. Instead, a struct with all the file data is returned. See GRASP manual for details.')
+            else
+                if swopE1E2
+                    % Swop definitions to be consistent with GRASP
+                    Et = E1;
+                    E1 = E2;
+                    E2 = Et;
+                end
                 
-            % keyboard;
-            eta0 = 3.767303134749689e+02;
-            Prad = ones(size(freq)).*4*pi./(2*eta0);
-            radEff = ones(size(freq));
-            FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
-                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
-                'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,'E3',E3,...
-                'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
-            if swopXY
-                FF = FF.sortGrid;
+                if swopXY
+                    % Swop definitions to be consistent with GRASP
+                    xt = x;
+                    x = y;
+                    y = xt;
+                end
+                
+                % keyboard;
+                eta0 = 3.767303134749689e+02;
+                Prad = ones(size(freq)).*4*pi./(2*eta0);
+                radEff = ones(size(freq));
+                FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
+                    'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
+                    'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,'E3',E3,...
+                    'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+                if swopXY
+                    FF = FF.sortGrid;
+                end
             end
         end
 
@@ -6621,131 +6658,6 @@ classdef FarField
 
             fclose(fid);
         end
-        
-%         function FF = readCutMat(pathName,varargin)
-%             % READCUTMAT reads in a .cutmat (in house compressed) format
-%             %
-%             % FF = readCutMat(pathName,varargin) loads a FarField object
-%             % from the .cutmat file at pathName. Can have several optional
-%             % arguments describing the local field as name value pairs. 
-%             % The file format is a Matlab .mat file with a single variable 
-%             % p containing a matrix [th (deg),ph (deg),Eth ,Eph ,D (dB)]
-%             % 
-%             % Inputs
-%             % - pathName: Full path and filename string. Can be empty -
-%             %               then gui will request an ffs file
-%             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
-%             %   acceptable keywords are
-%             %   -- freq:        See FarField constructor help for details
-%             %   -- freqUnit:    {('Hz')|'kHz'|'MHz'|'GHz'|'THz'}
-%             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
-%             %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
-%             %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
-%             %   -- symBOR:      {('none')|'BOR0'|'BOR1'}
-%             %   -- r:           See FarField constructor help for details
-%             %   -- orientation: See FarField constructor help for details
-%             %   -- earthLocation: See FarField constructor help for details
-%             %   -- time:        See FarField constructor help for details
-%             %
-%             % Outputs
-%             % - FF:    Farfield object
-%             %
-%             % Dependencies
-%             % -
-%             %
-%             % Created: 2021-04-17, Dirk de Villiers
-%             % Updated: 2021-04-17, Dirk de Villiers
-%             %
-%             % Tested : Matlab R2020a
-%             %  Level : 1
-%             %   File : 
-%             %
-%             % Example
-%             %   F = FarField.readCutMat;
-%             %   F.plot('plotType','2D','showGrid',1)
-%             
-%             parseobj = inputParser;
-%             parseobj.FunctionName = 'readASCII';
-%             
-%             typeValidator_pathName = @(x) isa(x,'char');
-%             parseobj.addRequired('pathName',typeValidator_pathName);
-%             
-%             typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
-%             parseobj.addParameter('freq',1,typeValidation_freq);
-%             
-%             expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
-%             parseobj.addParameter('freqUnit','Hz', @(x) any(validatestring(x,expected_freqUnit)));
-%             
-%             expected_polType = {'linear','circular','slant','none'};
-%             parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType,'FarField','polType')));
-%             
-%             expected_symPlane = {'none','electric','magnetic'};
-%             parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
-%             parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
-%             parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
-%             
-%             expected_symBOR = {'none','BOR0','BOR1'};
-%             parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
-%             
-%             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readCutMat');
-%             parseobj.addParameter('r',1,typeValidation_scalar);
-%             
-%             typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
-%             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
-%             
-%             typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readCutMat');
-%             parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
-%             
-%             typeValidation_time = @(x) isa(x,'datetime');
-%             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
-%             
-%             if nargin == 0
-%                 [name,path] = uigetfile('*.cutmat');
-%                 pathName = [path,name];
-%             end
-%             parseobj.parse(pathName,varargin{:})
-%             
-%             pathName = parseobj.Results.pathName;
-%             freq = parseobj.Results.freq;
-%             freqUnit = parseobj.Results.freqUnit;
-%             polType = parseobj.Results.polType;
-%             symmetryXZ = parseobj.Results.symmetryXZ;
-%             symmetryYZ = parseobj.Results.symmetryYZ;
-%             symmetryXY = parseobj.Results.symmetryXY;
-%             symmetryBOR = parseobj.Results.symmetryBOR;
-%             r = parseobj.Results.r;
-%             orientation = parseobj.Results.orientation;
-%             earthLocation = parseobj.Results.earthLocation;
-%             time = parseobj.Results.time;
-%             
-%             % Read the data file
-%             if ~strcmp(pathName(end-6:end),'.cutmat')
-%                 pathName = [pathName,'.cutmat'];
-%             end
-%             load(pathName,'-mat');
-%             
-%             radEff = 1;
-%             
-%             th = deg2rad(p(:,1));
-%             ph = deg2rad(p(:,2));
-%             Eth = p(:,3);
-%             Eph = p(:,4);
-%             D = lin10(p(:,5));
-%             W = 1./(2.*FarField.eta0).*(abs(Eth).^2 + abs(Eph).^2);
-%             U = r^2.*(W);
-%             Prad = 4*pi.*U./D;
-%             
-%             % Remove nans from power - possible at formally zero fields
-%             Prad = Prad(~isnan(Prad));
-%             
-%             Pmean = mean(Prad);
-%             if any(abs(Prad - Pmean)./Pmean > 10^(-3)), warning('Power inconsistant over angle - taking mean value'); end
-%             
-%             FF = FarField(ph,th,Eth,Eph,freq,Pmean,radEff,...
-%                 'coorType','spherical','polType',polType,'gridType','PhTh','freqUnit',freqUnit,...
-%                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
-%                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
-%         end
         
         function FF = farFieldFromPowerPattern(x,y,U,freq,varargin)
             % FARFIELDFROMPOWERPATTERN Create a Farfield object from a
