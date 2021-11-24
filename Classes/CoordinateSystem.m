@@ -648,7 +648,7 @@ classdef CoordinateSystem
            % For only one argument, the global system is assumed for coor0
            %
            % Inputs
-           % - coor0:   Base CoordinateSystem object
+           % - coor0:   Base CoordinateSystem object (Global as default)
            % - coor1:   Rotated CoordinateSystem object
            %
            % Outputs
@@ -659,9 +659,9 @@ classdef CoordinateSystem
            % -
            %
            % Created: 2019-05-09, Dirk de Villiers
-           % Updated: 2019-05-09, Dirk de Villiers
+           % Updated: 2021-11-24, Dirk de Villiers
            %
-           % Tested : Matlab R2018b, Dirk de Villiers
+           % Tested : Matlab R2021a, Dirk de Villiers
            %  Level : 2
            %   File : testScript_CoordinateSystem.m
            %
@@ -670,6 +670,7 @@ classdef CoordinateSystem
            % Cr = C0.rotEuler(deg2rad([30,60,45]));
            % angEulerP = rad2deg(getEulerangBetweenCoors(Cr,C0))
            
+           if nargin < 2 || isempty(coor0), coor0 = CoordinateSystem; end
            angEuler = GRASP2Euler(getGRASPangBetweenCoors(coor1,coor0));
        end
        
