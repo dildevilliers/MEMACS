@@ -836,7 +836,7 @@ classdef Pnt3D
             % Inputs
             % - PH:  Matrix of azimuth angles in radians
             % - TH:  Matrix of polar angles in radians
-            % - R:   Matrix of radii in m
+            % - R:   Matrix of radii in m (default 1)
             %
             % Outputs
             % - obj:  Pnt3D object
@@ -859,6 +859,9 @@ classdef Pnt3D
             %   p = Pnt3D.sph(PH,TH,R);
             %   p.plot
             
+            assert(all(size(PH)==size(TH)),'PH and TH must be the same size');
+            
+            if nargin < 3, R = ones(size(PH)); end
             [X,Y,Z] = sph2cart(PH,pi/2 - TH,R);
             obj = Pnt3D(X,Y,Z);
         end

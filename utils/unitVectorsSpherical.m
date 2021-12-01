@@ -1,6 +1,6 @@
 function [thHat,phHat,rHat] = unitVectorsSpherical(th,ph)
 % Returns the 3 spherical coordinate system unit vectors as a function of
-% input angles th and ph. Output vectors in pnt3D class
+% input angles th and ph. Output vectors in Pnt3D class
 
 tHatx = cos(th).*cos(ph);
 tHaty = cos(th).*sin(ph);
