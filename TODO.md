@@ -5,6 +5,8 @@
 - [ ] include property for code version in all classes
 
 # Farfield
+- [ ] speed up rotate for coorType = power and write help
+- [ ] test rotate with other coorTypes, and include in testScript
 - [ ] Finish readGRASPcut method - sort out multiple frequency cases for cutmat and write testScript;
 - [ ] Update readGRASPcut method to handle a default of 1 frequency point, and automatically calculating nr_cuts internally for .cut files
 - [ ] Make writeCutMat method
@@ -15,7 +17,6 @@
 - [ ] Sort out save and load to use a struct and not rely on the object itself
 - [ ] finish SimpleTaper constructor, write help and testscript
 - [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
-- [ ] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
 - [ ] Fix FarField.rotate field components pole at th = 180 
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
 - [ ] writeFITS (DdV)
@@ -85,6 +86,7 @@
 - [x] Finish rotatePhi method. 
 - [x] readFITS testScript_Farfield is broken - data missing in all branches
 - [x] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
+- [x] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
 
 
 # Pnt3D

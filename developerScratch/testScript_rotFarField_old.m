@@ -2,27 +2,32 @@
 clear all
 close all
 
-p = mfilename('fullpath');
-[filepath] = fileparts(p);
-dataPath = [filepath,'\..\data\SimPatterns\rotateFF\'];
-
 plotDim = 2;    % Select 1, 2 or 3 for 2D or 3D plots
 grid2Dplot = 'PhTh'; % Can be DirCos, TrueView, PhTh, etc
 coorPlot = 'spherical';
 output = 'E2';
 outputType = 'imag';
 scaleMag = 'lin';
-fi = 6;
 onlyPower = true;
 
-% GRASP rotation
-GRASPangDeg = [65,-110,-15];
+% CST like axis rotations
+rotX = deg2rad(45);
+rotY = deg2rad(45);
+rotZ = deg2rad(45);
 cGlob = CoordinateSystem;
-cRot = cGlob.rotGRASP(deg2rad(GRASPangDeg));
+cRot = cGlob.rotx(rotX,true);
+cRot = cRot.roty(rotY,true);
+cRot = cRot.rotz(rotZ,true);
+% rotAng = cRot.getGRASPangles;
+rotAng = cRot.getGRASPangBetweenCoors;
+
+rotHandle = @rotGRASP;
+% rotAng = deg2rad([45,45,45]);
+% rotAng = deg2rad([0,0,90]);
 
 % Read a test field
-pathName = [dataPath,'FForigin'];
-FF = FarField.readGRASPgrd(pathName);
+pathName = 'CircWG_origin';
+FF = FarField.readCSTffs(pathName);
 
 handle2Dgrid = str2func(['grid2',grid2Dplot]);
 handleCoor = str2func(['coor2',coorPlot]);
@@ -32,7 +37,7 @@ if plotDim == 3
 elseif plotDim == 2
     FF = handle2Dgrid(FF);
     FF = handleCoor(FF,false);
-    FF.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag,'freqIndex',fi), hold on
+    FF.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag), hold on
 elseif plotDim == 1
     FF = handleCoor(FF,false);
     FF.plotPrincipleCuts('output',output);
@@ -49,15 +54,14 @@ elseif plotDim == 2
     figure
     FFr = handle2Dgrid(FFr);
     FFr = handleCoor(FFr,false);
-    FFr.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag,'freqIndex',fi), hold on
+    FFr.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag), hold on
 elseif plotDim == 1
     FFr = handleCoor(FFr,false);
     FFr.plotPrincipleCuts('output',output);
 end
 
 % Read the rotated validation file
-FFrotVal = FarField.readGRASPgrd([dataPath,'FFrot']);
-
+FFrotVal = FarField.readCSTffs('CircWG_rot');
 if plotDim == 3
     figure
     FFrotVal.plot('plotType','3D','output',output)
@@ -65,7 +69,7 @@ elseif plotDim == 2
     figure
     FFrotVal = handle2Dgrid(FFrotVal);
     FFrotVal = handleCoor(FFrotVal,false);
-    FFrotVal.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag,'freqIndex',fi), hold on
+    FFrotVal.plot('plotType','2D','output',output,'outputType',outputType,'step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag), hold on
 elseif plotDim == 1
     FFrotVal = handleCoor(FFrotVal,false);
     FFrotVal.plotPrincipleCuts('output',output);
@@ -76,5 +80,5 @@ FFdel = FFrotVal - FFr;
 FFdel = handle2Dgrid(FFdel);
 FFdel = handleCoor(FFdel,false);
 figure
-FFdel.plot('plotType','2D','output',output,'outputType','mag','step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag,'freqIndex',fi), hold on
+FFdel.plot('plotType','2D','output',output,'outputType','mag','step',1,'showGrid',true,'dynamicRange_dB',40,'scaleMag',scaleMag), hold on
 

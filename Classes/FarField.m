@@ -1927,9 +1927,9 @@ classdef FarField
             if ~strcmp(obj.coorType,'spherical')
                 [objBase,obj] = coor2setup(obj);
                 % Set back to original polType
-                [objBase.E1,objBase.E2] = getEspherical(objBase);
+                [objBase.E1,objBase.E2,objBase.E3] = getEspherical(objBase);
                 polFunc = str2func(['getE',obj.polType]);
-                [obj.E1,obj.E2] = polFunc(objBase);
+                [obj.E1,obj.E2,obj.E3] = polFunc(objBase);
                 obj.coorType = 'spherical';
             end
             if setStdGrid
@@ -2167,7 +2167,6 @@ classdef FarField
             obj = handleGridType(obj);
             obj = handleCoorType(obj,false);
             if ~strcmp(objPolType,'none'), obj = handlePolType(obj); end
-            obj = obj.setRangeSph(obj1.xRangeType,obj1.yRangeType);
         end
         
         %% Base grid functions
@@ -3334,8 +3333,8 @@ classdef FarField
                 tol = deg2rad(2); % Check for points close to the edges in azimuth
                 if abs(min(xVal) + pi) < tol && abs(max(xVal) - pi) < tol
                     edgeAngDeg = 180 - edgeAngExtent_deg;
-                    iNeg = find(xVal > deg2rad(edgeAngDeg));
-                    iPos = find(xVal < deg2rad(-edgeAngDeg));
+                    iNeg = find(xVal > deg2rad(edgeAngDeg) & xVal < (deg2rad(180)-tol));
+                    iPos = find(xVal < deg2rad(-edgeAngDeg) & xVal > (deg2rad(-180)+tol));
                     xVal = [xVal(iNeg)-2*pi;xVal;xVal(iPos)+2*pi];
                     yVal = [yVal(iNeg);yVal;yVal(iPos)];
                     zVal = [zVal(iNeg);zVal;zVal(iPos)];
@@ -3396,7 +3395,7 @@ classdef FarField
                     YVal = reshape(yVal,NyVal,NxVal);
                     ZVal = reshape(zVal,NyVal,NxVal);
 %                     Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
-                    Zf = griddedInterpolant(XVal',YVal',ZVal.','cubic');
+                    Zf = griddedInterpolant(XVal',YVal',ZVal.','spline');
                 catch ME
                     % Grid did not work... Go to scatter
                 end
@@ -3562,7 +3561,7 @@ classdef FarField
             end
         end
         
-        function obj = rotate(obj,rotCoor)
+        function obj = rotate(obj,rotCoor,keepGrid)
             % ROTATE Rotation function for FarField objects.
             
             % General rotation function for FarField objects
@@ -3570,229 +3569,71 @@ classdef FarField
             % field, assuming the original field was in the global
             % coordinate system
             
+            % Flag to keep everything on the original grid
+            if nargin < 3 || isempty(keepGrid), keepGrid = true; end
             
-            warning('FarField.rotate is currently very unstable. Use with care and check results. It is being re-written with different interface from old versions')
             objIn = obj; % Keep for later setup
-            
             C0 = CoordinateSystem;
-            if obj.isGrid4pi
+            
+            % Project fields onto Cartesian coordinates and spherical grid
+            obj = obj.coor2Ludwig1;
+            obj = obj.clearBase;
+            
+            if keepGrid
+                pRot = Pnt3D.sph(obj.ph,obj.th);
+                cBack = C0.rotGRASP(getGRASPangBetweenCoors(C0,rotCoor));
+                pIn = pRot.changeBase(C0,cBack);
+                
+                % Interpolate the fields from where we want to fetch
+                % them, to rotate them onto the output (original) grid
+                [E1r,E2r,E3r] = deal(zeros(obj.Nang,obj.Nf));
+                for ff = 1:obj.Nf
+                    E1r(:,ff) = obj.interpolateGrid('E1',pIn.ph,pIn.th,'freqIndex',ff);
+                    E2r(:,ff) = obj.interpolateGrid('E2',pIn.ph,pIn.th,'freqIndex',ff);
+                    E3r(:,ff) = obj.interpolateGrid('E3',pIn.ph,pIn.th,'freqIndex',ff);
+                end
+                % Scale the E-fields to get rid of the farfield factor
+                k = 2.*pi.*obj.freqHz./obj.c0;
+                FFfact = 1./(exp(-1i.*k.*obj.r)./obj.r);
+                E1r = bsxfun(@times,E1r,FFfact);
+                E2r = bsxfun(@times,E2r,FFfact);
+                E3r = bsxfun(@times,E3r,FFfact);
+            else
                 pIn = Pnt3D.sph(obj.ph,obj.th);
                 pRot = pIn.changeBase(C0,rotCoor);
                 
-                % Project fields onto Cartesian coordinates
-                obj = obj.coor2Ludwig1;
                 E1r = obj.E1;
                 E2r = obj.E2;
                 E3r = obj.E3;
                 % Rotate the grid
-                obj = obj.grid2PhTh;
                 obj.x = pRot.ph;
                 obj.y = pRot.th;
-                
-                % Work in Cartesian coordinates to link with Ludwig1 fields
-                % Vector tip points before rotation
-                xTipIn = pIn + Pnt3D(1,0,0);
-                yTipIn = pIn + Pnt3D(0,1,0);
-                zTipIn = pIn + Pnt3D(0,0,1);
-                % Rotate all the points
-                xTipRot = xTipIn.changeBase(C0,rotCoor);
-                yTipRot = yTipIn.changeBase(C0,rotCoor);
-                zTipRot = zTipIn.changeBase(C0,rotCoor);
-                % Rotated unit vectors
-                xHatRot = xTipRot - pRot;
-                yHatRot = yTipRot - pRot;
-                zHatRot = zTipRot - pRot;
-                % Project onto the local unit vectors
-                obj.E1 = E1r.*repmat(xHatRot.x,1,obj.Nf) + E2r.*repmat(yHatRot.x,1,obj.Nf) + E3r.*repmat(zHatRot.x,1,obj.Nf);
-                obj.E2 = E1r.*repmat(xHatRot.y,1,obj.Nf) + E2r.*repmat(yHatRot.y,1,obj.Nf) + E3r.*repmat(zHatRot.y,1,obj.Nf);
-                obj.E3 = E1r.*repmat(xHatRot.z,1,obj.Nf) + E2r.*repmat(yHatRot.z,1,obj.Nf) + E3r.*repmat(zHatRot.z,1,obj.Nf);
-                
-            else
-                
             end
-            obj = obj.clearBase;
-            obj = transformTypes(obj, objIn);
-%             obj = obj.coor2spherical;
-%             obj = obj.setRangeSph('pos');
             
+            % Work in Cartesian coordinates to link with Ludwig1 fields
+            % Vector tip points before rotation
+            xTipIn = pIn + Pnt3D(1,0,0);
+            yTipIn = pIn + Pnt3D(0,1,0);
+            zTipIn = pIn + Pnt3D(0,0,1);
+            % Rotate all the points
+            xTipRot = xTipIn.changeBase(C0,rotCoor);
+            yTipRot = yTipIn.changeBase(C0,rotCoor);
+            zTipRot = zTipIn.changeBase(C0,rotCoor);
+            % Rotated unit vectors
+            xHatRot = xTipRot - pRot;
+            yHatRot = yTipRot - pRot;
+            zHatRot = zTipRot - pRot;
+            % Project onto the local unit vectors
+            obj.E1 = E1r.*repmat(xHatRot.x,1,obj.Nf) + E2r.*repmat(yHatRot.x,1,obj.Nf) + E3r.*repmat(zHatRot.x,1,obj.Nf);
+            obj.E2 = E1r.*repmat(xHatRot.y,1,obj.Nf) + E2r.*repmat(yHatRot.y,1,obj.Nf) + E3r.*repmat(zHatRot.y,1,obj.Nf);
+            obj.E3 = E1r.*repmat(xHatRot.z,1,obj.Nf) + E2r.*repmat(yHatRot.z,1,obj.Nf) + E3r.*repmat(zHatRot.z,1,obj.Nf);
             
-            
-            
-            
-            
-            
-            
-            
-            if 0  % Old code
-                % This will probably depend on the pattern type which one is
-                % best.  Only have spherical and Ludwig 3 implemented for now,
-                % so hard-coded.
-                baseCoorType = 'Ludwig3';
-                coorHandle = str2func(['coor2',baseCoorType]);
-                
-                % Test if the rotation function handle has the trailing 'sph'
-                handleStr = func2str(rotHandle);
-                if ~strcmp(handleStr(end-2:end),'sph')
-                    handleStr = [handleStr,'sph'];  % Add it if not - some user errors fixed at least!
-                    rotHandle = str2func(handleStr);
-                end
-                % Transform to sensible grid and coordinate system for rotation
-                FFsph = obj1.grid2PhTh;  % Always work in the PhTh coordinate system
-                %             FFsph = FFsph.setXrange('sym'); % Always work in symmetrical xRange
-                FFsph = FFsph.setRangeSph('sym');
-                if ~strcmp(obj1.coorType,'power'), FFsph = coorHandle(FFsph,false); end % No coordinate transform required for power only
-                
-                %             % Force all the th = 0|180 fields to be identical - fixes pole
-                %             % interpolation problems
-                %             tol = 10^(-obj1.nSigDig);
-                %             i_0_0 = find(abs(FFsph.th) < tol & abs(FFsph.ph) < tol);
-                %             i_180_0 = find(abs(FFsph.th - pi) < tol & abs(FFsph.ph) < tol);
-                %             if ~isempty(i_0_0)
-                %                 E1_0_0 = obj1.E1(i_0_0(1),:);
-                %                 E2_0_0 = obj1.E2(i_0_0(1),:);
-                %                 i_0 = find(abs(FFsph.th - 0)<tol);
-                %                 FFsph.E1(i_0,:) = repmat(E1_0_0,length(i_0),1);
-                %                 FFsph.E2(i_0,:) = repmat(E2_0_0,length(i_0),1);
-                %             end
-                %             if ~isempty(i_180_0)
-                %                 E1_180_0 = obj1.E1(i_180_0(1),:);
-                %                 E2_180_0 = obj1.E2(i_180_0(1),:);
-                %                 i_180 = find(abs(FFsph.th - pi)<tol);
-                %                 FFsph.E1(i_180,:) = repmat(E1_180_0,length(i_180),1);
-                %                 FFsph.E2(i_180,:) = repmat(E2_180_0,length(i_180),1);
-                %             end
-                
-                % Get the grid step sizes from the original
-                %             stepx = (max(FFsph.x) - min(FFsph.x))./(FFsph.Nx-1);
-                %             stepy = (max(FFsph.y) - min(FFsph.y))./(FFsph.Ny-1);
-                % Get a sensible grid size
-                Nxin = FFsph.Nx;
-                Nyin = FFsph.Ny;
-                if Nxin*Nyin > FFsph.Nang
-                    Nxin = sqrt(FFsph.Nang/2);
-                    Nyin = Nxn/2;
-                    Nxin = floor(Nxin/2)*2 + 1;
-                    Nyin = floor(Nyin/2)*2 + 1;
-                end
-                stepx = (max(FFsph.ph) - min(FFsph.ph))./(Nxin-1);
-                stepy = (max(FFsph.th) - min(FFsph.th))./(Nyin-1);
-                stepDeg = rad2deg([stepx,stepy]);
-                xmin = min(FFsph.x);
-                xmax = max(FFsph.x);
-                ymin = min(FFsph.y);
-                ymax = max(FFsph.y);
-                % Perform the rotation of the grid
-                phIn = FFsph.x.';
-                thIn = FFsph.y.';
-                sphAngIn = [phIn;thIn];
-                sphAngRot = rotHandle(sphAngIn,rotAng);
-                phOut = sphAngRot(1,:).';
-                thOut = sphAngRot(2,:).';
-                FFsph.x = phOut;
-                FFsph.y = thOut;
-                FFsph = FFsph.roundGrid;  % Found some rare, strange behaviour in the interpolant if this is not done
-                
-                % Coordinate systems
-                C0 = CoordinateSystem;
-                rotHandleStr = func2str(rotHandle);
-                rotHandleCoor = str2func(rotHandleStr(1:end-3));
-                Crot = rotHandleCoor(C0,rotAng);
-                
-                if strcmp(obj1.coorType,'power')
-                    % Build the new grid
-                    Nxi = round((xmax - xmin)/stepx) + 1;
-                    Nyi = round((ymax - ymin)/stepy) + 1;
-                    xivect = linspace(xmin,xmax,Nxi);
-                    yivect = linspace(ymin,ymax,Nyi);
-                    [Xi,Yi] = meshgrid(xivect,yivect);
-                    xi = Xi(:);
-                    yi = Yi(:);
-                    % Interpolate the fields
-                    [Ugrid] = deal(zeros(Nxi*Nyi,obj1.Nf));
-                    FFsph = FFsph.setBase;
-                    for ff = 1:obj1.Nf
-                        Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
-                    end
-                    FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,'fieldPol','power','freqUnit',FFsph.freqUnit,...
-                        'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
-                        'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
-                else
-                    % Perform the rotation of the field vectors
-                    % Vector origin points before rotation
-                    [OIx,OIy,OIz] = PhTh2DirCos(phIn,thIn);
-                    origin_In = Pnt3D(OIx(:).',OIy(:).',OIz(:).');
-                    origin_out = origin_In.changeBase(C0,Crot);
-                    
-                    % local unit vector directions before and after rotation
-                    switch baseCoorType
-                        case 'spherical'
-                            [xHatIn,yHatIn,~] = unitVectorsSpherical(thIn,phIn);
-                            [xHatOut,yHatOut,~] = unitVectorsSpherical(thOut,phOut);
-                            [E1sign,E2sign] = deal(1,1);
-                        case 'Ludwig3'
-                            [xHatIn,yHatIn] = unitVectorsDirCos(thIn,phIn);
-                            [xHatOut,yHatOut] = unitVectorsDirCos(thOut,phOut);
-                            [E1sign,E2sign] = deal(-1,-1);
-                    end
-                    % Vector tip points before rotation
-                    xTipIn = origin_In + xHatIn;
-                    yTipIn = origin_In + yHatIn;
-                    % Rotate all the points
-                    xTipOut = xTipIn.changeBase(C0,Crot);
-                    yTipOut = yTipIn.changeBase(C0,Crot);
-                    xOut = xTipOut - origin_out;
-                    yOut = yTipOut - origin_out;
-                    % Project onto the local unit vectors
-                    xx = dot(xOut.pointMatrix,xHatOut.pointMatrix);
-                    xy = dot(xOut.pointMatrix,yHatOut.pointMatrix);
-                    yx = dot(yOut.pointMatrix,xHatOut.pointMatrix);
-                    yy = dot(yOut.pointMatrix,yHatOut.pointMatrix);
-                    E1rot = FFsph.E1.*repmat(xx(:),1,FFsph.Nf) + FFsph.E2.*repmat(yx(:),1,FFsph.Nf);
-                    E2rot = FFsph.E1.*repmat(xy(:),1,FFsph.Nf) + FFsph.E2.*repmat(yy(:),1,FFsph.Nf);
-                    FFsph.E1 = E1sign.*E1rot;
-                    FFsph.E2 = E2sign.*E2rot;
-                    
-                    % Set the baseGrid of the rotated object.  This is required
-                    % since all transformations operate from the base grid
-                    FFsph = FFsph.sortGrid;
-                    FFsph = FFsph.setBase;
-                    if 0 && onlyRotPowerPattern
-                        % Build the new grid
-                        Nxi = round((xmax - xmin)/stepx) + 1;
-                        Nyi = round((ymax - ymin)/stepy) + 1;
-                        xivect = linspace(xmin,xmax,Nxi);
-                        yivect = linspace(ymin,ymax,Nyi);
-                        [Xi,Yi] = meshgrid(xivect,yivect);
-                        xi = Xi(:);
-                        yi = Yi(:);
-                        % Interpolate the fields
-                        [Ugrid] = deal(zeros(Nxi*Nyi,obj1.Nf));
-                        for ff = 1:obj1.Nf
-                            Ugrid(:,ff) = interpolateGrid(FFsph,'U',xi,yi,ff,'top');
-                        end
-                        FFsph = FarField.farFieldFromPowerPattern(xi,yi,Ugrid,FFsph.freq,...
-                            'fieldPol','linearY','freqUnit',FFsph.freqUnit,'symmetryXZ',obj1.symmetryXZ,'symmetryYZ',obj1.symmetryYZ,'symmetryXY',obj1.symmetryXY,'symmetryBOR',obj1.symmetryBOR,...
-                            'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
-                    else
-                        FFsph = FFsph.currentForm2Base(stepDeg,rad2deg([xmin,xmax;ymin,ymax]));
-                    end
-                end
-                % Reset the grid and coordinate system, and reset the base back
-                % in the original format
-                obj = transformTypes(FFsph, obj1);
-                % Recall symmetries - only set the symmetries if they are still
-                % valid after rotation
-                tol = 10^(-obj.nSigDig);
-                YZsym = abs((abs(dot(C0.x_axis,Crot.x_axis)) - 1)) < tol;
-                XZsym = abs((abs(dot(C0.y_axis,Crot.y_axis)) - 1)) < tol;
-                XYsym = abs((abs(dot(C0.z_axis,Crot.z_axis)) - 1)) < tol;
-                if YZsym, obj = obj.setSymmetryYZ(obj1.symmetryYZ); end
-                if XZsym, obj = obj.setSymmetryXZ(obj1.symmetryXZ); end
-                if XYsym, obj = obj.setSymmetryXY(obj1.symmetryXY); end
-                %             obj = obj.setXrange(obj1.xRangeType);
-                obj = obj.setRangeSph(obj1.xRangeType);
-                obj = obj.currentForm2Base();
-            end
+            % Clean up and rebuild the new object
+            obj = obj.clearBase;    % This will be updated in the coordinate change, so get rid of it
+            obj = transformTypes(obj,objIn);
+            obj = obj.clearBase;    % Same story, remove
+            obj = obj.setRangeSph(objIn.xRangeType,objIn.yRangeType);
+          
         end
 
         function obj = rotatePhi(obj,phiRot)
