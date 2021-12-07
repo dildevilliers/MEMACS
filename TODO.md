@@ -17,9 +17,7 @@
 - [ ] Sort out save and load to use a struct and not rely on the object itself
 - [ ] finish SimpleTaper constructor, write help and testscript
 - [ ] Fix and speed up mirrorSymmetricPattern. Might require custom implementations of all grid types. Start with spherical though!
-- [ ] Fix FarField.rotate field components pole at th = 180 
 - [ ] Fix the setOrientation workflow.  Does not seem to go back to [0,0,0] before doing a new orientation. Always rotates from where it is due to base settings in rotate.
-- [ ] writeFITS (DdV)
 - [ ] Slant property is confusing.  Maybe incorporate natively with x/y linear pol?
 - [ ] Typical pattern parameters calculator: eff, XP, etc.
 - [ ] remove static method redundant validators - the main constructor should catch the errors
@@ -87,6 +85,8 @@
 - [x] readFITS testScript_Farfield is broken - data missing in all branches
 - [x] Check readGRASPgrd, not sure of E1 and E2 order for all cases. Pre-allocate the matrices for speed.
 - [x] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
+- [x] writeFITS (DdV)
+- [x] Fix FarField.rotate field components pole at th = 180 
 
 
 # Pnt3D

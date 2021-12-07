@@ -44,6 +44,8 @@ classdef FarField
         th          % Spherical coordinate theta angle of grid
         xname       % Name of the x-grid variable {'\phi','u','az','\epsilon','Xg=asin(u)','Xg','North-az','RA','long'}
         yname       % Name of the y-grid variable {'\theta','v','el','\alpha','Yg=asin(v)','Yg','Alt','dec','lat'}
+        xUnit       % x-axis unit
+        yUnit       % y-axis unit
         E1name      % Name of the E1-field component {'Eth','Ex','Eaz','Eal','Eh','Exp','Elh'}
         E2name      % Name of the E2-field component {'Eph','Ey','Eel','Eep','Ev','Eco','Erh'}
         E3name      % Name of the E3-field component {'Er','Ez','Er','Er','Ew'...}
@@ -456,6 +458,14 @@ classdef FarField
         
         function yname = get.yname(obj)
             [~,yname] = setXYnames(obj);
+        end
+        
+        function xUnit = get.xUnit(obj)
+            [~,~,xUnit] = setXYnames(obj);
+        end
+        
+        function yUnit = get.yUnit(obj)
+            [~,~,~,yUnit] = setXYnames(obj);
         end
         
         function E1name = get.E1name(obj)
@@ -4778,6 +4788,93 @@ classdef FarField
             fclose(fid);
         end
         
+        function writeFITS(obj,pathName)
+            % WRITEFITS Write a FarField object to a FITS file
+            % writeFITS(obj,pathName) writes a FarField object to a .FITS
+            % file. The whole cube is output as one file with matrix shape
+            % [Nx x Ny x Nf x Ne x Nc x Np]. 
+            % Nx, Ny, and Nf are number of x/y grid and frequency points.
+            % Ne = number of fields; Nc = number of components; Np = number
+            % of complex parts 
+            % with real and imaginary parts split as the 2 elements here.
+            % Some information about the format is provided in the 
+            % headers/keywords
+            % 
+            % Inputs
+            % - obj:    FarField object. Can be a vector of size Ne.
+            % - pathName: The full path and name of the target file. If
+            %             empty a gui input will be requested  
+            % 
+            % Outputs
+            % - 
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2021-12-07, Dirk de Villiers
+            % Updated: 2021-12-07, Dirk de Villiers
+            %
+            % Tested : Matlab R2021a, Dirk de Villiers
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField;
+            %   F.writeFITS('c:\Temp\FFwrite.fits');
+            
+            if nargin < 2 || isempty(pathName)
+                pathName = uigetdir();
+            end
+            
+            Ne = numel(obj);
+            
+            [E1v,E2v,E3v] = deal([]);
+            for ee = 1:Ne
+                % Test that all the fields have the same properties
+                Nc(ee) = 1 + ~isempty(obj(ee).E2) + ~isempty(obj(ee).E3);
+                Np(ee) = 1 + ~strcmp(obj(ee).coorType,'power');
+                if ee > 1
+                    assert(Nc(ee) == Nc(ee-1),'All fields in input vector must have the same number of components')
+                    assert(Np(ee) == Np(ee-1),'All fields in input vector must have the same number of complex parts')
+                end
+                assert(obj(Ne).isGridUniform,'writeFITS only works on uniform grids')
+            
+                E1v = [E1v;obj(ee).E1(:)];
+                E2v = [E2v;obj(ee).E2(:)];
+                E3v = [E3v;obj(ee).E3(:)];
+            end
+            
+            fitsMat = [E1v;E2v;E3v];
+            fitsMat = [real(fitsMat);imag(fitsMat)];
+            % Note the meshgrid style reshape on the first two dimensions
+            % needed for fits format
+            fitsMat = reshape(fitsMat,obj(1).Ny,obj(1).Nx,obj(1).Nf,Ne(1),Nc(1),Np(1));
+            
+            fitswrite(fitsMat,pathName);
+            % Update the header
+            import matlab.io.*;
+            fptr = fits.openFile(pathName,'readwrite');
+            fits.writeKey(fptr,'CRVAL1',min(obj(1).x),'No comment')
+            fits.writeKey(fptr,'CRVAL2',min(obj(1).y),'No comment')
+            fits.writeKey(fptr,'CRVAL3',min(obj(1).freqHz),'No comment')
+            fits.writeKey(fptr,'CRPIX1',1,'No comment')
+            fits.writeKey(fptr,'CRPIX2',1,'No comment')
+            fits.writeKey(fptr,'CRPIX3',1,'No comment')
+            [delX,delY,delF] = deal(0);
+            if obj(1).Nx > 1, delX = (max(obj(1).x) - min(obj(1).x))/(obj(1).Nx-1); end
+            fits.writeKey(fptr,'CDELT1',delX,'No comment')
+            if obj(1).Ny > 1, delY = (max(obj(1).y) - min(obj(1).y))/(obj(1).Ny-1); end
+            fits.writeKey(fptr,'CDELT2',delY,'No comment')
+            if obj(1).Nf > 1, delF = (max(obj(1).freqHz) - min(obj(1).freqHz))/(obj(1).Nf-1); end
+            fits.writeKey(fptr,'CDELT3',delF,'No comment')
+            fits.writeKey(fptr,'CUNIT1',upper(obj(1).xUnit),'No comment')
+            fits.writeKey(fptr,'CUNIT2',upper(obj(1).yUnit),'No comment')
+            fits.writeKey(fptr,'CUNIT3',upper(obj(1).freqUnit),'No comment')
+            fits.writeKey(fptr,'CTYPE1',upper(strrep(obj(1).xname,'\','')),'No comment')
+            fits.writeKey(fptr,'CTYPE2',upper(strrep(obj(1).yname,'\','')),'No comment')
+            fits.writeKey(fptr,'CTYPE3','FREQ','No comment')
+            fits.closeFile(fptr);
+        end
     end
     
     methods (Static = true)
@@ -6109,9 +6206,9 @@ classdef FarField
             %   .scaleFuncGrid: can be a function handle or scaling factor
             %                   for the grid. if it is an array with 2 
             %                   elements, the first is used for x, and the second for y
-            % - gridType:   See FarField help for details
-            % - coorType:   See FarField help for details
-            % - polType:   See FarField help for details
+            % - gridType:   See FarField help for details ('PhTh')
+            % - coorType:   See FarField help for details ('spherical')
+            % - polType:    See FarField help for details ('linear')
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
             %   acceptable keywords are
             %   -- xRange:      Two element vector of the x range limits
@@ -6134,9 +6231,9 @@ classdef FarField
             % -
             %
             % Created: 2019-09-06, Dirk de Villiers
-            % Updated: 2020-02-07, Dirk de Villiers
+            % Updated: 2021-12-07, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2021a
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -6197,6 +6294,11 @@ classdef FarField
                 coorType = input('Input the coorType string:');
                 polType = input('Input the polType string:');
             end
+            
+            if nargin < 2, gridType = []; end
+            if nargin < 3, coorType = []; end
+            if nargin < 4, polType = []; end
+            
             parseobj.parse(inputStruct,gridType,coorType,polType,varargin{:})
             
             inputStruct = parseobj.Results.inputStruct;
@@ -7361,40 +7463,50 @@ classdef FarField
         end
         
         %% Name setters
-        function [xname,yname] = setXYnames(obj)
-            % SETXYNAMES Set x and y names
+        function [xname,yname,xunit,yunit] = setXYnames(obj)
+            % SETXYNAMES Set x and y names and units
             
             switch obj.gridType
                 case 'PhTh'
                     xname = '\phi';
                     yname = '\theta';
+                    [xunit, yunit] = deal('rad');
                 case 'DirCos'
                     xname = 'u';
                     yname = 'v';
+                    [xunit, yunit] = deal('');
                 case 'AzEl'
                     xname = 'az';
                     yname = 'el';
+                    [xunit, yunit] = deal('rad');
                 case 'ElAz'
                     xname = '\epsilon';
                     yname = '\alpha';
+                    [xunit, yunit] = deal('rad');
                 case 'TrueView'
                     xname = 'Xg=\theta cos(\phi)';
                     yname = 'Yg=\theta sin(\phi)';
+                    [xunit, yunit] = deal('rad');
                 case 'ArcSin'
                     xname = 'Xg=asin(u)';
                     yname = 'Yg=asin(v)';
+                    [xunit, yunit] = deal('');
                 case 'Mollweide'
                     xname = 'Xg';
                     yname = 'Yg';
+                    [xunit, yunit] = deal('');
                 case 'Horiz'
                     xname = 'North-az';
                     yname = 'alt';
+                    [xunit, yunit] = deal('rad');
                 case 'RAdec'
                     xname = 'RA';
                     yname = 'dec';
+                    [xunit, yunit] = deal('rad');
                 case 'GalLongLat'
                     xname = 'long';
                     yname = 'lat';
+                    [xunit, yunit] = deal('rad');
             end
         end
         
