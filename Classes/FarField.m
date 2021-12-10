@@ -49,6 +49,7 @@ classdef FarField
         E1name      % Name of the E1-field component {'Eth','Ex','Eaz','Eal','Eh','Exp','Elh'}
         E2name      % Name of the E2-field component {'Eph','Ey','Eel','Eep','Ev','Eco','Erh'}
         E3name      % Name of the E3-field component {'Er','Ez','Er','Er','Ew'...}
+        Eunit       % Unit of fields in E1/2/3
         Nf          % Number of frequencies
         Nx          % Number of unique x points
         Ny          % Number of unique y points
@@ -478,6 +479,10 @@ classdef FarField
         
         function E3name = get.E3name(obj)
             [~,~,E3name] = setEnames(obj);
+        end
+        
+        function Eunit = get.Eunit(obj)
+            [~,~,~,Eunit] = setEnames(obj);
         end
         
         function xRangeType = get.xRangeType(obj)
@@ -4788,9 +4793,9 @@ classdef FarField
             fclose(fid);
         end
         
-        function writeFITS(obj,pathName)
+        function writeFITS(obj,pathName,fieldNames)
             % WRITEFITS Write a FarField object to a FITS file
-            % writeFITS(obj,pathName) writes a FarField object to a .FITS
+            % writeFITS(obj,pathName,fieldNames) writes a FarField object to a .FITS
             % file. The whole cube is output as one file with matrix shape
             % [Nx x Ny x Nf x Ne x Nc x Np]. 
             % Nx, Ny, and Nf are number of x/y grid and frequency points.
@@ -4801,9 +4806,10 @@ classdef FarField
             % headers/keywords
             % 
             % Inputs
-            % - obj:    FarField object. Can be a vector of size Ne.
-            % - pathName: The full path and name of the target file. If
-            %             empty a gui input will be requested  
+            % - obj:        FarField object. Can be a vector of size Ne.
+            % - pathName:   The full path and name of the target file. If
+            %                empty a gui input will be requested  
+            % - fieldNames: Cell array of names of fields of length Ne.
             % 
             % Outputs
             % - 
@@ -4827,6 +4833,16 @@ classdef FarField
             end
             
             Ne = numel(obj);
+            if nargin < 3 || isempty(fieldNames)
+                for ee = 1:Ne
+                    fieldNames{ee} = ['E',num2str(ee)];
+                end
+            elseif ~iscell(fieldNames)
+                assert(Ne==1,['fieldNames must be cell array corresponding to the length of the input field vector: ',num2str(Ne)])
+                fieldNames = {fieldNames};
+            else
+                assert(length(fieldNames)==Ne,['fieldNames must be cell array corresponding to the length of the input field vector: ',num2str(Ne)])
+            end
             
             [E1v,E2v,E3v] = deal([]);
             for ee = 1:Ne
@@ -4870,9 +4886,21 @@ classdef FarField
             fits.writeKey(fptr,'CUNIT1',upper(obj(1).xUnit),'No comment')
             fits.writeKey(fptr,'CUNIT2',upper(obj(1).yUnit),'No comment')
             fits.writeKey(fptr,'CUNIT3',upper(obj(1).freqUnit),'No comment')
+            fits.writeKey(fptr,'CUNIT4',upper(obj(1).Eunit),'No comment')
+            fits.writeKey(fptr,'CUNIT5',upper(obj(1).Eunit),'No comment')
+            fits.writeKey(fptr,'CUNIT6',upper(obj(1).Eunit),'No comment')
             fits.writeKey(fptr,'CTYPE1',upper(strrep(obj(1).xname,'\','')),'No comment')
             fits.writeKey(fptr,'CTYPE2',upper(strrep(obj(1).yname,'\','')),'No comment')
             fits.writeKey(fptr,'CTYPE3','FREQ','No comment')
+            type4 = ['Jones:',fieldNames{1}];
+            if Ne > 1, type4 = [type4,'/',fieldNames{2}]; end
+            fits.writeKey(fptr,'CTYPE4',type4,'No comment')
+            type5 = ['Comp:',obj(1).E1name];
+            if Nc > 1, type5 = [type5,'/',obj(1).E2name]; end
+            fits.writeKey(fptr,'CTYPE5',type5,'No comment')
+            type6 = 'REAL';
+            if Np > 1, type6 = [type6,'/IMAG']; end
+            fits.writeKey(fptr,'CTYPE6',type6,'No comment')
             fits.closeFile(fptr);
         end
     end
@@ -7510,10 +7538,11 @@ classdef FarField
             end
         end
         
-        function [E1name,E2name,E3name] = setEnames(obj)
+        function [E1name,E2name,E3name,Eunit] = setEnames(obj)
             % SETENAMES Set E-field component names
             
             E3name = 'Er'; % Often a placeholer
+            Eunit = 'V/m';
             switch obj.polType
                 case 'circular'
                     E1name = 'Elh';
@@ -7544,6 +7573,7 @@ classdef FarField
                     E1name = 'sqrt(2\eta_0W)';
                     E2name = 'none';
                     E3name = 'none';
+                    Eunit = 'sqrt(W)/m';
                 otherwise
                     error(['Unknown polType property: ', obj.polType]);
             end
