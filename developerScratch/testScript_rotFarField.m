@@ -6,12 +6,12 @@ p = mfilename('fullpath');
 [filepath] = fileparts(p);
 dataPath = [filepath,'\..\data\SimPatterns\rotateFF\'];
 
-plotDim = 2;    % Select 1, 2 or 3 for 2D or 3D plots
+plotDim = 3;    % Select 1, 2 or 3 for 2D or 3D plots
 grid2Dplot = 'PhTh'; % Can be DirCos, TrueView, PhTh, etc
-coorPlot = 'spherical';
-output = 'E2';
-outputType = 'imag';
-scaleMag = 'lin';
+coorPlot = 'Ludwig3';
+output = 'Directivity';
+outputType = 'mag';
+scaleMag = 'dB';
 fi = 6;
 onlyPower = true;
 

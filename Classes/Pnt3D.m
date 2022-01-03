@@ -218,13 +218,13 @@ classdef Pnt3D
         function S = size(obj,posReturn)
             if nargin == 1, posReturn = []; end
             if isempty(posReturn)
-                if numel(obj) > 1
+                if numel(obj) > 1 || isempty(obj)
                     S = builtin('size',obj);
                 else
                     S = size(obj.x);
                 end
             else
-                if numel(obj) > 1
+                if numel(obj) > 1 || isempty(obj)
                     S = builtin('size',obj,posReturn);
                 else
                     S = size(obj.x,posReturn);
@@ -740,11 +740,15 @@ classdef Pnt3D
             %  p = Pnt3D(x,0,0)
             %  p1 = p.split
             
-            obj(numel(obj1.x)) = Pnt3D;
-            for pp = 1:numel(obj)
-                obj(pp) = Pnt3D(obj1.x(pp),obj1.y(pp),obj1.z(pp));
+            if ~isempty(obj1)
+                obj(numel(obj1.x)) = Pnt3D;
+                for pp = 1:numel(obj)
+                    obj(pp) = Pnt3D(obj1.x(pp),obj1.y(pp),obj1.z(pp));
+                end
+                obj = reshape(obj,size(obj1.x));
+            else
+                obj = Pnt3D.empty;
             end
-            obj = reshape(obj,size(obj1.x));
         end
         
         function obj = fuse(obj1)
