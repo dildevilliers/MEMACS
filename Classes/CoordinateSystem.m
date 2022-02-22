@@ -7,6 +7,7 @@ classdef CoordinateSystem
     properties
       origin(1,1) Pnt3D = Pnt3D(0,0,0) % Coordinate system origin position
       base = [] % Coordinate system in which this one is defined. Empty implies the global system.
+      axisText(1,3) char = 'xyz'
     end
    
     properties (SetAccess = private)
@@ -940,9 +941,9 @@ classdef CoordinateSystem
            plot3(xAx(1,:),xAx(2,:),xAx(3,:),'r','LineWidth',lineWidth), hold on
            plot3(yAx(1,:),yAx(2,:),yAx(3,:),'g','LineWidth',lineWidth)
            plot3(zAx(1,:),zAx(2,:),zAx(3,:),'b','LineWidth',lineWidth)
-           text(xAx(1,2),xAx(2,2),xAx(3,2),'x','FontSize',textSize,'color','r')
-           text(yAx(1,2),yAx(2,2),yAx(3,2),'y','FontSize',textSize,'color','g')
-           text(zAx(1,2),zAx(2,2),zAx(3,2),'z','FontSize',textSize,'color','b')
+           text(xAx(1,2),xAx(2,2),xAx(3,2),obj.axisText(1),'FontSize',textSize,'color','r')
+           text(yAx(1,2),yAx(2,2),yAx(3,2),obj.axisText(2),'FontSize',textSize,'color','g')
+           text(zAx(1,2),zAx(2,2),zAx(3,2),obj.axisText(3),'FontSize',textSize,'color','b')
            grid on
            axis equal
            xlabel('x-axis (m)')

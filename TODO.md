@@ -55,7 +55,6 @@
 - [ ] plot on a spherical surface
 - [ ] Add semilog scaleMag option for plot (might be handy for error comparison)
 - [ ] Fix 3D plot for negative y-(th)axis cases
-- [ ] provide 3D plot for users without Antennas toolbox
 - [ ] Jones getter
 - [ ] Jones plotter (fix up)
 - [ ] Stokes getter
@@ -87,6 +86,7 @@
 - [x] Fix rotate - used to work at some stage?  Only works for power coorType. And plenty of issues here with the base after the setRangeSph update.
 - [x] writeFITS (DdV)
 - [x] Fix FarField.rotate field components pole at th = 180 
+- [x] provide 3D plot for users without Antennas toolbox
 
 
 # Pnt3D

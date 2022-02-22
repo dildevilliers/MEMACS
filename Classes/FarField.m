@@ -2742,7 +2742,6 @@ classdef FarField
                     % ToDo:
                     % Doesn't work with AzEl/ElAz grids +-90 y-axis breaks the plot
                     
-                    % Use the MATLAB antennas toolbox plotting function
                     if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
                         % Handle dynamic range here: ToDo
                         if strcmp(outputType,'mag')
@@ -2762,16 +2761,36 @@ classdef FarField
                                     if ~norm
                                         dr = linHandle(dynamicRange_dB);
                                         if strcmp(output,'XP_CO') || strcmp(output,'CO_XP')
-                                            caxis([0,dr]);
+                                            minVal = 0;
+%                                             caxis([0,dr]);
                                         else
-                                            caxis([maxVal/dr,maxVal]);
+                                            minVal = maxVal/dr;
+%                                             caxis([minVal,maxVal]);
                                         end
                                     end
                             end
                         end
-                        iVal = ~isnan(Ziplot);
-                        patternCustom(Ziplot(iVal),Yi(iVal),Xi(iVal));
+%                         % Use the MATLAB antennas toolbox plotting function
+%                         iVal = ~isnan(Ziplot);
+%                         patternCustom(Ziplot(iVal),Yi(iVal),Xi(iVal));
+                        
+                        c_ = Ziplot;
+                        r_ = (Ziplot - minVal)./abs(minVal+maxVal);
+                        rho_ = r_.*sind(Yi);
+                        x_ = rho_.*cosd(Xi);
+                        y_ = rho_.*sind(Xi);
+                        z_ = r_.*cosd(Yi);
+                        scaleFact = 1./max([x_(:);y_(:);z_(:)]).*sqrt(0.5);
+                        surf(x_.*scaleFact,y_.*scaleFact,z_.*scaleFact,c_,'FaceColor','interp','EdgeColor','none'), hold on
+                        axis equal
+                        axis off
+                        colormap jet
+                        colorbar
+                        C = CoordinateSystem;
+                        C.plot
+                        
                         title([obj.coorType, ', ',obj.polType, ' polarisation: ',outputType,'(', compName, ') (',unit,'); Freq = ',num2str(freqPlot),' ', freqUnitPlot])
+                        
                     else
                         error(['gridType must be PhTh for 3D plots: found gridType = ', obj.gridType])
                     end
