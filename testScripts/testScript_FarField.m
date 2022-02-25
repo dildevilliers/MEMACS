@@ -242,6 +242,25 @@ end
 
 clear FF1
 
+% Aperture field - no real test, just plot it
+load([dataPath,'apFieldTest'])
+[Eax,Eay,X,Y] = FF.getApField(8,2,1);
+figure
+surf(X,Y,dB20(Eax),'facecolor','interp','edgecolor','none')
+xlabel('x (m)')
+ylabel('y (m)')
+view([0,90])
+axis([-20,20,-20,20])
+colorbar
+apFieldPass = any(~isnan([Eax(:);Eay(:);X(:);Y(:)]));
+if apFieldPass
+    disp('Pass: getApField')
+else
+    disp('FAIL: getApField')
+end
+
+clear FF
+
 %% Field normalization
 % pradInt - use the known power from GRASP as test
 tol = 1e-3;
@@ -728,7 +747,7 @@ FF = FarField.SimpleTaper(55, -12, -12, 1e9);
 
 %% Final test
 FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,readFITSpass,FarFieldfromStructPass,...
-    bwPass,sllPass,...
+    bwPass,sllPass,apFieldPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
     getRangePass,setRangePass,...

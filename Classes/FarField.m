@@ -833,7 +833,7 @@ classdef FarField
             % Created: 2019-08-17, Dirk de Villiers
             % Updated: 2019-08-18, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2021a
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -909,7 +909,7 @@ classdef FarField
             % Created: 2019-08-18, Dirk de Villiers
             % Updated: 2019-08-18, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2021a
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -1037,6 +1037,119 @@ classdef FarField
             
         end
             
+        function [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal)
+            % GETAPFIELD calculates the aperture field through FFT
+            %
+            % [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal)
+            % calculates the FFT-based aperture field distribution of the
+            % provided FarField. The FarField typically has a peak along
+            % the z-axis, since the aperture plane is assumed to be in the
+            % xy-plane, centred around the origin. Non much error checking
+            % is done here, so you can get strange results for fields not
+            % caused by nominally flat aperture distributions.
+            % Output is provided in matrix form for direct plotting with
+            % mesh/surf.
+            % The internal grids are forced odd to allow symmetric patterns
+            % to remain symmetric
+            % 
+            % Inputs
+            % - obj: FarField object (radiating along z)
+            % - gridPow2: Size of the k-space grid as power of 2 (8)
+            % - padPow2: Size of the additional area to zero pad as power of 2 (2)
+            % - normVal: Value of the maximum aperture E-field. If 0 is
+            %            passed, power normalisation is attempted (1)
+            %
+            % Outputs
+            % - Eax: x-component of aperture E-field [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (V/m)
+            % - Eay: y-component of aperture E-field [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (V/m)
+            % - X: x-values of the aperture grid [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (m)
+            % - Y: y-values of the aperture grid [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (m)
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2022-02-24, Dirk de Villiers
+            % Updated: 2022-02-24, Dirk de Villiers
+            %
+            % Tested : Matlab R2021a
+            %  Level : 2
+            %   File : testScript_FarField.m
+            %
+            % Example
+            %   F = FarField.readGRASPgrd;
+            %   [Eax,Eay,X,Y] = F.getApField(8,2,1);
+            %   figure, surf(X,Y,dB20(Eax),'facecolor','interp','edgecolor','none')
+            %   xlabel('x (m)'), ylabel('y (m)'), view([0,90]),
+            %   axis([-20,20,-20,20]), axis equal, colorbar
+            
+            
+            if nargin < 2 || isempty(gridPow2), gridPow2 = 8; end
+            if nargin < 3 || isempty(padPow2), padPow2 = 2; end
+            if nargin < 4 || isempty(normVal), normVal = 1; end
+            
+            assert(mod(gridPow2,1) == 0, 'Expect integer value for gridPow2')
+            assert(mod(padPow2,1) == 0, 'Expect integer value for padPow2')
+            
+            obj = obj.coor2spherical;
+            obj = obj.mirrorSymmetricPattern;
+            
+            % Scale the fields
+            lambda = obj.c0./obj.freqHz;
+            k = 2.*pi./lambda;
+            Ck = -1i.*k./(4.*pi);
+            K = -2.*Ck.*cos(obj.th./2).^2;
+            
+            Eax_t = 1./K.*(obj.E1.*cos(obj.ph) - obj.E2.*sin(obj.ph));
+            Eay_t = 1./K.*(obj.E1.*sin(obj.ph) + obj.E2.*cos(obj.ph));
+            
+            kx = k.*sin(obj.th).*cos(obj.ph);
+            ky = k.*sin(obj.th).*sin(obj.ph);
+            
+            % Grid for the FFT
+            [kxy,iU] = unique([kx(:),ky(:)],'rows');
+            IEX = scatteredInterpolant(kxy(:,1),kxy(:,2),Eax_t(iU));
+            IEY = scatteredInterpolant(kxy(:,1),kxy(:,2),Eay_t(iU));
+            kmin = max(min(kx),min(ky))./sqrt(2);
+            kmax = min(max(kx),max(ky))./sqrt(2);
+            Nk = 2^gridPow2 + 1;
+            [kxi,kyi] = ndgrid(linspace(kmin,kmax,Nk));
+            Eax_ti = IEX(kxi,kyi);
+            Eay_ti = IEY(kxi,kyi);
+           
+            % Zero pad
+            Npad = (Nk-1).*2^padPow2 + 1;
+            [Eax_,Eay_] = deal(zeros(Npad));
+            i0 = 2^(gridPow2 + padPow2 - 1) - 2^(gridPow2-1) + 2;
+            iN = i0 + Nk - 1;
+            Eax_(i0:iN,i0:iN) = Eax_ti;
+            Eay_(i0:iN,i0:iN) = Eay_ti;
+            
+            % Calculate FFT
+            Eax = fftshift(fft2(fftshift(Eax_)));
+            Eay = fftshift(fft2(fftshift(Eay_)));
+            
+            % Calculate aperture grid
+            dx = pi/kmax;
+            xR = Nk*dx;
+            xStep = xR/(Npad-1);
+            xmin = -xR/2 - 1*xStep*0;
+            xmax = xR/2 - 1*xStep*0;
+            [X,Y] = ndgrid(linspace(xmin,xmax,Npad));
+            
+            % Normalise field
+            [maxEx,iNx] = max(abs(Eax(:)));
+            [maxEy,iNy] = max(abs(Eay(:)));
+            if maxEx > maxEy
+                normFact = Eax(iNx);
+            else
+                normFact = Eay(iNy);
+            end
+            Eax = Eax./normFact.*normVal;
+            Eay = Eax./normFact.*normVal;
+            
+            
+        end
+        
         %% Field normalization
         function P = pradInt(obj,intRule)
             % PRADINT  Calculates the total power in the field
@@ -2055,7 +2168,7 @@ classdef FarField
             end
         end
         
-        %% polarization type transformation methods
+        %% Polarization type transformation methods
         function obj = changePol(obj,polTypeString)
             % CHANGEPOL Change the FarField object polarization type.
             %
