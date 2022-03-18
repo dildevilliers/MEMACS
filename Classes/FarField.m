@@ -1037,10 +1037,10 @@ classdef FarField
             
         end
             
-        function [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal)
+        function [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal,rimInfo,plotApField)
             % GETAPFIELD calculates the aperture field through FFT
             %
-            % [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal)
+            % [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal,rimInfo,plotApField)
             % calculates the FFT-based aperture field distribution of the
             % provided FarField. The FarField typically has a peak along
             % the z-axis, since the aperture plane is assumed to be in the
@@ -1057,7 +1057,11 @@ classdef FarField
             % - gridPow2: Size of the k-space grid as power of 2 (8)
             % - padPow2: Size of the additional area to zero pad as power of 2 (2)
             % - normVal: Value of the maximum aperture E-field. If 0 is
-            %            passed, power normalisation is attempted (1)
+            %            passed, power normalisation is done (0)
+            % - rimInfo: information about the aperture plane rim. A scalar
+            %            indicated the diameter in (m). Otherwise an object 
+            %            of the Rim class is accepted. Empty = no rim. ([])
+            % - plotApField: Flag to also plot the result (0)
             %
             % Outputs
             % - Eax: x-component of aperture E-field [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (V/m)
@@ -1086,9 +1090,22 @@ classdef FarField
             if nargin < 2 || isempty(gridPow2), gridPow2 = 8; end
             if nargin < 3 || isempty(padPow2), padPow2 = 2; end
             if nargin < 4 || isempty(normVal), normVal = 1; end
+            if nargin < 5 || isempty(rimInfo), rimInfo = []; end
+            if nargin < 6 || isempty(plotApField), plotApField = false; end
             
             assert(mod(gridPow2,1) == 0, 'Expect integer value for gridPow2')
             assert(mod(padPow2,1) == 0, 'Expect integer value for padPow2')
+            
+            % Figure out rim type
+            if isnumeric(rimInfo) && isscalar(rimInfo)
+                rimType = 1;
+            elseif isa(rimInfo,'Rim')
+                rimType = 2;
+            elseif isa(rimInfo,'ReflectorSystem')
+                rimType = 3;
+            else
+                error('Expecting a scaler value, a Rim or ReflectorSystem type object for rimInfo');
+            end
             
             obj = obj.coor2spherical;
             obj = obj.mirrorSymmetricPattern;
@@ -1136,6 +1153,41 @@ classdef FarField
             xmax = xR/2 - 1*xStep*0;
             [X,Y] = ndgrid(linspace(xmin,xmax,Npad));
             
+            % Calculate the total power in the aperture plane
+            PaxT = integral2D(X.',Y.',abs(Eax.').^2,'simp');
+            PayT = integral2D(X.',Y.',abs(Eay.').^2,'simp');
+            
+            % Calculate the power the rim and rim details for plotting
+            Nrim = 501;
+            switch rimType
+                case 1
+                    iOut = find(sqrt(X(:).^2 + Y(:).^2) > rimInfo/2);
+                    
+                    phR = linspace(0,2*pi,Nrim);
+                    xR = cos(phR).*rimInfo./2;
+                    yR = sin(phR).*rimInfo./2;
+                case 2
+                    rim = rimInfo;
+                    iOut = find(~rim.isInRim(X(:),Y(:)));
+                case 3
+                    rPR = rimInfo.PR.getPointCloudRim(Nrim);
+                    xR = rPR.x - rimInfo.PR.coor.origin.x;
+                    yR = rPR.y - rimInfo.PR.coor.origin.y;
+                    rim = TabRim([xR;yR]);
+                    iOut = find(~rim.isInRim(X(:),Y(:)));
+                    
+                    rimP = rim.cartRim(Nrim);
+                    xR = rimP.x;
+                    yR = rimP.y;
+            end
+            EaxA = Eax; EayA = Eay; 
+            EaxA(iOut) = 0; EayA(iOut) = 0;
+            EaxA = reshape(EaxA,Npad,Npad); EayA = reshape(EayA,Npad,Npad);
+            PaxA = integral2D(X.',Y.',abs(EaxA.').^2,'simp');
+            PayA = integral2D(X.',Y.',abs(EayA.').^2,'simp');
+            
+            
+            
             % Normalise field
             [maxEx,iNx] = max(abs(Eax(:)));
             [maxEy,iNy] = max(abs(Eay(:)));
@@ -1145,8 +1197,35 @@ classdef FarField
                 normFact = Eay(iNy);
             end
             Eax = Eax./normFact.*normVal;
-            Eay = Eax./normFact.*normVal;
+            Eay = Eay./normFact.*normVal;
             
+            if plotApField
+                figure
+                subplot(2,2,1)
+                Eplot = dB20(Eax);
+                surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
+                xlabel('x (m)')
+                ylabel('y (m)')
+                title('Amplitude (dB)')
+                view([0,90])
+                zR = max(Eplot(:)).*ones(size(xR));
+                plot3(xR,yR,zR,'k')
+                axis equal
+                
+                subplot(2,2,2)
+                Eplot = rad2deg(angle(Eax))./360.*lambda.*1e3;
+                surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
+                xlabel('x (m)')
+                ylabel('y (m)')
+                title('Path length error (mm)')
+                view([0,90])
+                zR = max(Eplot(:)).*ones(size(xR));
+                plot3(xR,yR,zR,'k')
+                axis equal
+                axis([-D,D,-D,D])
+                colorbar
+                caxis([-5,5]-zR(1))
+            end
             
         end
         
