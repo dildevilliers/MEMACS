@@ -1037,7 +1037,7 @@ classdef FarField
             
         end
             
-        function [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal,rimInfo,plotApField)
+        function [Eax,Eay,X,Y,apPower] = getApField(obj,gridPow2,padPow2,normVal,rimInfo,plotApField)
             % GETAPFIELD calculates the aperture field through FFT
             %
             % [Eax,Eay,X,Y] = getApField(obj,gridPow2,padPow2,normVal,rimInfo,plotApField)
@@ -1068,6 +1068,11 @@ classdef FarField
             % - Eay: y-component of aperture E-field [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (V/m)
             % - X: x-values of the aperture grid [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (m)
             % - Y: y-values of the aperture grid [2^(gridPow2+padPow2)+1, 2^(gridPow2+padPow2)+1] (m)
+            % - apPower: Struct containing the aperture powers (W) as
+            %   -- PaxT = total power in x-pol
+            %   -- PayT = total power in y-pol
+            %   -- PaxA = power in rim in x-pol
+            %   -- PayA = power in rim in y-pol
             %
             % Dependencies
             % -
@@ -1097,7 +1102,9 @@ classdef FarField
             assert(mod(padPow2,1) == 0, 'Expect integer value for padPow2')
             
             % Figure out rim type
-            if isnumeric(rimInfo) && isscalar(rimInfo)
+            if isempty(rimInfo)
+                rimType = 0;
+            elseif isnumeric(rimInfo) && isscalar(rimInfo)
                 rimType = 1;
             elseif isa(rimInfo,'Rim')
                 rimType = 2;
@@ -1154,12 +1161,21 @@ classdef FarField
             [X,Y] = ndgrid(linspace(xmin,xmax,Npad));
             
             % Calculate the total power in the aperture plane
+            Pt = obj.pradInt;  % Total power in farfield
             PaxT = integral2D(X.',Y.',abs(Eax.').^2,'simp');
             PayT = integral2D(X.',Y.',abs(Eay.').^2,'simp');
+            PaT = PaxT + PayT; % Total power in aperture plane
+            PnormFact = Pt./PaT;
+            PaxT = PaxT*PnormFact; PayT = PayT*PnormFact;
+            
             
             % Calculate the power the rim and rim details for plotting
             Nrim = 501;
             switch rimType
+                case 0
+                    iOut = [];
+                    [xR,yR] = deal([]);
+                    PaxA = PaxT; PayA = PayT;
                 case 1
                     iOut = find(sqrt(X(:).^2 + Y(:).^2) > rimInfo/2);
                     
@@ -1180,51 +1196,71 @@ classdef FarField
                     xR = rimP.x;
                     yR = rimP.y;
             end
-            EaxA = Eax; EayA = Eay; 
-            EaxA(iOut) = 0; EayA(iOut) = 0;
-            EaxA = reshape(EaxA,Npad,Npad); EayA = reshape(EayA,Npad,Npad);
-            PaxA = integral2D(X.',Y.',abs(EaxA.').^2,'simp');
-            PayA = integral2D(X.',Y.',abs(EayA.').^2,'simp');
-            
+            if rimType ~= 0
+                EaxA = Eax; EayA = Eay;
+                EaxA(iOut) = 0; EayA(iOut) = 0;
+                EaxA = reshape(EaxA,Npad,Npad); EayA = reshape(EayA,Npad,Npad);
+                PaxA = integral2D(X.',Y.',abs(EaxA.').^2,'simp').*PnormFact;
+                PayA = integral2D(X.',Y.',abs(EayA.').^2,'simp').*PnormFact;
+            end
+            apPower = struct('PaxT',PaxT,'PayT',PayT,'PaxA',PaxA,'PayA',PayA);
             
             
             % Normalise field
-            [maxEx,iNx] = max(abs(Eax(:)));
-            [maxEy,iNy] = max(abs(Eay(:)));
-            if maxEx > maxEy
-                normFact = Eax(iNx);
+            
+            if normVal == 0
+                normFact = sqrt(PnormFact);
             else
-                normFact = Eay(iNy);
+                [maxEx,iNx] = max(abs(Eax(:)));
+                [maxEy,iNy] = max(abs(Eay(:)));
+                if maxEx > maxEy
+                    normFact = normVal./Eax(iNx);
+                else
+                    normFact = normVal./Eay(iNy);
+                end
             end
-            Eax = Eax./normFact.*normVal;
-            Eay = Eay./normFact.*normVal;
+            Eax = Eax.*normFact; Eay = Eay.*normFact;
             
             if plotApField
                 figure
-                subplot(2,2,1)
-                Eplot = dB20(Eax);
-                surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
-                xlabel('x (m)')
-                ylabel('y (m)')
-                title('Amplitude (dB)')
-                view([0,90])
-                zR = max(Eplot(:)).*ones(size(xR));
-                plot3(xR,yR,zR,'k')
-                axis equal
-                
-                subplot(2,2,2)
-                Eplot = rad2deg(angle(Eax))./360.*lambda.*1e3;
-                surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
-                xlabel('x (m)')
-                ylabel('y (m)')
-                title('Path length error (mm)')
-                view([0,90])
-                zR = max(Eplot(:)).*ones(size(xR));
-                plot3(xR,yR,zR,'k')
-                axis equal
-                axis([-D,D,-D,D])
-                colorbar
-                caxis([-5,5]-zR(1))
+                for pp = 1:2
+                    if pp == 1
+                        Ep = Eax;
+                        Ename = 'E_x';
+                    else
+                        Ep = Eay;
+                        Ename = 'E_y';
+                    end
+                    
+                    subplot(2,2,2*pp-1)
+                    Eplot = dB20(Ep);
+                    surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
+                    xlabel('x (m)')
+                    ylabel('y (m)')
+                    title(['|',Ename,'| (dB)'])
+                    view([0,90])
+                    zR = max(Eplot(:)).*ones(size(xR));
+                    plot3(xR,yR,zR,'k')
+                    axis equal
+                    axis([min(X(:)),max(X(:)),min(Y(:)),max(Y(:))])
+                    colorbar
+                    
+                    subplot(2,2,2*pp)
+                    Eplot = rad2deg(angle(Ep));
+                    surf(X,Y,Eplot,'facecolor','interp','edgecolor','none'), hold on
+                    xlabel('x (m)')
+                    ylabel('y (m)')
+                    title([Ename,' phase (deg)'])
+                    view([0,90])
+                    zR = max(Eplot(:)).*ones(size(xR));
+                    plot3(xR,yR,zR,'k')
+                    axis equal
+                    axis([min(X(:)),max(X(:)),min(Y(:)),max(Y(:))])
+                    colorbar
+%                     axis([-D,D,-D,D])
+%                     colorbar
+%                     caxis([-5,5]-zR(1))
+                end
             end
             
         end
