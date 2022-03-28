@@ -969,10 +969,10 @@ classdef FarField
             end
         end
         
-        function [apEff] = getApEff(obj,apArea)
+        function [apEff] = getApEff(obj,apArea,pol)
             % GETAPEFF Get the aperture efficiency of the beam
             %
-            % [apEff] = getApEff(obj,apArea) calculates the aperture
+            % [apEff] = getApEff(obj,apArea,pol) calculates the aperture
             % efficiency of a well-defined beam pattern pointing close to the
             % z-direction.  Simply uses the maximum directivity and current 
             % power in the object. Does not do power integration since
@@ -984,6 +984,8 @@ classdef FarField
             % Inputs
             % - obj: FarField object (defined on regular grid)
             % - apArea: Is the aperture area of the antenna in m^2 (1)
+            % - pol: Is the Ludwig 3 polarisation {'x','y','lh','rh'}
+            %        If empty, total gain will be used
             %
             % Outputs
             % - apEff:  per unit aperture efficiency
@@ -992,9 +994,9 @@ classdef FarField
             % -
             %
             % Created: 2020-04-10, Dirk de Villiers
-            % Updated: 2019-04-10, Dirk de Villiers
+            % Updated: 2022-03-27, Dirk de Villiers
             %
-            % Tested : Matlab R2018b
+            % Tested : Matlab R2021a
             %  Level : 1
             %   File : 
             %
@@ -1004,11 +1006,37 @@ classdef FarField
             %   apArea = pi.*(Dm/2)^2;
             %   apEff = F.getApEff(apArea);
 
-            % Find peak directivity
-            D = obj.getDirectivity;
-            [dMax,iPeak] = max(D);
-            apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            if nargin < 3
+                pol = []; 
+            else
+                assert(any(ismember(pol,{'x','y','lh','rh'})),'pol must be a either x, y, lh or rh')
+            end
             
+            if isempty(pol)
+                % Find peak directivity
+                Pval = obj.getDirectivity;
+                scaleFact = 1;
+            else
+                scaleFact = 4.*pi.*obj.r^2./(2.*obj.eta0)./obj.Prad;
+                obj = obj.coor2Ludwig3;
+                switch pol
+                    case 'x'
+                        obj = obj.pol2linear;
+                        Pval = abs(obj.E1).^2;
+                    case 'y'
+                        obj = obj.pol2linear;
+                        Pval = abs(obj.E2).^2;
+                    case 'lh'
+                        obj = obj.pol2circular;
+                        Pval = abs(obj.E1).^2;
+                    case 'rh'
+                        obj = obj.pol2circular;
+                        Pval = abs(obj.E2).^2;
+                end
+            end
+            [dMax,iPeak] = max(scaleFact.*Pval);
+            apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+                
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
 %                 for ff = 1:obj.Nf
@@ -1380,6 +1408,44 @@ classdef FarField
             obj = scale(obj,sqrt(Cn));
         end
         
+        function obj = forcePrad(obj,powerWatt)
+            % FORCEPRAD sets the property Prad to requested power level
+            %
+            % obj = forcePrad(obj,powerWatt) just updates the internal
+            % prperty Prad to the level in powerWatt. It does not change the
+            % E-field values at all. This is typically only used when one
+            % has incomplete patterns that are being externally manipulated
+            % in ways that may change the power in them (add and subtract
+            % for instance). Also check the setPower method, since it may
+            % be more approriate for scaling the power in the field.
+            % 
+            % Inputs
+            % - obj: FarField object
+            % - powerWatt: desired radiated power in Watt scalar or 
+            %              [1 x obj.Nf] (default = 4*pi/(2*377) W)
+            %
+            % Outputs
+            % - obj: FarField object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2022-03-28, Dirk de Villiers
+            % Updated: 2022-03-28, Dirk de Villiers
+            %
+            % Tested : Matlab R2021a
+            %  Level : 1
+            %   File : 
+            %
+            % Example
+            %   F = FarField;
+            %   F = F.forcePrad(1);
+            %   P = F.pradInt
+            
+            assert(numel(powerWatt) == obj.Nf,'powerWatt must have Nf elements')
+            obj.Prad = powerWatt;
+            
+        end
         %% Grid transformation setters
         function obj = setViewOrient(obj,viewCase)
             obj.viewOrientCase = viewCase;
@@ -2020,7 +2086,7 @@ classdef FarField
             if any(strcmp(obj.gridType,obj.sphereGrids))
                 rangeHandle = str2func(['range',yType,xType]);
                 if ~isempty(obj.xBase) || ~isempty(obj.E1Base)
-                    warning('FarField:baseRemoveWarning','setRangeSph will remove the base grid from the object, since the operation is performed on the current grid, and the grid size might change')
+%                     warning('FarField:baseRemoveWarning','setRangeSph will remove the base grid from the object, since the operation is performed on the current grid, and the grid size might change')
                 end
                 obj = obj.clearBase;
                 obj = rangeHandle(obj);
@@ -4027,12 +4093,22 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            obj.Prad = (sqrt(obj1.Prad) + sqrt(obj2.Prad)).^2;
-%             try
-%                 obj.Prad = obj.pradInt;
-%             catch ME
-%                 obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+%             obj.Prad = (sqrt(obj1.Prad) + sqrt(obj2.Prad)).^2;
+
+%             Pratio1 = obj1.pradInt./obj1.Prad;
+%             if isnan(Pratio1), Pratio1 = 1; end
+%             Pratio2 = obj2.pradInt./obj2.Prad;
+%             if isnan(Pratio2), Pratio2 = 1; end
+%             if max(abs(Pratio1./Pratio2 - 1)) < 1e-4
+%                 obj.Prad = obj.pradInt./Pratio1;
+%             else
+%                 warning('Cannot determine power ratios - setting Prad to default')
 %             end
+            try
+                obj.Prad = obj.pradInt;
+            catch ME
+                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+            end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -4054,12 +4130,12 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-            obj.Prad = (sqrt(obj1.Prad) - sqrt(obj2.Prad)).^2;
-%             try
-%                 obj.Prad = obj.pradInt;
-%             catch ME
-%                 obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
-%             end
+%             obj.Prad = (sqrt(obj1.Prad) - sqrt(obj2.Prad)).^2;
+            try
+                obj.Prad = obj.pradInt;
+            catch ME
+                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+            end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -4081,8 +4157,12 @@ classdef FarField
             else
                 obj.E3 = [];
             end
-             obj.Prad = (sqrt(obj1.Prad).*sqrt(obj2.Prad)).^2;
-%             obj.Prad = obj.pradInt;
+%              obj.Prad = (sqrt(obj1.Prad).*sqrt(obj2.Prad)).^2;
+            try
+                obj.Prad = obj.pradInt;
+            catch ME
+                obj.Prad = ones(size(obj.freqHz)).*4*pi/(2.*obj.eta0);
+            end
             obj.radEff = ones(size(obj.freqHz));
             obj = setBase(obj);
         end
@@ -4109,15 +4189,18 @@ classdef FarField
             % SCALE Scale E-field components by a scaleFactor in a FarField.
             
             % Scale the FarField object E-fields by the scaleFactor
-            obj = obj1;
-            obj.E1 = obj1.E1.*scaleFactor;
-            if ~isempty(obj1.E2)
-                obj.E2 = obj1.E2.*scaleFactor;
-            else
-                obj.E2 = obj1.E2;
+            obj = FarField.empty(0,numel(scaleFactor));
+            for ss = 1:numel(scaleFactor)
+                obj(ss) = obj1;
+                obj(ss).E1 = obj1.E1.*scaleFactor(ss);
+                if ~isempty(obj1.E2)
+                    obj(ss).E2 = obj1.E2.*scaleFactor(ss);
+                else
+                    obj(ss).E2 = obj1.E2;
+                end
+                obj(ss).Prad = obj1.Prad.*(abs(scaleFactor(ss)).^2);
+                obj(ss) = setBase(obj(ss));
             end
-            obj.Prad = obj1.Prad.*(abs(scaleFactor).^2);
-            obj = setBase(obj);
         end
         
         function [normE] = norm(obj,Ntype)
@@ -5170,6 +5253,7 @@ classdef FarField
             %               GRASP grid was requested {('SphericalGrid'),'PlanarGrid','SurfaceGrid','CylindricalGrid'}
             % * Arbitrary number of pairs of arguments: ...,keyword,value,... where
             %   acceptable keywords are  
+            %   -- Prad: See FarField constructor help for details
             %   -- symmetryXZ:  {('none')|'electric'|'magnetic'}
             %   -- symmetryYZ:  {('none')|'electric'|'magnetic'}
             %   -- symmetryXY:  {('none')|'electric'|'magnetic'}
@@ -5446,7 +5530,8 @@ classdef FarField
                 
                 % keyboard;
                 eta0 = 3.767303134749689e+02;
-                Prad = ones(size(freq)).*4*pi./(2*eta0);
+%                 Prad = ones(size(freq)).*4*pi./(2*eta0);
+                Prad = [];
                 radEff = ones(size(freq));
                 FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
                     'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
