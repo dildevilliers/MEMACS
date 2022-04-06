@@ -7334,22 +7334,31 @@ classdef FarField
             end
             
             % TODO: Extract the following as an external function
-            coorType = 'spherical';
+%             coorType = 'spherical';
+            coorType = 'Ludwig3';
+            CO = (A0 + A90)./2;
+            XP = (A0 - A90)./2;
+            COr = 1./sqrt(2).*1i.*CO;
+            XPr = 1./sqrt(2).*1i.*XP;
+            COl = -1./sqrt(2).*1i.*CO;
+            XPl = -1./sqrt(2).*1i.*XP;
             switch fieldPol
                 case 'linearX' % linearly polarised along X-axis
                     polType = 'linear';
-                    E1  = A0.*cos(ph);
-                    E2  = -A90.*sin(ph);
+                    E1 = CO - XP.*cos(2.*ph);
+                    E2 = zeros(size(E1));
                 case 'linearY' % linearly polarised along Y-axis
                     polType = 'linear';
-                    E1  = A0.*sin(ph);
-                    E2  = A90.*cos(ph);
+                    E2 = CO - XP.*cos(2.*ph);
+                    E1 = zeros(size(E2));
                 case 'circularLH'  % Lefthand Circular polarization
                     polType = 'circular';
-                    error('circular polarisation TODO')
+                    E1 = COl - XPl.*exp(-1i.*2.*ph);
+                    E2 = zeros(size(E1));
                 case 'circularRH'  % Righthand Circular polarization
                     polType = 'circular';
-                    error('circular polarisation TODO')
+                    E2 = COr - XPr.*exp(1i.*2.*ph);
+                    E1 = zeros(size(E2));
                 case 'power' % Only real power pattern of interest
                     polType = 'none';
                     coorType = 'power';
