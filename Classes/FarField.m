@@ -7260,8 +7260,10 @@ classdef FarField
             parseobj.addOptional('taperAng_deg',55,typeValidation_taper);
             parseobj.addOptional('taper_zx_dB',-12,typeValidation_taper);
             parseobj.addOptional('taper_zy_dB',-12,typeValidation_taper);
+            parseobj.addOptional('delta_PC',0,typeValidation_taper);  % Phase centre seperation between A0 and A90 in (m)
             
-            parseobj.addOptional('freq',1e9);
+            typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'finite','positive','scalar'},'SimpleTaper');
+            parseobj.addOptional('freq',1e9,typeValidation_freq);
             
             typeValidation_Ngrid = @(x) validateattributes(x,{'numeric'},{'integer','finite','positive','scalar'},'SimpleTaper');
             parseobj.addOptional('Nx',73,typeValidation_Ngrid);
@@ -7287,6 +7289,7 @@ classdef FarField
             taperAng_deg = parseobj.Results.taperAng_deg;
             taper_zx_dB = parseobj.Results.taper_zx_dB;
             taper_zy_dB = parseobj.Results.taper_zy_dB;
+            delta_PC = parseobj.Results.delta_PC;
             freq = parseobj.Results.freq;
             Nx = parseobj.Results.Nx;
             Ny = parseobj.Results.Ny;
@@ -7314,8 +7317,11 @@ classdef FarField
             end
 
             % Define the field pattern
-            A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2);
-            A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2);
+            c0 = 299792458;
+            lam = c0./freq;
+            k = 2.*pi./lam;
+            A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2).*exp(1i.*k.*delta_PC.*sin(th./2).^2);
+            A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2).*exp(-1i.*k.*delta_PC.*sin(th./2).^2);
             
             % Also build full pattern for power integration if needed
             if ~isempty(xLims) || ~isempty(yLims) || strcmp(gridType,'Mollweide')
