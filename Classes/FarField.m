@@ -5014,10 +5014,10 @@ classdef FarField
                     E2imag = imag(obj.E2);
                 elseif strcmp(obj.coorType,'Ludwig3')
                     ICOMP = 3;  % linear Ludwig3 polarization...
-                    E1real = real(obj.E2);
-                    E1imag = imag(obj.E2);
-                    E2real = real(obj.E1);
-                    E2imag = imag(obj.E1);
+                    E1real = real(obj.E1);
+                    E1imag = imag(obj.E1);
+                    E2real = real(obj.E2);
+                    E2imag = imag(obj.E2);
                 end
             elseif strcmp(obj.polType,'circular')
                 ICOMP = 2;  % circular polarization...
