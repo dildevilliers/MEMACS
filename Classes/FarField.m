@@ -7318,7 +7318,7 @@ classdef FarField
 
             % Define the field pattern
             c0 = 299792458;
-            lam = c0./freq;
+            lam = c0./(freq.*unitScaleFact(freqUnit));
             k = 2.*pi./lam;
             A0 = 10.^((taper_zx_dB./20).*(th./deg2rad(taperAng_deg)).^2).*exp(1i.*k.*delta_PC.*sin(th./2).^2);
             A90 = 10.^((taper_zy_dB./20).*(th./deg2rad(taperAng_deg)).^2).*exp(-1i.*k.*delta_PC.*sin(th./2).^2);
