@@ -1446,6 +1446,7 @@ classdef FarField
             obj.Prad = powerWatt;
             
         end
+        
         %% Grid transformation setters
         function obj = setViewOrient(obj,viewCase)
             obj.viewOrientCase = viewCase;
