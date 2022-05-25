@@ -1339,6 +1339,7 @@ classdef FarField
                 otherwise
                     error(['pradInt not implemented for gridType = ',obj.gridType])
             end
+            obj = obj.sortGrid;
             PH = reshape(obj.x,ny,nx);
             TH = reshape(obj.y,ny,nx);
             U = obj.getU;
@@ -1405,7 +1406,15 @@ classdef FarField
             P = obj.Prad;
             Cn = powerWatt./(P);
             obj.Prad = P;
-            obj = scale(obj,sqrt(Cn));
+%             obj = scale(obj,sqrt(Cn));
+            
+            for cc = 1:numel(Cn)
+                obj_ = obj.getFi(cc);
+                obj_ = obj_.scale(sqrt(Cn(cc)));
+                obj.E1(:,cc) = obj_.E1;
+                if ~isempty(obj_.E2), obj.E2(:,cc) = obj_.E2; end
+                if ~isempty(obj_.E3), obj.E3(:,cc) = obj_.E3; end
+            end
         end
         
         function obj = forcePrad(obj,powerWatt)
@@ -4084,12 +4093,12 @@ classdef FarField
             
             obj = obj1base;
             obj.E1 = obj1base.E1 + obj2base.E1;
-            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+            if ~isempty(obj1.E2) && ~isempty(obj2.E2)
                 obj.E2 = obj1base.E2 + obj2base.E2;
             else
                 obj.E2 = [];
             end
-            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+            if ~isempty(obj1.E3) && ~isempty(obj2.E3)
                 obj.E3 = obj1base.E3 + obj2base.E3;
             else
                 obj.E3 = [];
@@ -4121,12 +4130,12 @@ classdef FarField
             
             obj = obj1base;
             obj.E1 = obj1base.E1 - obj2base.E1;
-            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+            if ~isempty(obj1.E2) && ~isempty(obj2.E2)
                 obj.E2 = obj1base.E2 - obj2base.E2;
             else
                 obj.E2 = [];
             end
-            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+            if ~isempty(obj1.E3) && ~isempty(obj2.E3)
                 obj.E3 = obj1base.E3 - obj2base.E3;
             else
                 obj.E3 = [];
@@ -4148,12 +4157,12 @@ classdef FarField
             
             obj = obj1base;
             obj.E1 = obj1base.E1 .* obj2base.E1;
-            if ~isempty(obj1.E2) && ~isempty(obj1.E2)
+            if ~isempty(obj1.E2) && ~isempty(obj2.E2)
                 obj.E2 = obj1base.E2 .* obj2base.E2;
             else
                 obj.E2 = [];
             end
-            if ~isempty(obj1.E3) && ~isempty(obj1.E3)
+            if ~isempty(obj1.E3) && ~isempty(obj2.E3)
                 obj.E3 = obj1base.E3 .* obj2base.E3;
             else
                 obj.E3 = [];
@@ -5531,8 +5540,12 @@ classdef FarField
                 
                 % keyboard;
                 eta0 = 3.767303134749689e+02;
-%                 Prad = ones(size(freq)).*4*pi./(2*eta0);
-                Prad = [];
+                if any(strcmp(gridType,FarField.localGrids))
+                    Prad = [];
+                else
+                    % Just assume this is what we have - might be wrong
+                    Prad = ones(size(freq)).*4*pi./(2*eta0);
+                end
                 radEff = ones(size(freq));
                 FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
                     'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
