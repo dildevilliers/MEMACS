@@ -743,6 +743,49 @@ end
 %% Static methods
 FF = FarField.SimpleTaper(55, -12, -12, 1e9);
 
+%% Interpolation
+FF = FarField.readCSTffs([dataPath,'CircWG_origin']);
+FF1 = FF.underSampleGrid(4);
+FF1 = FF1.buildInterpAng('spline');
+FF2 = FF1.evalInterpAng(FF.x,FF.y);
+
+[E11_,E12_] = FF1.getEfield;
+[E21_,E22_] = FF2.getEfield;
+
+figure
+subplot 221
+FF.plot('output','E1','outputType','real','scaleMag','lin'), hold on
+plot3(rad2deg(FF1.x),rad2deg(FF1.y),real(E11_(:,1)),'ko')
+plot3(rad2deg(FF2.x),rad2deg(FF2.y),real(E21_(:,1)),'r.')
+axis normal
+subplot 222
+FF.plot('output','E1','outputType','imag','scaleMag','lin'), hold on
+plot3(rad2deg(FF1.x),rad2deg(FF1.y),imag(E11_(:,1)),'ko')
+plot3(rad2deg(FF2.x),rad2deg(FF2.y),imag(E21_(:,1)),'r.')
+axis normal
+subplot 223
+FF.plot('output','E2','outputType','real','scaleMag','lin'), hold on
+plot3(rad2deg(FF1.x),rad2deg(FF1.y),real(E12_(:,1)),'ko')
+plot3(rad2deg(FF2.x),rad2deg(FF2.y),real(E22_(:,1)),'r.')
+axis normal
+subplot 224
+FF.plot('output','E2','outputType','imag','scaleMag','lin'), hold on
+plot3(rad2deg(FF1.x),rad2deg(FF1.y),imag(E12_(:,1)),'ko')
+plot3(rad2deg(FF2.x),rad2deg(FF2.y),imag(E22_(:,1)),'r.')
+axis normal
+
+FFd = FF - FF2;
+[rmsE1,rmsE2,rmsE3] = FFd.rms;
+tol = 0.1;
+
+if all(rmsE1 < tol) && all(rmsE2 < tol)
+    disp('Pass: interpAng')
+    interpAngPass = true;
+else
+    disp('FAIL: interpAng')
+    interpAngPass = false;
+end
+clear FF FF1 FF2
 
 
 %% Final test
@@ -751,7 +794,7 @@ FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffs
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
     getRangePass,setRangePass,...
-    rotatePhiPass,...
+    rotatePhiPass,interpAngPass,...
     ]);
 if FarFieldPass
     disp('Pass: FarField');

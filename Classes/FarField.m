@@ -87,6 +87,8 @@ classdef FarField
         orientation(1,3) double {mustBeReal, mustBeFinite}      % Antenna orientation - in Euler angles (alpha,beta,gamma) in radians relative to an x->North, y->West, z->Zenith system  ([0,0,0])
         earthLocation(1,3)  double {mustBeReal, mustBeFinite}   % Antenna location on the Earth longitude and latitude in radians, and height above sea level in meters - defaults to the roof of the Stellenbosch University E&E Engineering Dept. :)
 
+        interpStructAng = []    % Structure containing the angular interpolation model
+        
         % Keep the input data here to not lose some info when going through
         % transformations and back...
         xBase
@@ -111,6 +113,7 @@ classdef FarField
         astroGrids = {'Horiz','RAdec','GalLongLat'};
         localGrids = {'PhTh','AzEl','ElAz'};
         version = 0.4;
+        interpAngMethods = {'linear', 'nearest', 'spline', 'pchip', 'cubic', 'makima', 'natural'}
     end
     
     methods
@@ -2632,6 +2635,8 @@ classdef FarField
             obj.gridTypeBase = [];
             obj.phBase = [];
             obj.thBase = [];
+            
+            obj.interpStructAng = [];
         end
         
         function obj = clearBaseFields(obj)
@@ -2642,6 +2647,8 @@ classdef FarField
             obj.E3Base = [];
             obj.coorTypeBase = [];
             obj.polTypeBase = [];
+            
+            obj.interpStructAng = [];
         end
         
         %% Plotting methods
@@ -3811,6 +3818,54 @@ classdef FarField
             obj.E1 = E1_;
             obj.E2 = E2_;
             obj.E3 = E3_;
+        end
+        
+        function obj = buildInterpAng(obj,interpType)
+            % BUILDINTERP build and stores an angular interpolation model
+            
+            if nargin < 2, interpType = 'linear'; end
+            assert(any(strcmp(interpType,FarField.interpAngMethods)),['Unknown interpType: ', interpType,'. Type FarField.interpAngMethods for a list of valid methods'])
+            
+            if obj.isGridUniform
+                if strcmp(interpType,'natural')
+                    warning('natural interpolation scheme only valid for scaattered data. Using spline.')
+                    interpType = 'spline';
+                end
+                xg = reshape(obj.x,obj.Ny,obj.Nx).';
+                yg = reshape(obj.y,obj.Ny,obj.Nx).';
+                obj.interpStructAng.E1i = cell(1,obj.Nf);
+                if ~isempty(obj.E2), obj.interpStructAng.E2i = cell(1,obj.Nf); end
+                if ~isempty(obj.E3), obj.interpStructAng.E3i = cell(1,obj.Nf); end
+                for ff = 1:obj.Nf
+                    obj.interpStructAng.E1i{ff} = griddedInterpolant(xg,yg,reshape(obj.E1(:,ff),obj.Ny,obj.Nx).',interpType);
+                    if ~isempty(obj.E2), obj.interpStructAng.E2i{ff} = griddedInterpolant(xg,yg,reshape(obj.E2(:,ff),obj.Ny,obj.Nx).',interpType); end
+                    if ~isempty(obj.E3), obj.interpStructAng.E3i{ff} = griddedInterpolant(xg,yg,reshape(obj.E3(:,ff),obj.Ny,obj.Nx).',interpType); end
+                end
+            else
+                error('not implemented for scattered grids yet')
+            end
+        end
+        
+        function obj = evalInterpAng(obj,xi,yi)
+            % EVALINTERPANG evaluates the angular interpolant 
+            
+            assert(~isempty(obj.interpStructAng),'No interpolation model found. Build one using buildInterpAng first.')
+            
+            obj.x = xi(:);
+            obj.y = yi(:);
+            
+            E1_ = zeros(numel(obj.x),obj.Nf);
+            if ~isempty(obj.E2), E2_ = E1_; else, E2_ = []; end
+            if ~isempty(obj.E3), E3_ = E1_; else, E3_ = []; end
+            for ff = 1:obj.Nf
+                E1_(:,ff) = obj.interpStructAng.E1i{ff}(obj.x,obj.y);
+                if ~isempty(obj.E2), E2_(:,ff) = obj.interpStructAng.E2i{ff}(obj.x,obj.y); end
+                if ~isempty(obj.E3), E3_(:,ff) = obj.interpStructAng.E3i{ff}(obj.x,obj.y); end
+            end
+            obj.E1 = E1_;
+            obj.E2 = E2_;
+            obj.E3 = E3_;
+            
         end
         
         %% Phase centre/shifts/rotations of the field
