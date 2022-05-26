@@ -5414,7 +5414,7 @@ classdef FarField
                     freq = [];
                     while 1
                         a = fgetl(fid);
-                        if strcmp(a,startMarker), break; end
+                        if strcmp(a,startMarker) || isempty(str2num(a)), break; end
                         freq = [freq,str2num(a)];
                     end
                 end
