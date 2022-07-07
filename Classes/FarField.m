@@ -3653,16 +3653,24 @@ classdef FarField
             valAng = valAng(:);
             
             % Extract the outputs on the base grid
+            % Below trickery for speed and backward compatibility
+            k = 2.*pi.*obj.freqHz./obj.c0;
+            FFfact = exp(-1i.*k.*obj.r)./obj.r;
             if strcmp(output,'E1')
-                [Zfreq,~,~] = getEfield(obj);
+%                 [Zfreq,~,~] = getEfield(obj);
+                Zfreq = obj.E1;
             elseif strcmp(output,'E2')
-                [~,Zfreq,~] = getEfield(obj);
+%                 [~,Zfreq,~] = getEfield(obj);
+                Zfreq = obj.E2;
             elseif strcmp(output,'E3')
-                [~,~,Zfreq] = getEfield(obj);
+%                 [~,~,Zfreq] = getEfield(obj);
+                Zfreq = obj.E3;
             else
+                FFfact = 1;
                 outputHandle = str2func(['get',output]);
                 Zfreq = outputHandle(obj);
             end
+            Zfreq = bsxfun(@times,Zfreq,FFfact);
             
             % Select frequency of interest
             Z = Zfreq(:,freqIndex);
