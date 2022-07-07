@@ -3970,6 +3970,7 @@ classdef FarField
             
             % Project fields onto Cartesian coordinates and spherical grid
             obj = obj.coor2Ludwig1;
+            obj = obj.setRangeSph('sym','180'); % So that this is not done three times below
             obj = obj.clearBase;
             
             if keepGrid
