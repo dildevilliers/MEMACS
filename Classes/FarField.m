@@ -409,11 +409,11 @@ classdef FarField
         end
         
         function Nx = get.Nx(obj)
-            Nx = length(unique(obj.x));
+            Nx = length(uniquetol(obj.x,eps));
         end
         
         function Ny = get.Ny(obj)
-            Ny = length(unique(obj.y));
+            Ny = length(uniquetol(obj.y,eps));
         end
         
         function NxBase = get.NxBase(obj)
@@ -4077,6 +4077,7 @@ classdef FarField
             resampleFlag = mod(phiRot/stepx,1) > 10^(-obj.nSigDig);
             obj = obj.setRangeSph(xRangeTypeIn,'180');
             NxIn = obj.Nx; 
+            isGrid4piIn = obj.isGrid4pi;
             if resampleFlag
                 xIn = obj.x;
                 yIn = obj.y;
@@ -4091,7 +4092,7 @@ classdef FarField
             end
             % Insert missing cuts from full sphere fields with redundant
             % edges
-            if obj.isGrid4pi && obj.Nx < NxIn
+            if isGrid4piIn && obj.Nx < NxIn
                 switch xRangeTypeIn
                     case 'pos'
                         if phiRot >= 0    
