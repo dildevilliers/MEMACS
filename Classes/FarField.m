@@ -4650,7 +4650,35 @@ classdef FarField
             
             if ~obj1.symXZ && ~obj1.symYZ && ~obj1.symXZ
                 obj = obj1;
+            elseif strcmp(obj1.gridType,'PhTh') && strcmp(obj1.coorType,'spherical') && strcmp(obj1.yRangeType,'180') && obj1.isGridUniform
+                % Make a very fast version for this since it is used very
+                % often
+                
+                if obj1.symXZ
+                    ph_ = wrap22pi(obj1.ph);
+                    obj1.x = wrap2pi([ph_;2*pi - ph_]);
+                    obj1.y = [obj1.th;obj1.th];
+                    obj1.E1 = [obj1.E1;obj1.symXZ.*obj1.E1];
+                    obj1.E2 = [obj1.E2;-obj1.symXZ.*obj1.E2];
+                    if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
+                    obj1.Prad = obj1.Prad*2;
+                    obj1.symmetryXZ = 'none';
+                end
+                if obj1.symYZ
+                    ph_ = wrap2pi(obj1.ph);
+                    obj1.x = wrap2pi([ph_;pi - ph_]);
+                    obj1.y = [obj1.th;obj1.th];
+                    obj1.E1 = [obj1.E1;obj1.symYZ.*obj1.E1];
+                    obj1.E2 = [obj1.E2;-obj1.symYZ.*obj1.E2];
+                    if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
+                    obj1.Prad = obj1.Prad*2;
+                    obj1.symmetryYZ = 'none';
+                end
+                obj1 = obj1.sortGrid;
+                obj = obj1;
+                
             else
+                symFact = 2^(sum(abs([obj1.symXY,obj1.symXZ,obj1.symYZ])));
                 gridTypeIn = obj1.gridType;
                 coorTypeIn = obj1.coorType;
                 [stepX,stepY] = obj1.gridStep;
@@ -4690,7 +4718,7 @@ classdef FarField
                     if ~isempty(E2In), E2In = [E2In;obj1.symYZ.*E2In]; end % Mirror according to symmetry
                 end
                 % Object for grid/coor transformation
-                objD = FarField(XIn,YIn,E1In,E2In,obj1.freq,obj1.Prad.*2,obj1.radEff,...
+                objD = FarField(XIn,YIn,E1In,E2In,obj1.freq,obj1.Prad.*symFact,obj1.radEff,...
                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,...
                 'E3',obj1.E3,'r',obj1.r,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
             
