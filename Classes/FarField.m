@@ -3431,6 +3431,8 @@ classdef FarField
             % Expand symmetry (TODO: the rest of them...)
             if strncmp(FF.symmetryBOR,'BOR',3)
                 FF = FF.expandBORpattern(45);
+            else
+                FF = FF.mirrorSymmetricPattern;
             end
             
             figure
@@ -4649,18 +4651,20 @@ classdef FarField
             % definitions
             
             if ~obj1.symXZ && ~obj1.symYZ && ~obj1.symXZ
-                obj = obj1;
+                obj = obj1; return;
             elseif strcmp(obj1.gridType,'PhTh') && strcmp(obj1.coorType,'spherical') && strcmp(obj1.yRangeType,'180') && obj1.isGridUniform
                 % Make a very fast version for this since it is used very
                 % often
-                
+                tol = mean(diff(unique(obj1.x)));
                 if obj1.symXZ
+                    insert_minpi = max(obj1.x) - pi < tol/10; % tes if the -pi cut will be needed later
                     ph_ = wrap22pi(obj1.ph);
                     obj1.x = wrap2pi([ph_;2*pi - ph_]);
                     obj1.y = [obj1.th;obj1.th];
                     obj1.E1 = [obj1.E1;obj1.symXZ.*obj1.E1];
                     obj1.E2 = [obj1.E2;-obj1.symXZ.*obj1.E2];
                     if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
+                    if insert_minpi, obj1 = obj1.copyAndInsertXcut(pi,-pi,tol); end
                     obj1.Prad = obj1.Prad*2;
                     obj1.symmetryXZ = 'none';
                 end
@@ -8369,7 +8373,12 @@ classdef FarField
                     xRangeType = 'pos';
                 end
                 if max(obj.y) - min(obj.y) <= pi+median(diff(unique(obj.y)))/2
-                    yRangeType = '180';
+                    % Not larger than 180 span
+                    if min(obj.y) < 0 && max(obj.y) > 0 % Also check if we are straddling 0 and incomplete
+                        yRangeType = '360';
+                    else
+                        yRangeType = '180';
+                    end
                 else
                     yRangeType = '360';
                 end
