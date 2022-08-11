@@ -3435,7 +3435,7 @@ classdef FarField
                 FF = FF.mirrorSymmetricPattern;
             end
             
-            figure
+            
             switch FF.gridType
                 case{'PhTh','AzEl','ElAz'}
                     % Shift the pattern onto a symmetrical grid
@@ -4665,7 +4665,7 @@ classdef FarField
                     obj1.E2 = [obj1.E2;-obj1.symXZ.*obj1.E2];
                     if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
                     if insert_minpi, obj1 = obj1.copyAndInsertXcut(pi,-pi,tol); end
-                    obj1.Prad = obj1.Prad*2;
+                    obj1.Prad = obj1.Prad*1;
                     obj1.symmetryXZ = 'none';
                 end
                 if obj1.symYZ
@@ -4675,7 +4675,7 @@ classdef FarField
                     obj1.E1 = [obj1.E1;obj1.symYZ.*obj1.E1];
                     obj1.E2 = [obj1.E2;-obj1.symYZ.*obj1.E2];
                     if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
-                    obj1.Prad = obj1.Prad*2;
+                    obj1.Prad = obj1.Prad*1;
                     obj1.symmetryYZ = 'none';
                 end
                 obj1 = obj1.sortGrid;
