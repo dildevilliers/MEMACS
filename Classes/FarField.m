@@ -1750,7 +1750,7 @@ classdef FarField
             % Make a whole new object to initialise the base
             % correctly - that is, no base after this change since it
             % changed the grid size
-            inInd = find(abs(obj1.x - xvalCopy) < tol);
+            inInd = find(abs(obj1.x - xvalCopy) < tol./10);
             xNew = [obj1.x;xvalPaste.*ones(size(inInd))];
             yNew = [obj1.y;obj1.y(inInd)];
             E1New = [obj1.E1;obj1.E1(inInd,:)];
@@ -2652,7 +2652,7 @@ classdef FarField
         end
         
         %% Plotting methods
-        function plot(obj,varargin)
+        function plotData = plot(obj,varargin)
             %PLOT   Plots a FarField object.
             % plot(obj,varargin) plots a 1-D, 2-D, or 3-D representation
             % of a FarField object.
@@ -2690,15 +2690,16 @@ classdef FarField
             %                  | 'bot'}
             %
             % Outputs
-            % - 
+            % - plotData: Struct containing some useful information
+            %   -- normVal: Value fo the normalisation used in the plot
             %
             % Dependencies
             % - MATLAB Antennas Toolbox for 3D plot
             %
             % Created: 2019-05-06, Dirk de Villiers
-            % Updated: 2019-05-06, Dirk de Villiers
+            % Updated: 2022-08-11, Dirk de Villiers
             %
-            % Tested : Matlab R2018b, Dirk de Villiers
+            % Tested : Matlab R2021a, Dirk de Villiers
             %  Level : 0
             %   File : \testScripts\testScript_FarField.m
             %
@@ -3001,16 +3002,16 @@ classdef FarField
                     otherwise
                         error(['output: ' output,' not implemented in plot function'])
                 end
-                if norm
-                    if isempty(normVal)
-                        Znorm = max(Zplot);
-                        Zinorm = max(Ziplot);
-                    else
-                        if strcmp(scaleMag,'dB')
-                            normVal = 10.^(normVal./dBscale);
-                        end
-                        [Znorm,Zinorm] = deal(normVal);
+                if isempty(normVal)
+                    Znorm = max(Zplot);
+                    Zinorm = max(Ziplot);
+                else
+                    if strcmp(scaleMag,'dB')
+                        normVal = 10.^(normVal./dBscale);
                     end
+                    [Znorm,Zinorm] = deal(normVal);
+                end
+                if norm
                     Zplot = Zplot./Znorm;
                     Ziplot = Ziplot./Zinorm;
                 end
@@ -3020,6 +3021,11 @@ classdef FarField
                     Ziplot = dBHandle(Ziplot);
                     unit = [unit, 'dB'];
                 end
+            end
+            
+            if nargout > 0
+                plotData.normVal = Znorm;
+                plotData.normVali = Zinorm;
             end
             
             % Make the plots
@@ -3243,8 +3249,7 @@ classdef FarField
             % step is the plot step size.  Can be empty - then the available data will
             % be used and no surface will be plotted.  If not, a griddata interpolant will be made.
             %
-            % Returns a vector of axis handles
-            
+            % norm is a logical to normalise output  (true)
             
             % Parse input
             parseobj = inputParser;
@@ -3263,52 +3268,88 @@ classdef FarField
             typeValidationstep = @(x) validateattributes(x,{'numeric'},{'real'},'plot','step');
             addParameter(parseobj,'step',0,typeValidationstep);     % In degrees
             
+            typeValidationnorm = @(x) validateattributes(x,{'logical','numeric'},{'binary','nonempty','numel',1},'plotJones','norm');
+            addParameter(parseobj,'norm',true,typeValidationnorm );
+            
             parse(parseobj, FF1, FF2, varargin{:});
             
             freqIndex = parseobj.Results.freqIndex;
             dynamicRange_dB = parseobj.Results.dynamicRange_dB;
             step = parseobj.Results.step;
+            norm = parseobj.Results.norm;
             
             % Plot the result
-            [w,h] = deal(0.4);
-            botTop = 0.56;
-            botBot = 0.08;
-            leftLeft = 0.1;
-            leftRight = 0.52;
-            figPos = [300,110,[4,3].*220];
+            if norm
+                [w,h] = deal(0.45);
+                botTop = 0.50;
+                botBot = 0.05;
+                leftLeft = 0.1;
+                leftRight = 0.5;
+                figPos = [350,150,[15,13.6].*60];
+            else
+                [w,h] = deal(0.4);
+                botTop = 0.56;
+                botBot = 0.08;
+                leftLeft = 0.1;
+                leftRight = 0.52;
+                figPos = [300,110,[4,3].*220];
+            end
 %             ax(1:4) = axis;
             if ~isGridEqual(FF1,FF2)
                 error('Base grids should be identical for the two input fields');
             else
+                if norm
+                    [E11,~] = FF1.getEfield;
+                    [~,E22] = FF2.getEfield;
+                    normVal = mean(max(dB20([E11,E22])));
+                else
+                    normVal = [];
+                end
 %                 figure
                 ax(1) = subplot('position',[leftLeft botTop w h]);
 %                 ax(1) = subplot(2,2,1,'align');
-                plot(FF1,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
+                plot(FF1,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',norm,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'normVal',normVal);
                 title('J_{11}')
                 xlabel('')
                 ax(1).XLabel.Visible = 'off';
-%                 ax(1).XTickLabel = [];
+                ax(1).XTickLabel = [];
+                if norm
+                    colorbar('off'); 
+                    caxis([-dynamicRange_dB,0])
+                end
 
                 ax(2) = subplot('position',[leftRight botTop w h]);
 %                 ax(2) = subplot(2,2,2,'align');
-                plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
+                plot(FF1,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',norm,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'normVal',normVal);
                 title('J_{12}')
                 ax(2).XLabel.Visible = 'off';
-%                 ax(2).XTickLabel = [];
+                ax(2).XTickLabel = [];
                 ax(2).YLabel.Visible = 'off';
-%                 ax(2).YTickLabel = [];
-
+                ax(2).YTickLabel = [];
+                if norm
+                    colorbar('off');
+                    caxis([-dynamicRange_dB,0])
+                end
+                
                 ax(3) = subplot('position',[leftLeft botBot w h]);
 %                 ax(3) = subplot(2,2,3,'align');
-                plot(FF2,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
+                plot(FF2,'output','E1','outputType','mag','plotType','2D','scaleMag','dB','norm',norm,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'normVal',normVal);
                 title('J_{21}')
+                if norm
+                    colorbar('off'); 
+                    caxis([-dynamicRange_dB,0])
+                end
                 
                 ax(4) = subplot('position',[leftRight botBot w h]);
 %                 ax(4) = subplot(2,2,4,'align');
-                plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',0,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex);
+                plot(FF2,'output','E2','outputType','mag','plotType','2D','scaleMag','dB','norm',norm,'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'normVal',normVal);
                 title('J_{22}')
                 ax(4).YLabel.Visible = 'off';
-%                 ax(4).YTickLabel = [];
+                ax(4).YTickLabel = [];
+                if norm
+                    colorbar('off');
+                    caxis([-dynamicRange_dB,0])
+                end
                 
                 for aa = 1:4
                     ax(aa).ActivePositionProperty = 'position';
@@ -3317,7 +3358,13 @@ classdef FarField
                     ax(aa).Box = 'on';
                     set(ax(aa),'fontsize',11);
                 end
-                set(gcf,'Position',figPos)
+                fig = gcf;
+                set(fig,'Position',figPos)
+                if norm
+                    h = axes(fig,'visible','off');
+                    c = colorbar(h,'Position',[0.9 0.1 0.03 0.8]);
+                    caxis(h,[-dynamicRange_dB,0])
+                end
             end
         end
         
@@ -3402,30 +3449,37 @@ classdef FarField
                     plotSec = false;
                     Emain = output;
                     ylabText = ['|',output,'| (dB)'];
+                    dBhandle = @dB10;
                 case 'E1'
                     Emain = 'E1';
                     Esec = 'E2';
                     ylabText = ['|',FF.E1name,'| (-); |',FF.E2name,'| (--) (dB)' ];
+                    dBhandle = @dB20;
                 case 'E2'
                     Emain = 'E2';
                     Esec = 'E1';
                     ylabText = ['|',FF.E2name,'| (-); |',FF.E1name,'| (--) (dB)' ];
+                    dBhandle = @dB20;
                 case 'AxialRatio'
                     Emain = 'AxialRatio';
                     plotSec = false;
                     ylabText = ['|AR| (dB)' ];
+                    dBhandle = @dB10;
                 case 'AxialRatioInv'
                     Emain = 'AxialRatioInv';
                     plotSec = false;
                     ylabText = ['|AR| (dB)' ];
+                    dBhandle = @dB10;
                 case 'CO_XP'
                     Emain = 'CO_XP';
                     plotSec = false;
                     ylabText = ['|CO/XP| (dB)' ];
+                    dBhandle = @dB10;
                 case 'XP_CO'
                     Emain = 'XP_CO';
                     plotSec = false;
                     ylabText = ['|XP/CO| (dB)' ];
+                    dBhandle = @dB10;
             end
             
             % Expand symmetry (TODO: the rest of them...)
@@ -3441,8 +3495,8 @@ classdef FarField
                     % Shift the pattern onto a symmetrical grid
                     if ~FF.isGridUniform
                         FF = currentForm2Base(FF,step);
-                    else
-                        FF = FF.reset2Base;
+%                     else
+%                         FF = FF.reset2Base;
                     end
                     FF = FF.setRangeSph('sym','360');
                     xVal1 = 0;
@@ -3450,28 +3504,29 @@ classdef FarField
                     xVal3 = 45;
                     
                     % Main component
-                    plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                    plotData1 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal1),...
-                        'LineStyle','-','Color','k')
+                        'LineStyle','-','Color','k');
+                    normVal = dBhandle(plotData1.normVali);
                     plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal2),...
-                        'LineStyle','-','Color','r')
+                        'LineStyle','-','Color','r','normVal',normVal);
                     plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal3),...
-                        'LineStyle','-','Color','b')
+                        'LineStyle','-','Color','b','normVal',normVal);
                     
                     if plotSec
                         % 2nd Component
                         plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal1),...
-                            'LineStyle','--','Color','k')
+                            'LineStyle','--','Color','k','normVal',normVal);
                         hold on
                         plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal2),...
-                            'LineStyle','--','Color','r')
+                            'LineStyle','--','Color','r','normVal',normVal);
                         plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal3),...
-                            'LineStyle','--','Color','b')
+                            'LineStyle','--','Color','b','normVal',normVal);
                     end
                     % Add the legend
                     xUnit = '^\circ';
@@ -3509,6 +3564,11 @@ classdef FarField
             titTextFull = h.Title.String;
             titTextCell = strsplit(titTextFull,'Hz');
             title([titTextCell{1},'Hz'])
+            yLims = [-dynamicRange_dB,0];
+            if ~norm
+                yLims = yLims + normVal;
+            end
+            ylim(yLims)
             
         end
 
@@ -3599,61 +3659,74 @@ classdef FarField
             
             gridTypeIn = obj.gridType;
             
-            % Evaluate the field on the base grid - this is where the output function
-            % should be best suited for interpolation.  Can't do this for
-            % astroGrids, or cases where we have transformed from local to
-            % astro or vice versa, or when the base is not defined yet
-            if ~obj.baseTypeDifferent && ~isempty(obj.xBase) 
-                obj = obj.grid2Base; 
-            end
             
-            % Shift to x = sym and y = 180 range (if applicable) - this is where the DirCos spits
-            % everything out after transforming, and it is standard for
-            % extending the range for smooth interpolants
-            if any(strcmp(obj.gridType,obj.localGrids))
-                % Suppress the warning - we know the base is deleted and
-                % don't care, since we are working with the current grid
-                % and not returning the object
-                warning('off','FarField:baseRemoveWarning');
-                obj = obj.setRangeSph('sym','180');
-                warning('on','FarField:baseRemoveWarning');
-            end
-            % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
-            % angular grids
-            grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
-            [ui,vi,wi] = grid2DirCoshandle(xi,yi);
-            valAngi = true(size(ui));
-            if any(strcmp(gridTypeIn,{'DirCos','ArcSin'}))
-                % Find the invalid points included by the external meshgrid
-                valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
-                % Check for bottom hemisphere plot - fix the w to be the negative root
-                if strcmp(hemisphere,'bot')
-                    wi = -wi;
-                end
-            elseif strcmp(gridTypeIn,'TrueView')
-                % Sort out the TrueView special case invalid points
-                valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
-            end
-            DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
-            [xi_bGT,yi_bGT] = DirCos2baseHandle(ui,vi,wi);
-            
-            % Get the valid angle positions - already in baseGrid here, but shifted to
-            % +- 180 degrees
-            % Get the indexes only, no later reshaping done, different from the grids
-            % required for plotting in FarField.plot
-            if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')
-                grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
-                [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
-                if strcmp(hemisphere,'top')
-                    valAng = find(w >= 0);
-                elseif strcmp(hemisphere,'bot')
-                    valAng = find(w <= 0);
-                end
+            % Make a very quick version for cases where we plot cuts, that
+            % are actually in the data...
+            [OneDx,OneDy] = deal(false);
+            inAngsX = abs(obj.x - xi(1)) < eps;
+            inAngsY = abs(obj.y - yi(1)) < eps;
+            if all(diff(xi) == 0) && sum(inAngsX) == obj.Ny
+                valAng = find(inAngsX);
+                OneDx = true;
+            elseif all(diff(yi) == 0) && sum(inAngsY) == obj.Nx
+                valAng = find(inAngsY);
+                OneDy = true;
             else
-                valAng = 1:obj.Nang;
+                % Evaluate the field on the base grid - this is where the output function
+                % should be best suited for interpolation.  Can't do this for
+                % astroGrids, or cases where we have transformed from local to
+                % astro or vice versa, or when the base is not defined yet
+                if ~obj.baseTypeDifferent && ~isempty(obj.xBase)
+                    obj = obj.grid2Base;
+                end
+                
+                % Shift to x = sym and y = 180 range (if applicable) - this is where the DirCos spits
+                % everything out after transforming, and it is standard for
+                % extending the range for smooth interpolants
+                if any(strcmp(obj.gridType,obj.localGrids))
+                    % Suppress the warning - we know the base is deleted and
+                    % don't care, since we are working with the current grid
+                    % and not returning the object
+                    warning('off','FarField:baseRemoveWarning');
+                    obj = obj.setRangeSph('sym','180');
+                    warning('on','FarField:baseRemoveWarning');
+                end
+                % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
+                % angular grids
+                grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
+                [ui,vi,wi] = grid2DirCoshandle(xi,yi);
+                valAngi = true(size(ui));
+                if any(strcmp(gridTypeIn,{'DirCos','ArcSin'}))
+                    % Find the invalid points included by the external meshgrid
+                    valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
+                    % Check for bottom hemisphere plot - fix the w to be the negative root
+                    if strcmp(hemisphere,'bot')
+                        wi = -wi;
+                    end
+                elseif strcmp(gridTypeIn,'TrueView')
+                    % Sort out the TrueView special case invalid points
+                    valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
+                end
+                DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
+                [xi_bGT,yi_bGT] = DirCos2baseHandle(ui,vi,wi);
+                
+                % Get the valid angle positions - already in baseGrid here, but shifted to
+                % +- 180 degrees
+                % Get the indexes only, no later reshaping done, different from the grids
+                % required for plotting in FarField.plot
+                if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')
+                    grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
+                    [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
+                    if strcmp(hemisphere,'top')
+                        valAng = find(w >= 0);
+                    elseif strcmp(hemisphere,'bot')
+                        valAng = find(w <= 0);
+                    end
+                else
+                    valAng = 1:obj.Nang;
+                end
+                valAng = valAng(:);
             end
-            valAng = valAng(:);
-            
             % Extract the outputs on the base grid
             % Below trickery for speed and backward compatibility
             k = 2.*pi.*obj.freqHz./obj.c0;
@@ -3681,114 +3754,123 @@ classdef FarField
             yVal = obj.y(valAng);
             zVal = Z(valAng);
             
-            edgeAngExtent_deg = 16;
-            % Extend grid past -180 and +180 for interpolation across the axis
-            if any(strcmp(obj.gridType,obj.sphereGrids))
-%             if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
-                tol = deg2rad(2); % Check for points close to the edges in azimuth
-                if abs(min(xVal) + pi) < tol && abs(max(xVal) - pi) < tol
-                    edgeAngDeg = 180 - edgeAngExtent_deg;
-                    iNeg = find(xVal > deg2rad(edgeAngDeg) & xVal < (deg2rad(180)-tol));
-                    iPos = find(xVal < deg2rad(-edgeAngDeg) & xVal > (deg2rad(-180)+tol));
-                    xVal = [xVal(iNeg)-2*pi;xVal;xVal(iPos)+2*pi];
-                    yVal = [yVal(iNeg);yVal;yVal(iPos)];
-                    zVal = [zVal(iNeg);zVal;zVal(iPos)];
+            if ~(OneDx || OneDy)
+                edgeAngExtent_deg = 16;
+                % Extend grid past -180 and +180 for interpolation across the axis
+                if any(strcmp(obj.gridType,obj.sphereGrids))
+                    %             if strcmp(obj.gridType,'PhTh') || strcmp(obj.gridType,'AzEl') || strcmp(obj.gridType,'ElAz')
+                    tol = deg2rad(2); % Check for points close to the edges in azimuth
+                    if abs(min(xVal) + pi) < tol && abs(max(xVal) - pi) < tol
+                        edgeAngDeg = 180 - edgeAngExtent_deg;
+                        iNeg = find(xVal > deg2rad(edgeAngDeg) & xVal < (deg2rad(180)-tol));
+                        iPos = find(xVal < deg2rad(-edgeAngDeg) & xVal > (deg2rad(-180)+tol));
+                        xVal = [xVal(iNeg)-2*pi;xVal;xVal(iPos)+2*pi];
+                        yVal = [yVal(iNeg);yVal;yVal(iPos)];
+                        zVal = [zVal(iNeg);zVal;zVal(iPos)];
+                    end
+                    %                     % Also extend the y-axis
+                    %                     if abs(min(yVal) - 0) < tol
+                    %                         edgeAngDeg = edgeAngExtent_deg;
+                    %                         iNeg = find(xVal < 0 & yVal < deg2rad(edgeAngDeg));
+                    %                         iPos = find(xVal > 0 & yVal < deg2rad(edgeAngDeg));
+                    %                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
+                    %                         yVal = [yVal;-yVal(iNeg);-yVal(iPos)];
+                    %                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
+                    %                     end
+                    %                     if abs(max(yVal) - pi) < tol
+                    %                         edgeAngDeg = 180 - edgeAngExtent_deg;
+                    %                         iNeg = find(xVal < 0 & yVal > deg2rad(edgeAngDeg));
+                    %                         iPos = find(xVal > 0 & yVal > deg2rad(edgeAngDeg));
+                    %                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
+                    %                         yVal = [yVal;2*pi-yVal(iNeg);2*pi-yVal(iPos)];
+                    %                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
+                    %                     end
+                    
                 end
-%                     % Also extend the y-axis
-%                     if abs(min(yVal) - 0) < tol
-%                         edgeAngDeg = edgeAngExtent_deg;
-%                         iNeg = find(xVal < 0 & yVal < deg2rad(edgeAngDeg));
-%                         iPos = find(xVal > 0 & yVal < deg2rad(edgeAngDeg));
-%                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
-%                         yVal = [yVal;-yVal(iNeg);-yVal(iPos)];
-%                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
-%                     end
-%                     if abs(max(yVal) - pi) < tol
-%                         edgeAngDeg = 180 - edgeAngExtent_deg;
-%                         iNeg = find(xVal < 0 & yVal > deg2rad(edgeAngDeg));
-%                         iPos = find(xVal > 0 & yVal > deg2rad(edgeAngDeg));
-%                         xVal = [xVal;xVal(iNeg)+pi;xVal(iPos)-pi];
-%                         yVal = [yVal;2*pi-yVal(iNeg);2*pi-yVal(iPos)];
-%                         zVal = [zVal;zVal(iNeg);zVal(iPos)];
-%                     end
                 
-            end
-            
-            % Remove duplicate differing values completely from the set - interpolate
-            % over them.  This happens at poles for certain coordinate projections
-            % (like at th = 180 in Ludwig3 for instance, of th=0 and 180 for spherical)
-            % First find duplicate domain values
-            [~,iUnique] = unique([xVal,yVal],'rows');
-            removePoints = [];
-            if length(iUnique) < length(xVal) && 0
-                iRepeated = setdiff((1:length(xVal)).',iUnique);
-                repeatedSet = [xVal(iRepeated),yVal(iRepeated),zVal(iRepeated)];
-                % Find the repeated values
-                repVals = unique(repeatedSet(:,1:2),'rows');
-                % Test if different z-values occur
-                for ii = 1:length(repVals(:,1))
-                    currentValRowIndex = find(ismember(repeatedSet(:,1:2),repVals(ii,:),'rows'));
-                    currentZ = repeatedSet(currentValRowIndex,3);
-                    if ~all(currentZ == currentZ(1))
-                        removePoints = [removePoints;repeatedSet(currentValRowIndex,1:2)];
+                % Remove duplicate differing values completely from the set - interpolate
+                % over them.  This happens at poles for certain coordinate projections
+                % (like at th = 180 in Ludwig3 for instance, of th=0 and 180 for spherical)
+                % First find duplicate domain values
+                [~,iUnique] = unique([xVal,yVal],'rows');
+                removePoints = [];
+                if length(iUnique) < length(xVal) && 0
+                    iRepeated = setdiff((1:length(xVal)).',iUnique);
+                    repeatedSet = [xVal(iRepeated),yVal(iRepeated),zVal(iRepeated)];
+                    % Find the repeated values
+                    repVals = unique(repeatedSet(:,1:2),'rows');
+                    % Test if different z-values occur
+                    for ii = 1:length(repVals(:,1))
+                        currentValRowIndex = find(ismember(repeatedSet(:,1:2),repVals(ii,:),'rows'));
+                        currentZ = repeatedSet(currentValRowIndex,3);
+                        if ~all(currentZ == currentZ(1))
+                            removePoints = [removePoints;repeatedSet(currentValRowIndex,1:2)];
+                        end
                     end
                 end
-            end
-            if numel(removePoints) > 0
-                iRemove = find(ismember([xVal,yVal],removePoints,'rows'));
-                xVal(iRemove) = [];
-                yVal(iRemove) = [];
-                zVal(iRemove) = [];
+                if numel(removePoints) > 0
+                    iRemove = find(ismember([xVal,yVal],removePoints,'rows'));
+                    xVal(iRemove) = [];
+                    yVal(iRemove) = [];
+                    zVal(iRemove) = [];
+                end
+                
             end
             
             % Build the interpolant on the base grid at the valid angles
-            if obj.isGridUniform
-                try
-                    NyVal = length(unique(yVal));
-                    NxVal = length(unique(xVal));
-                    XVal = reshape(xVal,NyVal,NxVal);
-                    YVal = reshape(yVal,NyVal,NxVal);
-                    ZVal = reshape(zVal,NyVal,NxVal);
-%                     Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
-                    Zf = griddedInterpolant(XVal',YVal',ZVal.','spline');
-                catch ME
-                    % Grid did not work... Go to scatter
+            if OneDx && ~OneDy
+                Zi = interp1(yVal,zVal,yi,'spline');
+            elseif OneDy && ~OneDx
+                Zi = interp1(xVal,zVal,xi,'spline');
+            else
+                if obj.isGridUniform
+                    try
+                        NyVal = length(unique(yVal));
+                        NxVal = length(unique(xVal));
+                        XVal = reshape(xVal,NyVal,NxVal);
+                        YVal = reshape(yVal,NyVal,NxVal);
+                        ZVal = reshape(zVal,NyVal,NxVal);
+                        %                     Zf = griddedInterpolant(XVal',YVal',ZVal.','linear');
+                        Zf = griddedInterpolant(XVal',YVal',ZVal.','spline');
+                    catch ME
+                        % Grid did not work... Go to scatter
+                    end
                 end
-            end
-            if ~exist('Zf','var')
-                warning('off','MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId')
-                Zf = scatteredInterpolant(xVal,yVal,zVal,'linear');
-                warning('on','MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId')
-            end
-            % Get the values on the scattered set of inputs
-            Zi = Zf(xi_bGT,yi_bGT);
-            Zi(~valAngi) = NaN;
-            
-            % Fix the poles on a case-by-case basis - mostly a futile
-            % excercise so far...
-            % Reinterpolate the points in the pole on the new grid with the
-            % interpolated function which is already spread out around the
-            % pole
-            tol = deg2rad(2);
-            if strcmp(obj.coorTypeBase,'Ludwig2AE') && strcmp(obj.coorType,'spherical')
-                % Pole at th = 0:
-                % Check if there are multiple points there
-                if length(find(yi == 0)) > 1
-                    iPole = find(abs(yi - 0) < tol);
-                    iClose = find(abs(yi) < deg2rad(edgeAngExtent_deg)); 
-                    iBase = setxor(iPole,iClose); % Remove the pole region from close in points for interpolation
-                    iPole0 = find(yi == 0 & xi == 0);
-%                     % Mirror across pole, and include the actual pole
-%                     xiBase = [xi(iBase);wrap2pi(xi(iBase) + pi);xi(iPole0)]; 
-%                     yiBase = [yi(iBase);-yi(iBase);yi(iPole0)];
-%                     ZiBase = [Zi(iBase);Zi(iBase);Zi(iPole0)];
-                    xiBase = [xi(iBase);xi(iPole0)];
-                    yiBase = [yi(iBase);yi(iPole0)];
-                    ZiBase = [Zi(iBase);Zi(iPole0)];
-                    Zf2 = scatteredInterpolant(xiBase,yiBase,ZiBase,'linear');
-                    Zi(iPole) = Zf2(xi(iPole),yi(iPole));
+                if ~exist('Zf','var')
+                    warning('off','MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId')
+                    Zf = scatteredInterpolant(xVal,yVal,zVal,'linear');
+                    warning('on','MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId')
                 end
+                % Get the values on the scattered set of inputs
+                Zi = Zf(xi_bGT,yi_bGT);
+                Zi(~valAngi) = NaN;
                 
+                % Fix the poles on a case-by-case basis - mostly a futile
+                % excercise so far...
+                % Reinterpolate the points in the pole on the new grid with the
+                % interpolated function which is already spread out around the
+                % pole
+                tol = deg2rad(2);
+                if strcmp(obj.coorTypeBase,'Ludwig2AE') && strcmp(obj.coorType,'spherical')
+                    % Pole at th = 0:
+                    % Check if there are multiple points there
+                    if length(find(yi == 0)) > 1
+                        iPole = find(abs(yi - 0) < tol);
+                        iClose = find(abs(yi) < deg2rad(edgeAngExtent_deg));
+                        iBase = setxor(iPole,iClose); % Remove the pole region from close in points for interpolation
+                        iPole0 = find(yi == 0 & xi == 0);
+                        %                     % Mirror across pole, and include the actual pole
+                        %                     xiBase = [xi(iBase);wrap2pi(xi(iBase) + pi);xi(iPole0)];
+                        %                     yiBase = [yi(iBase);-yi(iBase);yi(iPole0)];
+                        %                     ZiBase = [Zi(iBase);Zi(iBase);Zi(iPole0)];
+                        xiBase = [xi(iBase);xi(iPole0)];
+                        yiBase = [yi(iBase);yi(iPole0)];
+                        ZiBase = [Zi(iBase);Zi(iPole0)];
+                        Zf2 = scatteredInterpolant(xiBase,yiBase,ZiBase,'linear');
+                        Zi(iPole) = Zf2(xi(iPole),yi(iPole));
+                    end
+                    
+                end
             end
             
         end
@@ -8138,6 +8220,7 @@ classdef FarField
                     
                 end
                 % Sort
+                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8179,6 +8262,7 @@ classdef FarField
                     end
                 end
                 % Sort
+                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8260,6 +8344,7 @@ classdef FarField
                 end
                 obj = insertDirs(obj,xy0,yy0,E1y0,E2y0);
                 % Sort
+                obj.E3 = [];
                 obj = obj.sortGrid;
 %                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8335,6 +8420,7 @@ classdef FarField
                     obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); % Sorted in this function
                 end
                 % Sort
+                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
