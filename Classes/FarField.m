@@ -1039,7 +1039,8 @@ classdef FarField
             end
             [dMax,iPeak] = max(scaleFact.*Pval);
             apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
-                
+            apEff.th0 = mean(scaleFact.*Pval(obj.th == 0)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
+            
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
 %                 for ff = 1:obj.Nf
