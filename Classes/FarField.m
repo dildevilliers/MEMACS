@@ -4838,7 +4838,7 @@ classdef FarField
             end
         end
         
-        function obj = getBORpattern(obj1,BORcomp)
+        function [obj,BORcomps] = getBORpattern(obj1,BORcomp,getAllComps)
             % GETBORPATTERN expands the input FarField pattern into its BOR
             % components, BOR0 and BOR1. 
             
@@ -4847,12 +4847,10 @@ classdef FarField
             % the BOR0 or BOR1 components.  The output field has the same th
             % samples as the input field, but only the principle ph cuts
             
-            if nargin == 1
-                BORcomp = 1;
-            else
-                mustBeMember(BORcomp,[0,1]);
-            end
-            
+            if nargin < 2 || isempty(BORcomp), BORcomp = 1; end
+            mustBeMember(BORcomp,[0,1]);
+            if nargin < 3 || isempty(getAllComps), getAllComps = false; end
+                
             tol = 10^(-obj1.nSigDig+1);
             assert(strcmp(obj1.gridType,'PhTh'),'getBORpattern only operates on PhTh grid patterns');
             assert(abs(max(obj1.x) - min(obj1.x)) - 2*pi < tol,'The ph cuts must span 2*pi for BOR expansion');
@@ -4868,27 +4866,29 @@ classdef FarField
             obj1 = obj1.pol2linear;
             % Calculate the DFT in ph to get the BOR components
             % Store th variation in columns and BOR components row-wise
-            [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth));
+            [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth,obj1.Nf));
             [Ath,Bth,Cth,Dth] = deal(zeros(Nth,obj1.Nf));
             [BORpower] = deal(zeros(1,obj1.Nf));
+            maxComp = BORcomp;
+            if getAllComps, maxComp = size(An,1) - 1; end
             for ff = 1:obj1.Nf
                 %                 for nn = 0:floor((Nph - 1)/2)
-                for nn = 0:BORcomp % Just get what is required for speed - can slot the rest in if more modes are needed later
+                for nn = 0:maxComp % Just get what is required for speed - can slot the rest in if more modes are needed later
                     sin_vect = sin(nn*ph_vect);
                     cos_vect = cos(nn*ph_vect);
                     for tt = 1:Nth
                         Gth_vect = obj1.E1((0:(Nph-1))*Nth+tt,ff);
                         Gph_vect = obj1.E2((0:(Nph-1))*Nth+tt,ff);
-                        An(nn+1,tt) = 2/Nph.*sum(Gth_vect(:).*sin_vect(:));
-                        Bn(nn+1,tt) = 2/Nph.*sum(Gth_vect(:).*cos_vect(:));
-                        Cn(nn+1,tt) = 2/Nph.*sum(Gph_vect(:).*cos_vect(:));
-                        Dn(nn+1,tt) = -2/Nph.*sum(Gph_vect(:).*sin_vect(:));
+                        An(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*sin_vect(:));
+                        Bn(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*cos_vect(:));
+                        Cn(nn+1,tt,ff) = 2/Nph.*sum(Gph_vect(:).*cos_vect(:));
+                        Dn(nn+1,tt,ff) = -2/Nph.*sum(Gph_vect(:).*sin_vect(:));
                     end
                 end
-                Ath(:,ff) = An(1+BORcomp,:).';
-                Bth(:,ff) = Bn(1+BORcomp,:).';
-                Cth(:,ff) = Cn(1+BORcomp,:).';
-                Dth(:,ff) = Dn(1+BORcomp,:).';
+                Ath(:,ff) = An(1+BORcomp,:,ff).';
+                Bth(:,ff) = Bn(1+BORcomp,:,ff).';
+                Cth(:,ff) = Cn(1+BORcomp,:,ff).';
+                Dth(:,ff) = Dn(1+BORcomp,:,ff).';
                 
                 BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
                 BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
@@ -4910,6 +4910,14 @@ classdef FarField
             obj = FarField(PH(:),TH(:),Eth,Eph,obj1.freq,BORpower,obj1.radEff,...
                 'coorType','spherical','polType',obj1.polType,'gridType','PhTh','freqUnit',obj1.freqUnit,...
                 'symmetryBOR',symBOR,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time,'r',obj1.r);
+            if nargout > 1
+                BORcomps.A = An;
+                BORcomps.B = Bn;
+                BORcomps.C = Cn;
+                BORcomps.D = Dn;
+                BORcomps.th = th_vect;
+            end
+        
         end
         
         function obj = expandBORpattern(obj1,phStepDeg)
