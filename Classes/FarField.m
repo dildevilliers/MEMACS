@@ -1015,9 +1015,15 @@ classdef FarField
                 assert(any(ismember(pol,{'x','y','lh','rh'})),'pol must be a either x, y, lh or rh')
             end
             
+            % Allways calculate the IEEE definition efficiency
+            PvalD0 = obj.getDirectivity;
+            [dMaxD0] = max(PvalD0);
+            apEff.D0peak = dMaxD0.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            apEff.D0th0 = mean(PvalD0(obj.th == 0)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            
             if isempty(pol)
                 % Find peak directivity
-                Pval = obj.getDirectivity;
+                Pval = PvalIEEE;
                 scaleFact = 1;
             else
                 scaleFact = 4.*pi.*obj.r^2./(2.*obj.eta0)./obj.Prad;
