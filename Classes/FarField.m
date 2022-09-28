@@ -8148,7 +8148,8 @@ classdef FarField
                 % Get original coordinate system
                 coorTypeHandle = str2func(['coor2',obj.coorType]);
                 obj = obj.rangeChangeCoorTrans;
-                
+                obj.E3 = [];
+
                 % Bookkeeping on the original object
                 xSpanOrig = max(obj.x) - min(obj.x);
                 ySpanOrig = max(obj.y) - min(obj.y);
@@ -8231,11 +8232,8 @@ classdef FarField
                         yAdd = obj.y(iin);
                         obj = insertMissingCuts(obj,iin,xAdd,yAdd);
                     end
-                    
-                    
                 end
                 % Sort
-                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8257,7 +8255,8 @@ classdef FarField
                 coorTypeHandle = str2func(['coor2',obj.coorType]);
                 % Set to standard base
                 obj = obj.rangeChangeCoorTrans;
-                
+                obj.E3 = [];
+
                 % Set to standard base
                 obj = obj.range180sym;
                 % Bookkeeping on the original object
@@ -8277,7 +8276,6 @@ classdef FarField
                     end
                 end
                 % Sort
-                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8299,7 +8297,8 @@ classdef FarField
                 % Get original coordinate system
                 coorTypeHandle = str2func(['coor2',obj.coorType]);
                 obj = obj.rangeChangeCoorTrans;
-                
+                obj.E3 = [];
+
                 % Set to standard base
                 obj = obj.range180sym;
                 % Bookkeeping on the base object
@@ -8359,7 +8358,6 @@ classdef FarField
                 end
                 obj = insertDirs(obj,xy0,yy0,E1y0,E2y0);
                 % Sort
-                obj.E3 = [];
                 obj = obj.sortGrid;
 %                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
@@ -8376,10 +8374,11 @@ classdef FarField
             if strcmp(obj.xRangeType,'pos') && strcmp(obj.yRangeType,'360') 
                 % Do nothing - already there
                 return;
-            else% Get original coordinate system
+            else % Get original coordinate system
                 coorTypeHandle = str2func(['coor2',obj.coorType]);
                 obj = obj.rangeChangeCoorTrans;
-                
+                obj.E3 = [];
+
                 % Set to standard base
                 obj = obj.range180sym;
                 % Bookkeeping on the base object
@@ -8435,7 +8434,6 @@ classdef FarField
                     obj = insertDirs(obj,xy0,yy0,E1y0,E2y0); % Sorted in this function
                 end
                 % Sort
-                obj.E3 = [];
                 obj = obj.sortGrid;
                 % Reset coordinate Type
                 obj = coorTypeHandle(obj,false);
