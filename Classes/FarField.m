@@ -1023,7 +1023,7 @@ classdef FarField
             
             if isempty(pol)
                 % Find peak directivity
-                Pval = PvalIEEE;
+                Pval = PvalD0;
                 scaleFact = 1;
             else
                 scaleFact = 4.*pi.*obj.r^2./(2.*obj.eta0)./obj.Prad;
@@ -4877,20 +4877,41 @@ classdef FarField
             [BORpower] = deal(zeros(1,obj1.Nf));
             maxComp = BORcomp;
             if getAllComps, maxComp = size(An,1) - 1; end
+            
+            % This is faster, and much more accurate than the direct DFT
+            SCthMAT = [sin((0:maxComp).*ph_vect(:)), cos((0:maxComp).*ph_vect(:))];
+            SCphMAT = [cos((0:maxComp).*ph_vect(:)), -sin((0:maxComp).*ph_vect(:))];
+            
+            SCthInv = pinv(SCthMAT);
+            SCphInv = pinv(SCphMAT);
             for ff = 1:obj1.Nf
-                %                 for nn = 0:floor((Nph - 1)/2)
-                for nn = 0:maxComp % Just get what is required for speed - can slot the rest in if more modes are needed later
-                    sin_vect = sin(nn*ph_vect);
-                    cos_vect = cos(nn*ph_vect);
-                    for tt = 1:Nth
-                        Gth_vect = obj1.E1((0:(Nph-1))*Nth+tt,ff);
-                        Gph_vect = obj1.E2((0:(Nph-1))*Nth+tt,ff);
-                        An(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*sin_vect(:));
-                        Bn(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*cos_vect(:));
-                        Cn(nn+1,tt,ff) = 2/Nph.*sum(Gph_vect(:).*cos_vect(:));
-                        Dn(nn+1,tt,ff) = -2/Nph.*sum(Gph_vect(:).*sin_vect(:));
-                    end
+%                                 for nn = 0:floor((Nph - 1)/2)
+%                 for nn = 0:maxComp % Just get what is required for speed - can slot the rest in if more modes are needed later
+%                     sin_vect = sin(nn*ph_vect);
+%                     cos_vect = cos(nn*ph_vect);
+%                     for tt = 1:Nth
+%                         Gth_vect = obj1.E1((0:(Nph-1))*Nth+tt,ff);
+%                         Gph_vect = obj1.E2((0:(Nph-1))*Nth+tt,ff);
+%                         An(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*sin_vect(:));
+%                         Bn(nn+1,tt,ff) = 2/Nph.*sum(Gth_vect(:).*cos_vect(:));
+%                         Cn(nn+1,tt,ff) = 2/Nph.*sum(Gph_vect(:).*cos_vect(:));
+%                         Dn(nn+1,tt,ff) = -2/Nph.*sum(Gph_vect(:).*sin_vect(:));
+%                     end
+%                 end
+                
+                for tt = 1:Nth
+                    Gth_vect = obj1.E1((0:(Nph-1))*Nth+tt,ff);
+                    Gph_vect = obj1.E2((0:(Nph-1))*Nth+tt,ff);
+%                     ABvect = SCthMAT\Gth_vect;
+%                     CDvect = SCphMAT\Gph_vect;
+                    ABvect = SCthInv*Gth_vect;
+                    CDvect = SCphInv*Gph_vect;
+                    An(1:maxComp+1,tt,ff) = ABvect(1:maxComp+1);
+                    Bn(1:maxComp+1,tt,ff) = ABvect(maxComp+2:end);
+                    Cn(1:maxComp+1,tt,ff) = CDvect(1:maxComp+1);
+                    Dn(1:maxComp+1,tt,ff) = CDvect(maxComp+2:end);
                 end
+                
                 Ath(:,ff) = An(1+BORcomp,:,ff).';
                 Bth(:,ff) = Bn(1+BORcomp,:,ff).';
                 Cth(:,ff) = Cn(1+BORcomp,:,ff).';
@@ -4913,9 +4934,19 @@ classdef FarField
                 Eph = [Cth;Dth];
                 symBOR = 'BOR1';
             end
-            obj = FarField(PH(:),TH(:),Eth,Eph,obj1.freq,BORpower,obj1.radEff,...
-                'coorType','spherical','polType',obj1.polType,'gridType','PhTh','freqUnit',obj1.freqUnit,...
-                'symmetryBOR',symBOR,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time,'r',obj1.r);
+%             obj = FarField(PH(:),TH(:),Eth,Eph,obj1.freq,BORpower,obj1.radEff,...
+%                 'coorType','spherical','polType',obj1.polType,'gridType','PhTh','freqUnit',obj1.freqUnit,...
+%                 'symmetryBOR',symBOR,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time,'r',obj1.r);
+            obj1.x = PH(:);
+            obj1.y = TH(:);
+            obj1.E1 = Eth;
+            obj1.E2 = Eph;
+            obj1.Prad = BORpower;
+            obj1.coorType = 'spherical';
+            obj1.gridType = 'PhTh';
+            obj1.symmetryBOR = symBOR;
+            obj = obj1;
+            
             if nargout > 1
                 BORcomps.A = An;
                 BORcomps.B = Bn;
