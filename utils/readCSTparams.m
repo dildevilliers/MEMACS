@@ -41,10 +41,10 @@ end
 if ~strcmp(pathName(end-4:end),'.json')
     pathName = [pathName,'.json'];
 end
-if nargin > 1
-    outName = outFilePathName;
-else
+if nargin < 1 || isempty(outFilePathName)
     outName = 'params';
+else
+    outName = outFilePathName;
 end
 if ~strcmp(outName(end-1:end),'.m')
     outName = [outName,'.m'];
@@ -119,7 +119,7 @@ while swopped
     swopped = false;
     for iStep = iSplit:Npar-1
         s = strrep(ParamStruct(iStep).expr,' ','');
-        s = split(s,{'(',')','+','*','-','/'});
+        s = split(s,{'(',')','+','*','-','/',','});
         mustMove = false;
         for ss = 1:length(s)
             mustMove = mustMove || any(strcmp(s(ss),{ParamStruct(iStep:end).name}));
