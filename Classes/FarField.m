@@ -3985,7 +3985,7 @@ classdef FarField
             % pol - {'x' | 'y' | 'lh' | 'rh'}
             % th_M - subtended angle of the 'reflector' in rad
             
-            assert(strcmp(pol,'x')||strcmp(pol,'y')||strcmp(pol,'lh')||strcmp(pol,'rh')||isa('pol','double'),['Error: Unknown parameter for pol: ',pol])
+            assert(isa(pol,'double') || strcmp(pol,'x')||strcmp(pol,'y')||strcmp(pol,'lh')||strcmp(pol,'rh'),['Error: Unknown parameter for pol: ',pol])
             % Get in BOR1
             if strcmp(FF.symmetryBOR,'none')
                 FF = FF.getBORpattern;
@@ -3994,38 +3994,43 @@ classdef FarField
             lambda_vect = FF.c0./freq_vect;
             k_vect = 2*pi./lambda_vect;
             
-            th = FF.th(1:FF.Ny);
+            th_ = FF.th(1:FF.Ny);
             
             [A1f,B1f,C1f,D1f] = FF.getBOR1comps;
             
             [phi_0,phi_th_M,k_Delta,Delta,k_delta0,delta0,Z,eta_pd] = deal(zeros(1,FF.Nf));
             for ff = 1:FF.Nf
-                
-                switch pol
-                    case 'x'
-                        CO = B1f(:,ff) + D1f(:,ff);
-                    case {'y','lh','rh'}
-                        CO = A1f(:,ff) + C1f(:,ff);
-                    otherwise
-                        error(['Unknown pol: ', pol])
+                if isa(pol,'double')
+                    Ap = A1f(:,ff).*cos(pol) - B1f(:,ff).*sin(pol);
+                    Cp = C1f(:,ff).*cos(pol) - D1f(:,ff).*sin(pol);
+                    CO = Ap + Cp;
+                else
+                    switch pol
+                        case 'x'
+                            CO = B1f(:,ff) + D1f(:,ff);
+                        case {'y','lh','rh'}
+                            CO = A1f(:,ff) + C1f(:,ff);
+                        otherwise
+                            error(['Unknown pol: ', pol])
+                    end
                 end
                 
                 % Move the pattern to the approximate PC (Kildal comments 1984)
                 phi = unwrap(angle(CO));
                 phi_0(ff) = phi(1);
-                phi_th_M(ff) = interp1(th,phi,th_M);
+                phi_th_M(ff) = interp1(th_,phi,th_M);
                 k_Delta(ff) = (phi_0(ff) - phi_th_M(ff))/(1 - cos(th_M));
-                phi_Delta = phi - k_Delta(ff).*cos(th);
+                phi_Delta = phi - k_Delta(ff).*cos(th_);
                 Delta(ff) = k_Delta(ff)./k_vect(ff);
                 
                 % Find the PC from the formulas in Kildal 1983 (maximum eff method)
                 % Weighting function
-                w = abs(CO).*tan(th./2);
+                w = abs(CO).*tan(th_./2);
                 % Integral constants (change number of points for very sharp patterns...)
                 th_int = linspace(0,th_M,501);
-                w_int = interp1(th,w,th_int);
-                phi_Delta_int = interp1(th,phi_Delta,th_int);
-                phi_Delta0 = interp1(th,phi_Delta,0);
+                w_int = interp1(th_,w,th_int);
+                phi_Delta_int = interp1(th_,phi_Delta,th_int);
+                phi_Delta0 = interp1(th_,phi_Delta,0);
                 
                 Iw = integral1D(th_int,w_int);
                 Iwp = integral1D(th_int,w_int.*(phi_Delta_int - phi_Delta0));
@@ -8068,7 +8073,7 @@ classdef FarField
                     Eco = obj.E2;
                     E3slant = obj.E3;
                 otherwise
-                    [E1lin, E2lin] = getElinear(obj);
+                    [E1lin, E2lin] = getELudwig3(obj);
                     PSI = ones(size(obj.E1)).*obj.slant;
                     Exp = cos(PSI).*E1lin - sin(PSI).*E2lin;
                     Eco = sin(PSI).*E1lin + cos(PSI).*E2lin;
