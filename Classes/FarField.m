@@ -4859,7 +4859,7 @@ classdef FarField
             % samples as the input field, but only the principle ph cuts
             
             if nargin < 2 || isempty(BORcomp), BORcomp = 1; end
-            mustBeMember(BORcomp,[0,1]);
+            assert(isinf(BORcomp) || (mod(BORcomp,1) == 0 && BORcomp >= 0),'BORcomp must be inf or a natural number')
             if nargin < 3 || isempty(getAllComps), getAllComps = false; end
                 
             tol = 10^(-obj1.nSigDig+1);
@@ -4878,7 +4878,8 @@ classdef FarField
             % Calculate the DFT in ph to get the BOR components
             % Store th variation in columns and BOR components row-wise
             [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth,obj1.Nf));
-            [Ath,Bth,Cth,Dth] = deal(zeros(Nth,obj1.Nf));
+            [Fm] = deal(zeros(floor((Nph - 1)/2)+1,obj1.Nf));
+%             [Ath,Bth,Cth,Dth] = deal(zeros(Nth,obj1.Nf));
             [BORpower] = deal(zeros(1,obj1.Nf));
             maxComp = BORcomp;
             if getAllComps, maxComp = size(An,1) - 1; end
@@ -4887,6 +4888,7 @@ classdef FarField
             SCthMAT = [sin((0:maxComp).*ph_vect(:)), cos((0:maxComp).*ph_vect(:))];
             SCphMAT = [cos((0:maxComp).*ph_vect(:)), -sin((0:maxComp).*ph_vect(:))];
             
+            iMax = 0;
             SCthInv = pinv(SCthMAT);
             SCphInv = pinv(SCphMAT);
             for ff = 1:obj1.Nf
@@ -4917,28 +4919,85 @@ classdef FarField
                     Dn(1:maxComp+1,tt,ff) = CDvect(maxComp+2:end);
                 end
                 
-                Ath(:,ff) = An(1+BORcomp,:,ff).';
-                Bth(:,ff) = Bn(1+BORcomp,:,ff).';
-                Cth(:,ff) = Cn(1+BORcomp,:,ff).';
-                Dth(:,ff) = Dn(1+BORcomp,:,ff).';
+                % Estimate the power spectrum
+                Fm_ = abs(An(:,:,ff)).^2 + abs(Bn(:,:,ff)).^2 + abs(Cn(:,:,ff)).^2 + abs(Dn(:,:,ff)).^2;
+                Fm(:,ff) = sum(Fm_,2);
+                Fm(:,ff) = Fm(:,ff)./max(Fm(:,ff));
+                % Get indexes with some power
+                iMax_ = find(Fm(:,ff) > tol,1,'last');
+                if iMax_ > iMax, iMax = iMax_; end
                 
-                BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
-                BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
+%                 Ath(:,ff) = An(1+BORcomp,:,ff).';
+%                 Bth(:,ff) = Bn(1+BORcomp,:,ff).';
+%                 Cth(:,ff) = Cn(1+BORcomp,:,ff).';
+%                 Dth(:,ff) = Dn(1+BORcomp,:,ff).';
+%                 
+%                 BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
+%                 BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
+                
+                BORpower(ff) = 0;
+                for cc = 1:iMax_
+                    BORpower_integrand = 1./(2.*obj1.eta0).*(abs(An(cc,:,ff)).^2 + abs(Bn(cc,:,ff)).^2 + abs(Cn(cc,:,ff)).^2 + abs(Dn(cc,:,ff)).^2).*sin(th_vect(:).');
+                    if ~isinf(BORcomp) && cc == BORcomp+1
+                        BORpower(ff) = pi.*integral1D(th_vect(:).',BORpower_integrand,'auto');
+                    else
+                        BORpower(ff) = BORpower(ff) + pi.*integral1D(th_vect(:).',BORpower_integrand,'auto');
+                    end
+                end
+                
             end
+            % Write output before we force zeros
+            if nargout > 1
+                BORcomps.A = An;
+                BORcomps.B = Bn;
+                BORcomps.C = Cn;
+                BORcomps.D = Dn;
+                BORcomps.th = th_vect;
+            end
+            % Check if we should keep all components, or just one
+            if ~isinf(BORcomp), iMax = BORcomp + 1; end
             % Build a suitable FarField object
-            if BORcomp == 0
-                [PH,TH] = meshgrid(0,th_vect);
-                Eth = Bth;
-                Eph = Cth;
-                symBOR = 'BOR0';
-            else
-                % For y-pol: A1 -> Gth and D1 -> Gph
-                % For x-pol: B1 -> Gth and C1 -> Gph
-                [PH,TH] = meshgrid([0,pi/2],th_vect);
-                Eth = [Bth;Ath];  % First element corresponds to ph = 0, and second to ph = pi/2
-                Eph = [Cth;Dth];
-                symBOR = 'BOR1';
+            delPhDeg = 180/iMax;
+            phVectOut = deg2rad(0:delPhDeg:(180-delPhDeg)).';
+            [PH,TH] = meshgrid(phVectOut,th_vect);
+            nph = bsxfun(@times,(1:iMax).',PH(:).');  % Ncomp-by-Nang
+            sinph = repmat(sin(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
+            cosph = repmat(cos(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
+            symBOR = 'BOR';
+            % Just keep the one requested component if asked
+            if ~isinf(BORcomp)
+                An([1:iMax-1,iMax+1:end],:,:) = 0;
+                Bn([1:iMax-1,iMax+1:end],:,:) = 0;
+                Cn([1:iMax-1,iMax+1:end],:,:) = 0;
+                Dn([1:iMax-1,iMax+1:end],:,:) = 0;
+                symBOR = [symBOR,num2str(BORcomp)];   
             end
+            % Build the fields from all the remaining modal coefficients
+            % repmat out in columns to generate the values for different
+            % requested angles
+            Eth_ = repmat(An(1:iMax,:,:),1,iMax,1).*sinph + repmat(Bn(1:iMax,:,:),1,iMax,1).*cosph;
+            Eph_ = repmat(Cn(1:iMax,:,:),1,iMax,1).*cosph - repmat(Dn(1:iMax,:,:),1,iMax,1).*sinph;
+            % Sum up...
+            Eth = squeeze(sum(Eth_,1));
+            Eph = squeeze(sum(Eph_,1));
+            if obj1.Nf == 1
+                Eth = Eth(:);
+                Eph = Eph(:);
+            end
+            
+%             if BORcomp == 0
+%                 [PH,TH] = meshgrid(0,th_vect);
+%                 Eth = Bth;
+%                 Eph = Cth;
+%                 symBOR = 'BOR0';
+%             else
+%                 % For y-pol: A1 -> Gth and D1 -> Gph
+%                 % For x-pol: B1 -> Gth and C1 -> Gph
+%                 [PH,TH] = meshgrid([0,pi/2],th_vect);
+%                 Eth = [Bth;Ath];  % First element corresponds to ph = 0, and second to ph = pi/2
+%                 Eph = [Cth;Dth];
+%                 symBOR = 'BOR1';
+%             end
 %             obj = FarField(PH(:),TH(:),Eth,Eph,obj1.freq,BORpower,obj1.radEff,...
 %                 'coorType','spherical','polType',obj1.polType,'gridType','PhTh','freqUnit',obj1.freqUnit,...
 %                 'symmetryBOR',symBOR,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time,'r',obj1.r);
@@ -4952,13 +5011,7 @@ classdef FarField
             obj1.symmetryBOR = symBOR;
             obj = obj1;
             
-            if nargout > 1
-                BORcomps.A = An;
-                BORcomps.B = Bn;
-                BORcomps.C = Cn;
-                BORcomps.D = Dn;
-                BORcomps.th = th_vect;
-            end
+            
         
         end
         
