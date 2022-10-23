@@ -8128,8 +8128,10 @@ classdef FarField
                 otherwise
                     [E1lin, E2lin] = getELudwig3(obj);
                     PSI = ones(size(obj.E1)).*obj.slant;
-                    Exp = cos(PSI).*E1lin - sin(PSI).*E2lin;
-                    Eco = sin(PSI).*E1lin + cos(PSI).*E2lin;
+%                     Exp = cos(PSI).*E1lin - sin(PSI).*E2lin;
+%                     Eco = sin(PSI).*E1lin + cos(PSI).*E2lin;
+                    Eco = cos(PSI).*E1lin + sin(PSI).*E2lin;
+                    Exp = sin(PSI).*E1lin + cos(PSI).*E2lin;
                     E3slant = [];
             end
         end
