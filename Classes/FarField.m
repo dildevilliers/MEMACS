@@ -810,6 +810,49 @@ classdef FarField
             Xpol = (abs(obj.E1)./abs(obj.E2)).^2;
         end
         
+        function [psi,AR] = getPolAngle(obj)
+            % GETPOLANG Returns the polarisation angle from the x-axis 
+            % 
+            % function [psi,AR] = getPolAngle(obj)
+            % Returns psi, in rad, as the angle measured from the x-axis of
+            % the linear polarisation of the field in the th = 0 direction
+            % Optionally also returns AR, the axial ratio for elliptical
+            % polarization
+            
+            
+            ith0 = find(abs(obj.th) < eps,1);
+            assert(numel(ith0) == 1,'no entries for th = 0 found in the input')
+            obj = obj.coor2Ludwig3;
+            obj = obj.pol2linear;
+            Ey = obj.E2(ith0,:);
+            Ex = obj.E1(ith0,:);
+            
+            % Calculate the elliptical polarization components
+            Ex0 = abs(Ex);
+            Ey0 = abs(Ey);
+            px = angle(Ex);
+            py = angle(Ey);
+            dp = py - px;
+            
+            % Find special case indexes
+            iLin = find(abs(dp) < deg2rad(1e-4));
+            iCP = find(((sin(dp) < eps) || (cos(dp) < eps)) && (abs(Ex0 - Ey0) < eps));
+            
+            % Balanis (Antennas) eq (2-58) - (2-68) for general calculation
+            % - including nonsense at special cases
+            t = pi/2 - 0.5.*atan2(2.*Ex0.*Ey0.*cos(dp),Ex0.^2 - Ey0.^2);
+            if nargout > 1
+                OA = real(sqrt(0.5.*(Ex0.^2 + Ey0.^2 + sqrt(Ex0.^4 + Ey0.^4 + 2.*Ex0.^2.*Ey0.^2.*cos(2.*dp)))));
+                OB = real(sqrt(0.5.*(Ex0.^2 + Ey0.^2 - sqrt(Ex0.^4 + Ey0.^4 + 2.*Ex0.^2.*Ey0.^2.*cos(2.*dp)))));
+                AR = OA./OB;
+                AR(iLin) = inf;
+                AR(iCP) = 1;
+            end
+            psi = wrap22pi(pi/2 - t);
+            psi(iLin) = atan2(real(Ey(iLin)),real(Ex(iLin)));
+            psi(iCP) = 0;   % Meaningless
+        end
+        
         %% Performance metrics
         function [SLL1,SLL2,SLLstruct] = getSLL(obj)
             % GETSLL Get the sidelobe level of the beam
