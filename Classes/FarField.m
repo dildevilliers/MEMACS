@@ -4960,7 +4960,7 @@ classdef FarField
             delPhDeg = 180/iMax;
             phVectOut = deg2rad(0:delPhDeg:(180-delPhDeg)).';
             [PH,TH] = meshgrid(phVectOut,th_vect);
-            nph = bsxfun(@times,(1:iMax).',PH(:).');  % Ncomp-by-Nang
+            nph = bsxfun(@times,(0:iMax-1).',PH(:).');  % Ncomp-by-Nang
             sinph = repmat(sin(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
             cosph = repmat(cos(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
             symBOR = 'BOR';
