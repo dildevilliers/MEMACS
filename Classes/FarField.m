@@ -5081,7 +5081,7 @@ classdef FarField
             A1 = obj1.E1(Nth+1:end,:);
             B1 = obj1.E1(1:Nth,:);
             C1 = obj1.E2(1:Nth,:);
-            D1 = obj1.E2(Nth+1:end,:);
+            D1 = -obj1.E2(Nth+1:end,:);
         end
         
         %% Format and other testers
