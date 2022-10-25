@@ -4892,7 +4892,7 @@ classdef FarField
             end
         end
         
-        function [obj,BORcomps] = getBORpattern(obj1,BORcomp,getAllComps)
+        function [obj,BORcomps] = getBORpattern(obj,BORcomp,getAllComps)
             % GETBORPATTERN expands the input FarField pattern into its BOR
             % components, BOR0 and BOR1. 
             
@@ -4905,25 +4905,24 @@ classdef FarField
             assert(isinf(BORcomp) || (mod(BORcomp,1) == 0 && BORcomp >= 0),'BORcomp must be inf or a natural number')
             if nargin < 3 || isempty(getAllComps), getAllComps = false; end
                 
-            tol = 10^(-obj1.nSigDig+1);
-            assert(strcmp(obj1.gridType,'PhTh'),'getBORpattern only operates on PhTh grid patterns');
-            assert(abs(max(obj1.x) - min(obj1.x)) - 2*pi < tol,'The ph cuts must span 2*pi for BOR expansion');
-            assert(obj1.isGridUniform,'A plaid, monotonic, uniform grid is expected for BOR expansion');
-            assert(strcmp(obj1.coorType,'spherical'),'getBORpattern only operates on spherical coorType');
+            tol = 10^(-obj.nSigDig+1);
+            assert(strcmp(obj.gridType,'PhTh'),'getBORpattern only operates on PhTh grid patterns');
+            assert(abs(max(obj.x) - min(obj.x)) - 2*pi < tol,'The ph cuts must span 2*pi for BOR expansion');
+            assert(obj.isGridUniform,'A plaid, monotonic, uniform grid is expected for BOR expansion');
+            assert(strcmp(obj.coorType,'spherical'),'getBORpattern only operates on spherical coorType');
             
-            Nph = obj1.Nx;
-            Nth = obj1.Ny;
-            th_vect = unique(obj1.y);
-            ph_vect = unique(obj1.x);
+            Nph = obj.Nx;
+            Nth = obj.Ny;
+            th_vect = unique(obj.y);
+            ph_vect = unique(obj.x);
             
             % Must be in linear pol for BOR calculations
-            obj1 = obj1.pol2linear;
+            obj = obj.pol2linear;
             % Calculate the DFT in ph to get the BOR components
             % Store th variation in columns and BOR components row-wise
-            [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth,obj1.Nf));
-            [Fm] = deal(zeros(floor((Nph - 1)/2)+1,obj1.Nf));
-%             [Ath,Bth,Cth,Dth] = deal(zeros(Nth,obj1.Nf));
-            [BORpower] = deal(zeros(1,obj1.Nf));
+            [An,Bn,Cn,Dn] = deal(zeros(floor((Nph - 1)/2)+1,Nth,obj.Nf));
+            [Fm,BORpower] = deal(zeros(floor((Nph - 1)/2)+1,obj.Nf));
+            iMax = zeros(1,obj.Nf);
             maxComp = BORcomp;
             if getAllComps, maxComp = size(An,1) - 1; end
             
@@ -4931,10 +4930,10 @@ classdef FarField
             SCthMAT = [sin((0:maxComp).*ph_vect(:)), cos((0:maxComp).*ph_vect(:))];
             SCphMAT = [cos((0:maxComp).*ph_vect(:)), -sin((0:maxComp).*ph_vect(:))];
             
-            iMax = 0;
             SCthInv = pinv(SCthMAT);
             SCphInv = pinv(SCphMAT);
-            for ff = 1:obj1.Nf
+            tolPower = 1e-9;
+            for ff = 1:obj.Nf
 %                                 for nn = 0:floor((Nph - 1)/2)
 %                 for nn = 0:maxComp % Just get what is required for speed - can slot the rest in if more modes are needed later
 %                     sin_vect = sin(nn*ph_vect);
@@ -4950,10 +4949,8 @@ classdef FarField
 %                 end
                 
                 for tt = 1:Nth
-                    Gth_vect = obj1.E1((0:(Nph-1))*Nth+tt,ff);
-                    Gph_vect = obj1.E2((0:(Nph-1))*Nth+tt,ff);
-%                     ABvect = SCthMAT\Gth_vect;
-%                     CDvect = SCphMAT\Gph_vect;
+                    Gth_vect = obj.E1((0:(Nph-1))*Nth+tt,ff);
+                    Gph_vect = obj.E2((0:(Nph-1))*Nth+tt,ff);
                     ABvect = SCthInv*Gth_vect;
                     CDvect = SCphInv*Gph_vect;
                     An(1:maxComp+1,tt,ff) = ABvect(1:maxComp+1);
@@ -4966,26 +4963,11 @@ classdef FarField
                 Fm_ = abs(An(:,:,ff)).^2 + abs(Bn(:,:,ff)).^2 + abs(Cn(:,:,ff)).^2 + abs(Dn(:,:,ff)).^2;
                 Fm(:,ff) = sum(Fm_,2);
                 Fm(:,ff) = Fm(:,ff)./max(Fm(:,ff));
-                % Get indexes with some power
-                iMax_ = find(Fm(:,ff) > tol,1,'last');
-                if iMax_ > iMax, iMax = iMax_; end
-                
-%                 Ath(:,ff) = An(1+BORcomp,:,ff).';
-%                 Bth(:,ff) = Bn(1+BORcomp,:,ff).';
-%                 Cth(:,ff) = Cn(1+BORcomp,:,ff).';
-%                 Dth(:,ff) = Dn(1+BORcomp,:,ff).';
-%                 
-%                 BORpower_integrand = 1./(2.*obj1.eta0).*(abs(Ath(:,ff)).^2 + abs(Bth(:,ff)).^2 + abs(Cth(:,ff)).^2 + abs(Dth(:,ff)).^2).*sin(th_vect);
-%                 BORpower(ff) = pi.*integral1D(th_vect,BORpower_integrand,'auto');
-                
-                BORpower(ff) = 0;
-                for cc = 1:iMax_
-                    BORpower_integrand = 1./(2.*obj1.eta0).*(abs(An(cc,:,ff)).^2 + abs(Bn(cc,:,ff)).^2 + abs(Cn(cc,:,ff)).^2 + abs(Dn(cc,:,ff)).^2).*sin(th_vect(:).');
-                    if ~isinf(BORcomp) && cc == BORcomp+1
-                        BORpower(ff) = pi.*integral1D(th_vect(:).',BORpower_integrand,'auto');
-                    else
-                        BORpower(ff) = BORpower(ff) + pi.*integral1D(th_vect(:).',BORpower_integrand,'auto');
-                    end
+                % Calculate the power in each mode
+                iMax(ff) = find(Fm(:,ff) > tolPower,1,'last');
+                for cc = 1:iMax(ff)
+                    BORpower_integrand = 1./(2.*obj.eta0).*(abs(An(cc,:,ff)).^2 + abs(Bn(cc,:,ff)).^2 + abs(Cn(cc,:,ff)).^2 + abs(Dn(cc,:,ff)).^2).*sin(th_vect(:).');
+                    BORpower(cc,ff) = pi.*integral1D(th_vect(:).',BORpower_integrand,'auto');
                 end
                 
             end
@@ -4996,66 +4978,54 @@ classdef FarField
                 BORcomps.C = Cn;
                 BORcomps.D = Dn;
                 BORcomps.th = th_vect;
+                BORcomps.BORpower = BORpower;
+                BORcomps.iMax = iMax;
             end
             % Check if we should keep all components, or just one
-            if ~isinf(BORcomp), iMax = BORcomp + 1; end
+            if ~isinf(BORcomp)
+                iMaxAllF = BORcomp + 1;
+                PradBOR = BORpower(iMaxAllF,:);
+            else
+                iMaxAllF = max(iMax);
+                PradBOR = sum(BORpower(1:iMaxAllF,:));
+            end
             % Build a suitable FarField object
-            delPhDeg = 180/iMax;
+            delPhDeg = 180/iMaxAllF;
             phVectOut = deg2rad(0:delPhDeg:(180-delPhDeg)).';
             [PH,TH] = meshgrid(phVectOut,th_vect);
-            nph = bsxfun(@times,(0:iMax-1).',PH(:).');  % Ncomp-by-Nang
-            sinph = repmat(sin(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
-            cosph = repmat(cos(nph),1,1,obj1.Nf);     % Ncomp-by-Nang-by-Nf
+            nph = bsxfun(@times,(0:iMaxAllF-1).',PH(:).');  % Ncomp-by-Nang
+            sinph = repmat(sin(nph),1,1,obj.Nf);     % Ncomp-by-Nang-by-Nf
+            cosph = repmat(cos(nph),1,1,obj.Nf);     % Ncomp-by-Nang-by-Nf
             symBOR = 'BOR';
             % Just keep the one requested component if asked
             if ~isinf(BORcomp)
-                An([1:iMax-1,iMax+1:end],:,:) = 0;
-                Bn([1:iMax-1,iMax+1:end],:,:) = 0;
-                Cn([1:iMax-1,iMax+1:end],:,:) = 0;
-                Dn([1:iMax-1,iMax+1:end],:,:) = 0;
+                An([1:iMaxAllF-1,iMaxAllF+1:end],:,:) = 0;
+                Bn([1:iMaxAllF-1,iMaxAllF+1:end],:,:) = 0;
+                Cn([1:iMaxAllF-1,iMaxAllF+1:end],:,:) = 0;
+                Dn([1:iMaxAllF-1,iMaxAllF+1:end],:,:) = 0;
                 symBOR = [symBOR,num2str(BORcomp)];   
             end
             % Build the fields from all the remaining modal coefficients
             % repmat out in columns to generate the values for different
             % requested angles
-            Eth_ = repmat(An(1:iMax,:,:),1,iMax,1).*sinph + repmat(Bn(1:iMax,:,:),1,iMax,1).*cosph;
-            Eph_ = repmat(Cn(1:iMax,:,:),1,iMax,1).*cosph - repmat(Dn(1:iMax,:,:),1,iMax,1).*sinph;
+            Eth_ = repmat(An(1:iMaxAllF,:,:),1,iMaxAllF,1).*sinph + repmat(Bn(1:iMaxAllF,:,:),1,iMaxAllF,1).*cosph;
+            Eph_ = repmat(Cn(1:iMaxAllF,:,:),1,iMaxAllF,1).*cosph - repmat(Dn(1:iMaxAllF,:,:),1,iMaxAllF,1).*sinph;
             % Sum up...
             Eth = squeeze(sum(Eth_,1));
             Eph = squeeze(sum(Eph_,1));
-            if obj1.Nf == 1
+            if obj.Nf == 1
                 Eth = Eth(:);
                 Eph = Eph(:);
             end
             
-%             if BORcomp == 0
-%                 [PH,TH] = meshgrid(0,th_vect);
-%                 Eth = Bth;
-%                 Eph = Cth;
-%                 symBOR = 'BOR0';
-%             else
-%                 % For y-pol: A1 -> Gth and D1 -> Gph
-%                 % For x-pol: B1 -> Gth and C1 -> Gph
-%                 [PH,TH] = meshgrid([0,pi/2],th_vect);
-%                 Eth = [Bth;Ath];  % First element corresponds to ph = 0, and second to ph = pi/2
-%                 Eph = [Cth;Dth];
-%                 symBOR = 'BOR1';
-%             end
-%             obj = FarField(PH(:),TH(:),Eth,Eph,obj1.freq,BORpower,obj1.radEff,...
-%                 'coorType','spherical','polType',obj1.polType,'gridType','PhTh','freqUnit',obj1.freqUnit,...
-%                 'symmetryBOR',symBOR,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time,'r',obj1.r);
-            obj1.x = PH(:);
-            obj1.y = TH(:);
-            obj1.E1 = Eth;
-            obj1.E2 = Eph;
-            obj1.Prad = BORpower;
-            obj1.coorType = 'spherical';
-            obj1.gridType = 'PhTh';
-            obj1.symmetryBOR = symBOR;
-            obj = obj1;
-            
-            
-        
+            obj.x = PH(:);
+            obj.y = TH(:);
+            obj.E1 = Eth;
+            obj.E2 = Eph;
+            obj.Prad = PradBOR;
+            obj.coorType = 'spherical';
+            obj.gridType = 'PhTh';
+            obj.symmetryBOR = symBOR;
         end
         
         function obj = expandBORpattern(obj1,phStepDeg)
