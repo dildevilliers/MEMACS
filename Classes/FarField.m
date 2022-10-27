@@ -810,7 +810,7 @@ classdef FarField
             Xpol = (abs(obj.E1)./abs(obj.E2)).^2;
         end
         
-        function [psi,AR] = getPolAngle(obj)
+        function [psi,AR,delta0] = getPolAngle(obj)
             % GETPOLANG Returns the polarisation angle from the x-axis 
             % 
             % function [psi,AR] = getPolAngle(obj)
@@ -830,13 +830,16 @@ classdef FarField
             % Calculate the elliptical polarization components
             Ex0 = abs(Ex);
             Ey0 = abs(Ey);
+            da = Ex0./Ey0;
             px = angle(Ex);
             py = angle(Ey);
             dp = py - px;
+            delta0.da = da;
+            delta0.dp = dp;
             
             % Find special case indexes
             iLin = find(abs(dp) < deg2rad(1e-4));
-            iCP = find(((sin(dp) < eps) || (cos(dp) < eps)) && (abs(Ex0 - Ey0) < eps));
+            iCP = find(((sin(dp) < eps(2)) || (cos(dp) < eps(2))) && (abs(da - 1) < eps(4)));
             
             % Balanis (Antennas) eq (2-58) - (2-68) for general calculation
             % - including nonsense at special cases
