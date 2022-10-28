@@ -810,14 +810,16 @@ classdef FarField
             Xpol = (abs(obj.E1)./abs(obj.E2)).^2;
         end
         
-        function [psi,AR,delta0] = getPolAngle(obj)
+        function [psi,AR,delta0,ellipseInfo] = getPolAngle(obj)
             % GETPOLANG Returns the polarisation angle from the x-axis 
             % 
             % function [psi,AR] = getPolAngle(obj)
             % Returns psi, in rad, as the angle measured from the x-axis of
             % the linear polarisation of the field in the th = 0 direction
             % Optionally also returns AR, the axial ratio for elliptical
-            % polarization
+            % polarization, delta0 the field ratios in a struct containing 
+            % % da and dp, and ellipseInfo a struct containing the ellipse
+            % information OA, OB and 
             
             
             ith0 = find(abs(obj.th) < eps,1);
@@ -834,8 +836,7 @@ classdef FarField
             px = angle(Ex);
             py = angle(Ey);
             dp = py - px;
-            delta0.da = da;
-            delta0.dp = dp;
+            
             
             % Find special case indexes
             iLin = find(abs(dp) < deg2rad(1e-4));
@@ -851,6 +852,15 @@ classdef FarField
                 AR(iLin) = inf;
                 AR(iCP) = 1;
             end
+            if nargout > 2
+                delta0.da = da;
+                delta0.dp = dp;
+            end
+            if nargout > 3
+                ellipseInfo.OA = OA;
+                ellipseInfo.OB = OB;
+            end
+
             psi = wrap22pi(pi/2 - t);
             psi(iLin) = atan2(real(Ey(iLin)),real(Ex(iLin)));
             psi(iCP) = 0;   % Meaningless
