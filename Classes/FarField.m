@@ -839,8 +839,9 @@ classdef FarField
             
             
             % Find special case indexes
-            iLin = find(abs(dp) < deg2rad(1e-4));
-            iCP = find(((sin(dp) < eps(2)) || (cos(dp) < eps(2))) && (abs(da - 1) < eps(4)));
+            tol = 1e-12;
+            iLin = abs(sin(dp)) < tol;
+            iCP = find((abs(da - 1) < tol) && (abs(cos(dp)) < tol));
             
             % Balanis (Antennas) eq (2-58) - (2-68) for general calculation
             % - including nonsense at special cases
