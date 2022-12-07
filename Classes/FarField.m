@@ -1076,7 +1076,7 @@ classdef FarField
             PvalD0 = obj.getDirectivity;
             [dMaxD0] = max(PvalD0);
             apEff.D0peak = dMaxD0.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
-            apEff.D0th0 = mean(PvalD0(obj.th == 0)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            apEff.D0th0 = mean(PvalD0(obj.th == 0,:)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
             
             if isempty(pol)
                 % Find peak directivity
@@ -1102,7 +1102,7 @@ classdef FarField
             end
             [dMax,iPeak] = max(scaleFact.*Pval);
             apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
-            apEff.th0 = mean(scaleFact.*Pval(obj.th == 0)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
+            apEff.th0 = mean(scaleFact.*Pval(obj.th == 0,:)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
             
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
@@ -3600,9 +3600,10 @@ classdef FarField
                     xVal = 0;
                     yVal = 0;
                     % Main component
-                    plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                    plotData1 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal),...
-                        'cutConstant','x','LineStyle','-','Color','k')
+                        'cutConstant','x','LineStyle','-','Color','k');
+                    normVal = dBhandle(plotData1.normVali);
                     plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(yVal),...
                         'cutConstant','y','LineStyle','-','Color','r')
