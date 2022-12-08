@@ -4246,7 +4246,7 @@ classdef FarField
             end
             % Insert missing cuts from full sphere fields with redundant
             % edges
-            if isGrid4piIn && obj.Nx < NxIn
+            if isGrid4piIn && obj.Nx < NxIn && ~resampleFlag
                 switch xRangeTypeIn
                     case 'pos'
                         if phiRot >= 0    
