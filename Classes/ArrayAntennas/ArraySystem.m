@@ -74,10 +74,10 @@ classdef ArraySystem
             obj.elements = ArrayElements(obj.antPos,obj.channelPhasors,obj.couplingMatrix);
             obj.receiver = ArrayReceiver(obj.noisePower,obj.LNAGain,obj.IFGain,obj.freqLO,obj.couplingMatrix);
             obj.adc = ArrayADC(obj.Nbits,obj.maxV,obj.minV,obj.ADCtype);
-            obj.delT = 1/obj.freqSamp;
-            t0 = 0;   % Hardcode for now - no reason to change I think...
-            obj.t = t0:obj.delT:(t0+obj.delT*(obj.Nt-1));
-            obj.Nant = size(obj.antPos.pointMatrix,2);
+%             obj.delT = 1/obj.freqSamp;
+%             t0 = 0;   % Hardcode for now - no reason to change I think...
+%             obj.t = t0:obj.delT:(t0+obj.delT*(obj.Nt-1));
+%             obj.Nant = size(obj.antPos.pointMatrix,2);
         end
         
         %% Dependency-based setters
@@ -131,7 +131,7 @@ classdef ArraySystem
         end
         
         %% 
-        function x = getPortSignal(obj,s,Qtype)
+        function x = getPortSignal(obj,s,t,Qtype)
             % Returns the digitised signals at the antenna ports as a
             % matrix of size [Nant, Nt].  s is an array of PlaneWaveSignal
             % objects
@@ -141,14 +141,18 @@ classdef ArraySystem
             %  +-inf: Hilbert transform
             
             if nargin < 3
+                t = obj.t;
+            end
+            
+            if nargin < 4
                 Qtype = 0;
             end
             assert(isscalar(Qtype),'Error: Qtype must be scalar');
             
             % Get signals after elements
-            portSigMat = obj.elements.portSignals(s,obj.t);
+            portSigMat = obj.elements.portSignals(s,t);
             % Put them through receiver
-            sn = obj.receiver.sigRec(portSigMat,obj.t);
+            sn = obj.receiver.sigRec(portSigMat,t);
             % Digitise
             xi = obj.adc.ADC(real(sn));
             if Qtype == 0
