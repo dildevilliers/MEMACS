@@ -929,7 +929,7 @@ classdef CoordinateSystem
            if nargin  == 1
                scale = 1;
            end
-           lineWidth = 1;
+           lineWidth = 1.2;
            textSize = 12;
            x = obj.x_axis.*scale;
            y = obj.y_axis.*scale;

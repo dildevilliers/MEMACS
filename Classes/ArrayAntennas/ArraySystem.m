@@ -25,13 +25,16 @@ classdef ArraySystem
         elements
         receiver
         adc(1,1) ArrayADC
+    end
+    
+    properties (Dependent = true, Hidden = true)
         delT
         t
         Nant
     end
     
     methods
-        % Constructor
+        %% Constructor
         function obj = ArraySystem(antPos,channelPhasors,couplingMatrix,noisePower,LNAGain,IFGain,freqLO,freqSamp,Nt,Nbits,maxV,minV,ADCtype)
             if nargin >= 1
                 obj = obj.setAntPos(antPos);
@@ -71,13 +74,27 @@ classdef ArraySystem
             obj.elements = ArrayElements(obj.antPos,obj.channelPhasors,obj.couplingMatrix);
             obj.receiver = ArrayReceiver(obj.noisePower,obj.LNAGain,obj.IFGain,obj.freqLO,obj.couplingMatrix);
             obj.adc = ArrayADC(obj.Nbits,obj.maxV,obj.minV,obj.ADCtype);
-            obj.delT = 1/obj.freqSamp;
-            t0 = 0;   % Hardcode for now - no reason to change I think...
-            obj.t = t0:obj.delT:(t0+obj.delT*(obj.Nt-1));
-            obj.Nant = size(obj.antPos.pointMatrix,2);
+%             obj.delT = 1/obj.freqSamp;
+%             t0 = 0;   % Hardcode for now - no reason to change I think...
+%             obj.t = t0:obj.delT:(t0+obj.delT*(obj.Nt-1));
+%             obj.Nant = size(obj.antPos.pointMatrix,2);
         end
         
-        % Parameter setters
+        %% Dependency-based setters
+        function delT = get.delT(obj)
+            delT = 1/obj.freqSamp;    
+        end
+        
+        function t = get.t(obj)
+            t0 = 0;   % Hardcode for now - no reason to change I think...
+            t = t0:obj.delT:(t0+obj.delT*(obj.Nt-1));    
+        end
+        
+        function Nant = get.Nant(obj)
+            Nant = size(obj.antPos.pointMatrix,2);    
+        end
+        
+        %% Parameter setters        
         function obj = setAntPos(obj,antPos)
             [obj.antPos,obj.elements.antPos] = deal(antPos);
         end
@@ -113,7 +130,8 @@ classdef ArraySystem
             [obj.ADCtype,obj.adc.ADCtype] = deal(ADCtype);
         end
         
-        function x = getPortSignal(obj,s,Qtype)
+        %% 
+        function x = getPortSignal(obj,s,t,Qtype)
             % Returns the digitised signals at the antenna ports as a
             % matrix of size [Nant, Nt].  s is an array of PlaneWaveSignal
             % objects
@@ -123,14 +141,18 @@ classdef ArraySystem
             %  +-inf: Hilbert transform
             
             if nargin < 3
+                t = obj.t;
+            end
+            
+            if nargin < 4
                 Qtype = 0;
             end
             assert(isscalar(Qtype),'Error: Qtype must be scalar');
             
             % Get signals after elements
-            portSigMat = obj.elements.portSignals(s,obj.t);
+            portSigMat = obj.elements.portSignals(s,t);
             % Put them through receiver
-            sn = obj.receiver.sigRec(portSigMat,obj.t);
+            sn = obj.receiver.sigRec(portSigMat,t);
             % Digitise
             xi = obj.adc.ADC(real(sn));
             if Qtype == 0

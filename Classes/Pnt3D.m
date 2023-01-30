@@ -331,6 +331,38 @@ classdef Pnt3D
             D = objD.r;
         end
         
+         function obj = addPoints(obj,obj2)
+            %ADDPOINTS   Adds another Pnt3D object to the points.
+            % obj = addPoints(obj,obj2) adds the Pnt3D object obj2 to the points.  
+            % Vector must have the same number of columns as the points, 
+            % or be scalar.  Same as plus, but with an explicit input
+            % vector of points.
+            %
+            % Inputs
+            % - obj, obj2:  Pnt3D objects
+            %
+            % Outputs
+            % - obj:  Pnt3D object
+            %
+            % Dependencies
+            % - 
+            %
+            % Created: 2020-03-10, Ridalise Louw
+            % Updated: 2020-03-10, Ridalise Louw
+            %
+            % Tested : // TO DO
+            %  Level :  
+            %   File : testScript_Pnt3D.m
+            %
+            % Example
+            %   [x,y,z] = deal(1:5);
+            %   p = Pnt3D(x,y,z);
+            %   [x2,y2,z2] = deal(6:8);
+            %   p2 = Pnt3D(x2,y2,z2);
+            %   p = p.addPoints(p2)
+            obj = Pnt3D([obj.x obj2.x],[obj.y obj2.y],[obj.z obj2.z]);
+         end
+        
         function obj = addVect(obj,V)
             %ADDVECT   Adds a [3xN] vector to the points.
             % obj = addVect(obj,V) adds the [3xN] vector V to the points.  
