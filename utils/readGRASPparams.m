@@ -38,12 +38,16 @@ end
 if ~strcmp(pathName(end-3:end),'.tor')
     pathName = [pathName,'.tor'];
 end
+writeOutput = true;
 if nargin < 2 || isempty(outFilePathName)
     outName = 'params';
+elseif islogical(outFilePathName) && ~outFilePathName
+    outName = [];
+    writeOutput = false;
 else
     outName = outFilePathName;
 end
-if ~strcmp(outName(end-1:end),'.m')
+if writeOutput&& ~strcmp(outName(end-1:end),'.m')
     outName = [outName,'.m'];
 end
 
@@ -135,7 +139,7 @@ while swopped
 end
 
 % Save the m-file, and calculate the unknown values
-fid = fopen(outName,'wt');
+if writeOutput, fid = fopen(outName,'wt'); end
 for pp = 1:Npar
     if isnumeric(ParamStruct(pp).expr)
         val = num2str(ParamStruct(pp).expr);
@@ -143,7 +147,7 @@ for pp = 1:Npar
         val = ParamStruct(pp).expr;
     end
     printLine = [ParamStruct(pp).name,' = ',val,'; %',ParamStruct(pp).descr];
-    fprintf(fid,'%s\n',printLine);
+    if writeOutput, fprintf(fid,'%s\n',printLine); end
     
     % Evaluate all variables to get them in the workspace (in order)
     eval(printLine);
@@ -152,6 +156,6 @@ for pp = 1:Npar
         ParamStruct(pp).value = eval(ParamStruct(pp).name);
     end
 end
-fclose(fid);
+if writeOutput, fclose(fid); end
 
 end
