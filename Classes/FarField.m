@@ -445,11 +445,11 @@ classdef FarField
         end
         
         function Directivity_dBi = get.Directivity_dBi(obj)
-            Directivity_dBi = dB10(max(obj.getDirectivity()));
+            Directivity_dBi = dB10(max(obj.getDirectivity(),[],1));
         end
         
         function Gain_dB = get.Gain_dB(obj)
-            Gain_dB = dB10(max(obj.getGain()));
+            Gain_dB = dB10(max(obj.getGain(),[],1));
         end
         
         function radEff_dB = get.radEff_dB(obj)
@@ -1074,9 +1074,9 @@ classdef FarField
             
             % Allways calculate the IEEE definition efficiency
             PvalD0 = obj.getDirectivity;
-            [dMaxD0] = max(PvalD0);
+            [dMaxD0] = max(PvalD0,[],1);
             apEff.D0peak = dMaxD0.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
-            apEff.D0th0 = mean(PvalD0(obj.th == 0,:)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
+            apEff.D0th0 = mean(PvalD0(obj.th == 0,:),1).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
             
             if isempty(pol)
                 % Find peak directivity
@@ -1100,9 +1100,9 @@ classdef FarField
                         Pval = abs(obj.E2).^2;
                 end
             end
-            [dMax,iPeak] = max(scaleFact.*Pval);
+            [dMax,iPeak] = max(scaleFact.*Pval,[],1);
             apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
-            apEff.th0 = mean(scaleFact.*Pval(obj.th == 0,:)).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
+            apEff.th0 = mean(scaleFact.*Pval(obj.th == 0,:),1).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
             
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
