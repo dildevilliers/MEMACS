@@ -6594,17 +6594,23 @@ classdef FarField
             [typeMark,scaleMark] = strtok(headerCell{3},' [');
             if contains(typeMark,'Abs(V')
                 outTypeIn = 'E-pattern';
+                absFunc = @(x) (x);     % Just pass through
+            elseif contains(typeMark,'Abs(Dir')
+                outTypeIn = 'Dir-pattern';
+                absFunc = @(x) sqrt(x);
             else
                 error('Only the E-pattern output type supported at this stage')
             end
             
             % Figure out the scale
             if contains(scaleMark,'dB')
-                E1In = lin20(data(:,4));
-                E2In = lin20(data(:,6));
+                E1In = lin20(absFunc(data(:,4)));
+                E2In = lin20(absFunc(data(:,6)));
+                mag2 = lin10(data(:,3));
             else
-                E1In = data(:,4);
-                E2In = data(:,6);
+                E1In = absFunc(data(:,4));
+                E2In = absFunc(data(:,6));
+                mag2 = data(:,3);
             end
             E1In = E1In.*exp(1i.*deg2rad(data(:,5)));
             E2In = E2In.*exp(1i.*deg2rad(data(:,7)));
@@ -6625,8 +6631,15 @@ classdef FarField
             end
             
             FF.Prad = FF.pradInt;
-            FF.radEff = FF.Prad./0.5;   % Default CST power is 0.5 W - this could be wrong in some cases if the CST power is changed in the simulation
-            
+            if strcmp(outTypeIn,'E-pattern')
+                FF.radEff = FF.Prad./0.5;   % Default CST power is 0.5 W - this could be wrong in some cases if the CST power is changed in the simulation
+            elseif strcmp(outTypeIn,'Dir-pattern') && FF.isGrid4pi  % Fix the power scaling
+                D = FF.getDirectivity;  
+                s = sqrt(mean(mag2./D(1:numel(mag2))));
+                FF.E1 = FF.E1.*s;
+                FF.E2 = FF.E2.*s;
+                FF.Prad = FF.pradInt;
+            end
         end
         
         function FF = readNFSscan(pathName,varargin)
