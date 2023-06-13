@@ -22,11 +22,11 @@ classdef FarField
     end
     
     properties (SetAccess = private)
-        x           % First (azimuth) grid parameter
-        y           % Second (polar) grid parameter
+        x(:,1)           % First (azimuth) grid parameter
+        y(:,1)           % Second (polar) grid parameter
         E1          % First E-field component
         E2          % Second E-field component
-        freq        % Frequency
+        freq(1,:)        % Frequency
         Prad        % Radiated power per frequency
         coorType    % Coordinate system type {'spherical','Ludwig1','Ludwig2AE','Ludwig2EA','Ludwig3','power'}
         polType     % polarization type {'linear','circular','slant'}
@@ -37,6 +37,7 @@ classdef FarField
         symmetryXY  % XY plane symmetry type {'none','electric','magnetic'}
         symmetryBOR % BOR symmetry type {'none','BOR0','BOR1'}
         viewOrientCase % View orientation case select (1: Observer faces AUT; 2: observer behind AUT; 3: observer behind AUT (inverted))
+        DirCosNorm_D(1,:) double {mustBeReal,mustBeFinite,mustBePositive} = [] % Diameter to use for mormalized (DirCosNorm_D/lambda) direction cosine plots
     end
     
     properties (Dependent = true)
@@ -79,6 +80,7 @@ classdef FarField
         
         auxParamStruct     % Structure containing all the name-value pair parameters
         
+        d_l  % Used by DircCosNorm
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -109,7 +111,7 @@ classdef FarField
         mu0 = 1.256637061435917e-06;
         eta0 = 3.767303134749689e+02;
         nSigDig = 6;
-        projectionGrids = {'DirCos','TrueView','Arcsin','Mollweide'};
+        projectionGrids = {'DirCos','DirCosNorm','TrueView','Arcsin','Mollweide'};
         astroGrids = {'Horiz','RAdec','GalLongLat'};
         localGrids = {'PhTh','AzEl','ElAz'};
         version = 0.4;
@@ -582,6 +584,10 @@ classdef FarField
                 'orientation',obj.orientation,'earthLocation',obj.earthLocation,'time',obj.time);
         end
             
+        function d_l = get.d_l(obj)
+            d_l = obj.DirCosNorm_D./(obj.c0./obj.freqHz);
+        end
+
         %% Field and frequency setters
         function obj = setFreq(obj,freq,freqUnit)
             % SETFREQ sets the frequency of the object
@@ -1663,6 +1669,25 @@ classdef FarField
             end
         end
         
+        function obj = grid2DirCosNorm(obj,D)
+            % GRID2DIRCOS Change the current grid to a DirCos grid.
+            % second argument updates the object DirCosNorm_D parameters
+            %
+            % See help changeGrid for details
+            if nargin > 1, obj.DirCosNorm_D = D; end
+            assert(obj.Nf == 1,'DirCosNorm grid only defined for objects with one frequency')
+            
+            if ~strcmp(obj.gridType,'DirCosNorm')
+                if isempty(obj.xBase)
+                    obj = obj.setBaseGrid;
+                else
+                    obj = obj.grid2Base;
+                end
+                [obj.x,obj.y] = getDirCosNorm(obj);
+                obj.gridType = 'DirCosNorm';
+            end
+        end
+
         function obj = grid2TrueView(obj)
             % GRID2TRUEVIEW Change the current grid to a TrueView grid.
             %
@@ -2859,7 +2884,7 @@ classdef FarField
             % Sort out the plot grid and names
             
             % Get valid positions for the plot
-            if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
+            if any(strcmp(obj.gridType,{'DirCos','ArcSin','DirCosNorm'}))
                 % Try to get the direction cosines from the base grid definition - if the
                 % base definition is not a direction cosine type it can contain
                 % information over the full sphere.
@@ -2911,7 +2936,7 @@ classdef FarField
                     interpOut = false;
                 end
             else
-                if any(strcmp(obj.gridType,{'DirCos','ArcSin'}))
+                if any(strcmp(obj.gridType,{'DirCos','ArcSin','DirCosNorm'}))
                     step = sind(step);
                 else
                     step = deg2rad(step);
@@ -3004,6 +3029,12 @@ classdef FarField
                     yiplot = yi;
                     xnamePlot = [obj.xname, ' = sin(\theta)cos(\phi)'];
                     ynamePlot = [obj.yname, ' = sin(\theta)sin(\phi)'];
+                    axisUnit = '';
+                case 'DirCosNorm'
+                    xiplot = xi;
+                    yiplot = yi;
+                    xnamePlot = [obj.xname, ' = sin(\theta)cos(\phi)D/\lambda'];
+                    ynamePlot = [obj.yname, ' = sin(\theta)sin(\phi)D/\lambda'];
                     axisUnit = '';
                 otherwise
                     X = rad2deg(X);
@@ -3758,10 +3789,17 @@ classdef FarField
                 end
                 % Get xi and yi in the base gridType, and on the [-180,180] x-domain for the
                 % angular grids
-                grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
-                [ui,vi,wi] = grid2DirCoshandle(xi,yi);
+                switch gridTypeIn
+                    case 'DirCosNorm'
+                        ui = xi./obj.d_l;
+                        vi = yi./obj.d_l;
+                        wi = sqrt(1 - (ui.^2 + vi.^2));
+                    otherwise
+                        grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
+                        [ui,vi,wi] = grid2DirCoshandle(xi,yi);
+                end
                 valAngi = true(size(ui));
-                if any(strcmp(gridTypeIn,{'DirCos','ArcSin'}))
+                if any(strcmp(gridTypeIn,{'DirCos','ArcSin','DirCosNorm'}))
                     % Find the invalid points included by the external meshgrid
                     valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
                     % Check for bottom hemisphere plot - fix the w to be the negative root
@@ -3779,7 +3817,7 @@ classdef FarField
                 % +- 180 degrees
                 % Get the indexes only, no later reshaping done, different from the grids
                 % required for plotting in FarField.plot
-                if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin')
+                if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin') || strcmp(gridTypeIn,'DirCosNorm')
                     grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
                     [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
                     if strcmp(hemisphere,'top')
@@ -4025,6 +4063,26 @@ classdef FarField
             
         end
         
+        function [obj,obj0] = getOnDirCosNormGrid(obj,D)
+            % getOnDirCosNormGrid gets the object on the same DirCosNorm grid for all frequencies
+            % [obj,obj0] = getOnDirCosNormGrid(obj)
+            % obj is on the same grid, deterined by the lowest input frequency
+            % (optional) obj0 is an array of objects, each on its own raw DirCosNorm grid
+
+            
+            if nargin > 1, obj.DirCosNorm_D = D; end
+            
+            assert(obj.isGridUniform,'Only works for input objects with uniform grids at present')
+            
+            % Make interpolants
+            obj = obj.buildInterpAng;
+
+            % Get evaluation angles
+            [u, v, w] = getDirCosNorm(obj);
+
+            keyboard
+        end
+
         %% Phase centre/shifts/rotations of the field
         function [Z, Delta, delta0, eta_pd] = phaseCentreKildal(FF,pol,th_M)
             % PHASECENTREKILDAL Computes the phase centre and approximates
@@ -7811,9 +7869,32 @@ classdef FarField
                     u = obj.x;
                     v = obj.y;
                     w = sqrt(1 - u.^2 - v.^2);
+                case 'DirCosNorm'
+                    u = obj.x./obj.d_l;
+                    v = obj.y./obj.d_l;
+                    w = sqrt(1 - u.^2 - v.^2);
                 otherwise
                     handle2DirCos = str2func([obj.gridType,'2DirCos']);
                     [u,v,w] = handle2DirCos(obj.x,obj.y);
+            end
+        end
+
+        function [u, v, w] = getDirCosNorm(obj)
+            % GETDIRCOSNORM Get DirCos grid.
+            
+            switch obj.gridType
+                case 'DirCosNorm'
+                    u = obj.x;
+                    v = obj.y;
+                    w = sqrt(1 - u.^2 - v.^2);
+                otherwise
+                    % First go to DirCos
+                    handle2DirCos = str2func([obj.gridType,'2DirCos']);
+                    [u,v,~] = handle2DirCos(obj.x,obj.y);
+                    % Then normalize
+                    u = bsxfun(@times,u,obj.d_l);
+                    v = bsxfun(@times,v,obj.d_l);
+                    w = sqrt(1 - u.^2 - v.^2);
             end
         end
         
@@ -8186,7 +8267,7 @@ classdef FarField
                     xname = '\phi';
                     yname = '\theta';
                     [xunit, yunit] = deal('rad');
-                case 'DirCos'
+                case {'DirCos','DirCosNorm'}
                     xname = 'u';
                     yname = 'v';
                     [xunit, yunit] = deal('');
