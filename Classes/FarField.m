@@ -1674,8 +1674,9 @@ classdef FarField
             % second argument updates the object DirCosNorm_D parameters
             %
             % See help changeGrid for details
-            if nargin > 1, obj.DirCosNorm_D = D; end
+            if nargin > 1 && ~isempty(D), obj.DirCosNorm_D = D; end
             assert(obj.Nf == 1,'DirCosNorm grid only defined for objects with one frequency')
+            assert(~isempty(obj.DirCosNorm_D),'Cannot set normalised DirCos grid without D')
             
             if ~strcmp(obj.gridType,'DirCosNorm')
                 if isempty(obj.xBase)
@@ -3791,9 +3792,10 @@ classdef FarField
                 % angular grids
                 switch gridTypeIn
                     case 'DirCosNorm'
-                        ui = xi./obj.d_l;
-                        vi = yi./obj.d_l;
+                        ui = xi./obj.d_l(freqIndex);
+                        vi = yi./obj.d_l(freqIndex);
                         wi = sqrt(1 - (ui.^2 + vi.^2));
+%                         obj.gridType = 'DirCos';   % Bit of a hack to make it call the right DirCos2DirCos function
                     otherwise
                         grid2DirCoshandle = str2func([gridTypeIn,'2DirCos']);
                         [ui,vi,wi] = grid2DirCoshandle(xi,yi);
@@ -3801,7 +3803,8 @@ classdef FarField
                 valAngi = true(size(ui));
                 if any(strcmp(gridTypeIn,{'DirCos','ArcSin','DirCosNorm'}))
                     % Find the invalid points included by the external meshgrid
-                    valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th));
+                    if ~strcmp(gridTypeIn,'DirCosNorm'), thInd = 1; else, thInd = freqIndex; end
+                    valAngi = sqrt(ui.^2 + vi.^2) <= max(sin(obj.th(:,thInd)));
                     % Check for bottom hemisphere plot - fix the w to be the negative root
                     if strcmp(hemisphere,'bot')
                         wi = -wi;
@@ -3810,7 +3813,12 @@ classdef FarField
                     % Sort out the TrueView special case invalid points
                     valAngi = sqrt((xi./pi).^2 + (yi./pi).^2) <= max(obj.th)./pi;
                 end
-                DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
+                if ~strcmp(obj.gridType,'DirCosNorm')
+                    DirCos2baseHandle = str2func(['DirCos2',obj.gridType]);
+                else
+                    DirCos2baseHandle = @DirCos2DirCos;
+                end
+
                 [xi_bGT,yi_bGT] = DirCos2baseHandle(ui,vi,wi);
                 
                 % Get the valid angle positions - already in baseGrid here, but shifted to
@@ -3818,7 +3826,12 @@ classdef FarField
                 % Get the indexes only, no later reshaping done, different from the grids
                 % required for plotting in FarField.plot
                 if strcmp(gridTypeIn,'DirCos') || strcmp(gridTypeIn,'ArcSin') || strcmp(gridTypeIn,'DirCosNorm')
-                    grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
+                    if ~strcmp(obj.gridType,'DirCosNorm')
+                        grid2DirCoshandleBase = str2func([obj.gridType,'2DirCos']);
+                    else
+                        grid2DirCoshandleBase = @DirCos2DirCos;
+                    end
+                    
                     [~,~,w] = grid2DirCoshandleBase(obj.x,obj.y);
                     if strcmp(hemisphere,'top')
                         valAng = find(w >= 0);
@@ -3856,7 +3869,12 @@ classdef FarField
             xVal = obj.x(valAng);
             yVal = obj.y(valAng);
             zVal = Z(valAng);
-            
+            if strcmp(obj.gridType,'DirCosNorm')
+                xVal = xVal./obj.d_l(freqIndex);
+                yVal = yVal./obj.d_l(freqIndex);
+            end
+
+
             if ~(OneDx || OneDy)
                 edgeAngExtent_deg = 16;
                 % Extend grid past -180 and +180 for interpolation across the axis
@@ -4063,24 +4081,53 @@ classdef FarField
             
         end
         
-        function [obj,obj0] = getOnDirCosNormGrid(obj,D)
+        function [obj,objOrigGrid] = getOnDirCosNormGrid(obj,D,ampNormFlag)
             % getOnDirCosNormGrid gets the object on the same DirCosNorm grid for all frequencies
-            % [obj,obj0] = getOnDirCosNormGrid(obj)
+            % [obj,objOrigGrid] = getOnDirCosNormGrid(obj)
             % obj is on the same grid, deterined by the lowest input frequency
-            % (optional) obj0 is an array of objects, each on its own raw DirCosNorm grid
-
+            % objOrigGrid is an array of objects still in the original input grid
             
-            if nargin > 1, obj.DirCosNorm_D = D; end
+            
+            if nargin > 1 && ~isempty(D), obj.DirCosNorm_D = D; end
+            if nargin < 3 || isempty(ampNormFlag), ampNormFlag = false; end
             
             assert(obj.isGridUniform,'Only works for input objects with uniform grids at present')
+            assert(~isempty(obj.DirCosNorm_D),'Cannot set normalised DirCos grid without D')
             
-            % Make interpolants
-            obj = obj.buildInterpAng;
-
+            
             % Get evaluation angles
-            [u, v, w] = getDirCosNorm(obj);
+            [u, v, ~] = getDirCosNorm(obj);
+            % Get the required [ph,th] angles for all the frequencies
+            u_ = bsxfun(@rdivide,u(:,1),obj.d_l);
+            v_ = bsxfun(@rdivide,v(:,1),obj.d_l);
+            w_ = sqrt(1 - u_.^2 - v_.^2);
+            [ph_,th_] = DirCos2PhTh(u_,v_,w_);
 
-            keyboard
+            E1_ = zeros(obj.Nang,obj.Nf);
+            if ~isempty(obj.E2), E2_ = zeros(obj.Nang,obj.Nf); else E2_ = []; end
+            if ~isempty(obj.E3), E3_ = zeros(obj.Nang,obj.Nf); else E3_ = []; end
+            if nargout > 1, objOrigGrid(1:obj.Nf) = obj; end
+            for ff = 1:obj.Nf
+                % Make interpolants per frequency
+                obj1f = buildInterpAng(obj.getFi(ff));
+                obj1f = obj1f.evalInterpAng(ph_(:,ff),th_(:,ff));
+                if ampNormFlag
+                    obj1f = obj1f.scale(obj.d_l(1)./obj.d_l(ff));
+                end
+                if nargout > 1, objOrigGrid(ff) = obj1f; end
+
+                E1_(:,ff) = obj1f.E1;
+                if ~isempty(obj1f.E2), E2_(:,ff) = obj1f.E2; end
+                if ~isempty(obj1f.E3), E3_(:,ff) = obj1f.E3; end
+                
+            end
+            obj.E1 = E1_;
+            obj.E2 = E2_;
+            obj.E3 = E3_;
+            obj.x = u(:,1);
+            obj.y = v(:,1);
+            obj.gridType = 'DirCosNorm';
+            obj = obj.clearBase;    
         end
 
         %% Phase centre/shifts/rotations of the field
@@ -7892,9 +7939,11 @@ classdef FarField
                     handle2DirCos = str2func([obj.gridType,'2DirCos']);
                     [u,v,~] = handle2DirCos(obj.x,obj.y);
                     % Then normalize
-                    u = bsxfun(@times,u,obj.d_l);
-                    v = bsxfun(@times,v,obj.d_l);
-                    w = sqrt(1 - u.^2 - v.^2);
+                    if ~isempty(obj.DirCosNorm_D)
+                        u = bsxfun(@times,u,obj.d_l);
+                        v = bsxfun(@times,v,obj.d_l);
+                        w = sqrt(1 - u.^2 - v.^2);
+                    end
             end
         end
         
