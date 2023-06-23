@@ -4041,7 +4041,7 @@ classdef FarField
             
             if obj.isGridUniform
                 if strcmp(interpType,'natural')
-                    warning('natural interpolation scheme only valid for scaattered data. Using spline.')
+                    warning('natural interpolation scheme only valid for scattered data. Using spline.')
                     interpType = 'spline';
                 end
                 xg = reshape(obj.x,obj.Ny,obj.Nx).';
@@ -4064,6 +4064,23 @@ classdef FarField
             
             assert(~isempty(obj.interpStructAng),'No interpolation model found. Build one using buildInterpAng first.')
             
+            % Handle (some) symmetry
+            if strcmp(obj.gridType,'PhTh') && strcmp(obj.coorType,'spherical') && strcmp(obj.yRangeType,'180') 
+                if obj.symXZ
+                    xi = wrap2pi(xi(:));
+                    inRange = xi >= 0;
+                    xEval = abs(xi);
+                    obj.symmetryXZ = 'none';
+                end
+                if obj.symYZ
+                    error('YZ symmetry not yet implemented')
+                end
+            else
+                xEval = xi(:);
+            end
+
+            yEval = yi(:);
+
             obj.x = xi(:);
             obj.y = yi(:);
             
@@ -4071,10 +4088,15 @@ classdef FarField
             if ~isempty(obj.E2), E2_ = E1_; else, E2_ = []; end
             if ~isempty(obj.E3), E3_ = E1_; else, E3_ = []; end
             for ff = 1:obj.Nf
-                E1_(:,ff) = obj.interpStructAng.E1i{ff}(obj.x,obj.y);
-                if ~isempty(obj.E2), E2_(:,ff) = obj.interpStructAng.E2i{ff}(obj.x,obj.y); end
-                if ~isempty(obj.E3), E3_(:,ff) = obj.interpStructAng.E3i{ff}(obj.x,obj.y); end
+                E1_(:,ff) = obj.interpStructAng.E1i{ff}(xEval,yEval);
+                if ~isempty(obj.E2), E2_(:,ff) = obj.interpStructAng.E2i{ff}(xEval,yEval); end
+                if ~isempty(obj.E3), E3_(:,ff) = obj.interpStructAng.E3i{ff}(xEval,yEval); end
             end
+            if obj.symXZ
+                E1_(~inRange,:) = obj.symXZ.*E1_(~inRange,:);
+                if ~isempty(E2_), E2_(~inRange,:) = -obj.symXZ.*E2_(~inRange,:); end
+            end
+
             obj.E1 = E1_;
             obj.E2 = E2_;
             obj.E3 = E3_;
@@ -4914,7 +4936,7 @@ classdef FarField
                 % often
                 tol = mean(diff(unique(obj1.x)));
                 if obj1.symXZ
-                    insert_minpi = max(obj1.x) - pi < tol/10; % tes if the -pi cut will be needed later
+                    insert_minpi = max(obj1.x) - pi < tol/10; % test if the -pi cut will be needed later
                     ph_ = wrap22pi(obj1.ph);
                     obj1.x = wrap2pi([ph_;2*pi - ph_]);
                     obj1.y = [obj1.th;obj1.th];
