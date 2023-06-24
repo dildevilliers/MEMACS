@@ -4064,8 +4064,10 @@ classdef FarField
             
             assert(~isempty(obj.interpStructAng),'No interpolation model found. Build one using buildInterpAng first.')
             
+            xEval = xi(:);
+            yEval = yi(:);
             % Handle (some) symmetry
-            if strcmp(obj.gridType,'PhTh') && strcmp(obj.coorType,'spherical') && strcmp(obj.yRangeType,'180') 
+            if strcmp(obj.gridType,'PhTh') && strcmp(obj.coorType,'spherical') && strcmp(obj.yRangeType,'180')
                 if obj.symXZ
                     xi = wrap2pi(xi(:));
                     inRange = xi >= 0;
@@ -4075,11 +4077,7 @@ classdef FarField
                 if obj.symYZ
                     error('YZ symmetry not yet implemented')
                 end
-            else
-                xEval = xi(:);
             end
-
-            yEval = yi(:);
 
             obj.x = xi(:);
             obj.y = yi(:);
