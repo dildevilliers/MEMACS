@@ -613,14 +613,14 @@ classdef CoordinateSystem
            
            % Now get ph
            % Get the vector which is x rotated by ph in the x-y plane
-           if ~isequal(abs(z),abs(z1))
+           if all(abs(z) - abs(z1) < eps)  % This should be more reliable than isequal 
+               x_ph = x1;
+           else
                Nz = cross(z,z1);
                Nz = Nz./norm(Nz);
                x_ph = cross(Nz,z);
                x_ph = x_ph./norm(x_ph);
-           else
-               x_ph = x1;
-           end
+           end               
            ph = angBetweenVectors(x,x_ph);
            % Sort out the sign of ph - compare to the z-axis direction
            phSign = sign(dot(cross(x,x_ph),z));
