@@ -53,6 +53,7 @@ while nl == 1,
 
         if findstr(line,'MA') > 0, DatFor=1; end
         if findstr(line,'RI') > 0, DatFor=2; end
+        if findstr(line,'dB') > 0, DatFor=3; end
         infoLineNr = textline_count;
     end
 end
@@ -122,10 +123,13 @@ else
                 end
             end
             for kk = 1:NrPorts
-                if DatFor == 1
-                    S_row(kk) = submat_row(2*kk-1)*exp(j*submat_row(2*kk)*pi/180);
-                elseif DatFor == 2
-                    S_row(kk) = submat_row(2*kk-1) + j*submat_row(2*kk);
+                switch DatFor
+                    case 1
+                        S_row(kk) = submat_row(2*kk-1)*exp(j*submat_row(2*kk)*pi/180);
+                    case 2
+                        S_row(kk) = submat_row(2*kk-1) + j*submat_row(2*kk);
+                    case 3
+                        S_row(kk) = lin20(submat_row(2*kk-1))*exp(j*submat_row(2*kk)*pi/180);
                 end
             end
             S(jj,:,ii) = S_row;
