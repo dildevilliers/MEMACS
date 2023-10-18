@@ -18,6 +18,7 @@ function [S,freq,Z0] = touchread(FileName,NrPorts,Fmin,Fmax)
 %
 % Author: Dirk de Villiers
 % Date  : 2008/06/07
+% Updated: 2023/10/18
 
 
 % Set the default values of the optional parameters
@@ -35,25 +36,23 @@ nl = 1;
 textline_count = 0;
 FUnit = 0;
 fid = fopen(FileName);
-while nl == 1,
+while nl == 1
     line = fgetl(fid);
     textline_count = textline_count + 1;
     nl = 0;
-    if strcmp(line(1),'!') == 1, nl = 1; end;
+    if strcmp(line(1),'!') == 1, nl = 1; end
     if strcmp(line(1),'#') == 1
         nl = 1;
-        if (findstr(line,'HZ')  > 0), FUnit = 1E0; end
-        if (findstr(line,'Hz')  > 0), FUnit = 1E0; end
-        if (findstr(line,'GHZ') > 0), FUnit = 1E9; end
-        if (findstr(line,'GHz') > 0), FUnit = 1E9; end
-        if (findstr(line,'MHZ') > 0), FUnit = 1E6; end
-        if (findstr(line,'MHz') > 0), FUnit = 1E6; end
-        if (findstr(line,'KHZ') > 0), FUnit = 1E3; end
-        if (findstr(line,'KHz') > 0), FUnit = 1E3; end
 
-        if findstr(line,'MA') > 0, DatFor=1; end
-        if findstr(line,'RI') > 0, DatFor=2; end
-        if findstr(line,'dB') > 0, DatFor=3; end
+        FUnit = 1;
+        if contains(lower(line),'ghz'), FUnit = 1e9; end
+        if contains(lower(line),'mhz'), FUnit = 1e6; end
+        if contains(lower(line),'khz'), FUnit = 1e3; end
+
+        if contains(lower(line),'ma'), DatFor = 1; end
+        if contains(lower(line),'ri'), DatFor = 2; end
+        if contains(lower(line),'db'), DatFor = 3; end
+
         infoLineNr = textline_count;
     end
 end
@@ -88,18 +87,18 @@ S = zeros(NrPorts,NrPorts,NrFreqs);
 
 if NrPorts == 2
     NrFreqs = M;
-    freq = Sfmat(:,1);
+%     freq = Sfmat(:,1);
     for ii = 1:NrFreqs
         if DatFor == 1
-            S(1,1,ii) = Sfmat(ii,2)*exp(j*Sfmat(ii,3)*pi/180);
-            S(2,1,ii) = Sfmat(ii,4)*exp(j*Sfmat(ii,5)*pi/180);
-            S(1,2,ii) = Sfmat(ii,6)*exp(j*Sfmat(ii,7)*pi/180);
-            S(2,2,ii) = Sfmat(ii,8)*exp(j*Sfmat(ii,9)*pi/180);
+            S(1,1,ii) = Sfmat(ii,2)*exp(1i*Sfmat(ii,3)*pi/180);
+            S(2,1,ii) = Sfmat(ii,4)*exp(1i*Sfmat(ii,5)*pi/180);
+            S(1,2,ii) = Sfmat(ii,6)*exp(1i*Sfmat(ii,7)*pi/180);
+            S(2,2,ii) = Sfmat(ii,8)*exp(1i*Sfmat(ii,9)*pi/180);
         elseif DatFor == 2
-            S(1,1,ii) = Sfmat(ii,2) + j*Sfmat(ii,3);
-            S(2,1,ii) = Sfmat(ii,4) + j*Sfmat(ii,5);
-            S(1,2,ii) = Sfmat(ii,6) + j*Sfmat(ii,7);
-            S(2,2,ii) = Sfmat(ii,8) + j*Sfmat(ii,9);
+            S(1,1,ii) = Sfmat(ii,2) + 1i*Sfmat(ii,3);
+            S(2,1,ii) = Sfmat(ii,4) + 1i*Sfmat(ii,5);
+            S(1,2,ii) = Sfmat(ii,6) + 1i*Sfmat(ii,7);
+            S(2,2,ii) = Sfmat(ii,8) + 1i*Sfmat(ii,9);
         end
     end
 else
@@ -122,14 +121,15 @@ else
                     submat_row = submat;
                 end
             end
+            S_row = zeros(1,NrPorts);
             for kk = 1:NrPorts
                 switch DatFor
                     case 1
-                        S_row(kk) = submat_row(2*kk-1)*exp(j*submat_row(2*kk)*pi/180);
+                        S_row(kk) = submat_row(2*kk-1)*exp(1i*submat_row(2*kk)*pi/180);
                     case 2
-                        S_row(kk) = submat_row(2*kk-1) + j*submat_row(2*kk);
+                        S_row(kk) = submat_row(2*kk-1) + 1i*submat_row(2*kk);
                     case 3
-                        S_row(kk) = lin20(submat_row(2*kk-1))*exp(j*submat_row(2*kk)*pi/180);
+                        S_row(kk) = lin20(submat_row(2*kk-1))*exp(1i*submat_row(2*kk)*pi/180);
                 end
             end
             S(jj,:,ii) = S_row;
