@@ -6029,9 +6029,9 @@ classdef FarField
             % -
             %
             % Created: 2019-04-22, Dirk de Villiers
-            % Updated: 2021-04-19, Dirk de Villiers
+            % Updated: 2023-10-18, Dirk de Villiers
             %
-            % Tested : Matlab R2020a
+            % Tested : Matlab R2022b
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -6050,7 +6050,7 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
 %             parseobj.addRequired('nr_freq',typeValidation_scalar);
 %             parseobj.addRequired('nr_cuts',typeValidation_scalar);
-            parseobj.addOptional('nr_freq',1,typeValidation_scalar);
+            parseobj.addOptional('nr_freq',[],typeValidation_scalar);
             parseobj.addOptional('nr_cuts',[],typeValidation_scalar);
             
             typeValidation_freq = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','increasing','nrows',1},'readGRASPcut');
@@ -6082,8 +6082,8 @@ classdef FarField
             if nargin == 0
                 [name,path,filterindex] = uigetfile({'*.cut';'*.cutmat'});
                 pathName = [path,name];
-                nr_freq = input('Enter number of frequencies:');
-                nr_cuts = input('Enter number of cuts:');
+%                 nr_freq = input('Enter number of frequencies:');
+%                 nr_cuts = input('Enter number of cuts:');
             end
 %             parseobj.parse(pathName,nr_freq,nr_cuts,varargin{:})
             parseobj.parse(pathName,varargin{:})
@@ -6131,31 +6131,70 @@ classdef FarField
             
             if filterindex == 1
                 
-                %===================================================================
-                % Load data for pre-allocation
-                %===================================================================
-                % Skip over text line
-                dummy = fgetl(fid);
-                %             form= '%*s %*s %*s %*s';
-                %             dummy = textscan(fid, form, 1);
-                
-                % Read info line
+                % Figure out number of frequency and field cuts
+                LINES = readlines([path,'\',name,ext]);
+                isNewBlock = strfind(LINES,LINES(1));
+                Nblocks = sum(cell2mat(isNewBlock));
+                % Read first info line to get number of values in each cut
                 form= '%f %f %f %f %f %f %f';
-                cut_info = textscan(fid, form, 1);
+                cut_info = textscan(LINES(2), form, 1);
                 V_INI = cut_info{1};
                 V_INC = cut_info{2};
                 V_NUM = cut_info{3};
-                C = cut_info{4};
                 ICOMP = cut_info{5};
                 ICUT = cut_info{6};
-                % NCOMP = cut_info{7};
-                
+                linesPerBlock = V_NUM + 2;
+                % Get the constant value vector
+                Cvect = zeros(1,Nblocks);
+                for bb = 1:Nblocks
+                    cut_info = textscan(LINES((bb-1).*linesPerBlock + 2), form, 1);
+                    Cvect(bb) = cut_info{4};
+                end
+                i0 = find(Cvect == Cvect(1));
+                nr_cuts_calc = diff(i0(1:2));
+                nr_freq_calc = Nblocks./nr_cuts_calc;
+                if isempty(nr_cuts)
+                    nr_cuts = nr_cuts_calc; 
+                else
+                    assert(isequal(nr_cuts,nr_cuts_calc),'nr_cuts or nr_freqs incompatible with file data');
+                end
+                if isempty(nr_freq)
+                    nr_freq = nr_freq_calc; 
+                else
+                    assert(isequal(nr_freq,nr_freq_calc),'nr_cuts or nr_freqs incompatible with file data');
+                end
+%                 C = Cvect(1);  % For legacy compatibility
+
+                %===================================================================
+                % Load data for pre-allocation
+                %===================================================================
+%                 Skip over text line
+%                 textLine = fgetl(fid);
+% %                 %             form= '%*s %*s %*s %*s';
+% %                 %             dummy = textscan(fid, form, 1);
+% %                 
+%                 % Read info line
+%                 form = '%f %f %f %f %f %f %f';
+%                 cut_info = textscan(fid, form, 1);
+%                 V_INI = cut_info{1};
+%                 V_INC = cut_info{2};
+%                 V_NUM = cut_info{3};
+%                 C = cut_info{4};
+%                 ICOMP = cut_info{5};
+%                 ICUT = cut_info{6};
+%                 % NCOMP = cut_info{7};
+
                 % Preallocate
                 [th_deg,ph_deg] = deal(zeros(V_NUM*nr_cuts,1));
                 [E1,E2] = deal(zeros(V_NUM*nr_cuts,nr_freq));
-                
+                readCounter = 2;
                 for ff = 1:nr_freq
                     for cc = 1:nr_cuts
+                        form = '%f %f %f %f %f %f %f';
+%                         cut_info = textscan(fid, form, 1);
+%                         C = cut_info{4};
+                        cut_info = sscanf(LINES(readCounter), form, [1 7]);
+                        C = cut_info(4);
                         if ff == 1 % Only do once
                             x_1cut = ones(V_NUM,1).*C;
                             y_1cut = (V_INI:V_INC:(V_INC*(V_NUM - 1) + V_INI)).';
@@ -6169,16 +6208,25 @@ classdef FarField
                             end
                         end
                         % Read cut data
-                        form= '%f %f %f %f';
-                        cut_data = textscan(fid, form, V_NUM);
-                        E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
-                        E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
+                        form = '%f %f %f %f';
+%                         cut_data = textscan(fid, form, V_NUM);
+                        cut_data = zeros(V_NUM,4);
+                        for vv = 1:V_NUM
+                            cut_data(vv,:) = sscanf(LINES(readCounter+vv), form, [1 4]);
+                        end
+                        readCounter = readCounter + V_NUM + 2;   % +2 to step over header and info
+%                         E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{1} + 1i.*cut_data{2};
+%                         E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data{3} + 1i.*cut_data{4};
+                        E1(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data(:,1) + 1i.*cut_data(:,2);
+                        E2(((cc-1)*V_NUM + 1):cc*V_NUM,ff) = cut_data(:,3) + 1i.*cut_data(:,4);
                         
-                        dummy = fgetl(fid); % step off previous line
-                        dummy = fgetl(fid); % step over header line
-                        form= '%f %f %f %f %f %f %f';
-                        cut_info = textscan(fid, form, 1);
-                        C = cut_info{4};
+%                         dummy = fgetl(fid); % step off previous line
+%                         dummy = fgetl(fid); % step over header line
+%                         form= '%f %f %f %f %f %f %f';
+%                         cut_info = textscan(fid, form, 1);
+%                         C = cut_info{4};
+%                         cut_info = sscanf(LINES(readCounter), form, [1 7]);
+%                         C = cut_info(4);
                     end
                 end
                 fclose(fid);
