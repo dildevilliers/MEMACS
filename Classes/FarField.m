@@ -6151,7 +6151,11 @@ classdef FarField
                     Cvect(bb) = cut_info{4};
                 end
                 i0 = find(Cvect == Cvect(1));
-                nr_cuts_calc = diff(i0(1:2));
+                if i0 == 1
+                    nr_cuts_calc = numel(Cvect);
+                else
+                    nr_cuts_calc = diff(i0(1:2));
+                end
                 nr_freq_calc = Nblocks./nr_cuts_calc;
                 if isempty(nr_cuts)
                     nr_cuts = nr_cuts_calc; 
