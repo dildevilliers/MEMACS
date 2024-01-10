@@ -66,8 +66,15 @@ while keepReading
         parCount = parCount + 1;
         data = textscan(line, '%s %s');
         paramName = data{1}{1};
-        line = fgetl(fid);  % Dummy past the bracket
-        line = fgetl(fid);
+        skipLines = true;
+        while skipLines
+            line = fgetl(fid);  % Dummy past the bracket or comments
+            if ismember(line(1),{'(','/'})
+                skipLines = true;
+            else
+                skipLines = false;
+            end
+        end
         data = textscan(line, '%s %s %s');
         paramValue = str2double(data{3}{1});
         if ~isnan(paramValue)
