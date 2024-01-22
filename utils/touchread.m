@@ -1,139 +1,129 @@
-function [S,freq,Z0] = touchread(FileName,NrPorts,Fmin,Fmax)
-
+function [S, freq] = touchread(file, NrPorts)
+%
 % TOUCHREAD(...) loads the measured s-parameter data from a text file with Touchstone
 % format.  FileName is a text variable containing the full path and filename of 
-% the file to be loaded, NrPorts is the number of ports of the S-parameter matrix,
-% Fmin is the minimum frequency of measurement points that must be considered and Fmax
-% is the maximum frequency for which data should be loaded from file.  
-% Any s-parameters measured at frequencies below Fmin and
-% above Fmax will not be returned to the user.  Fmin and Fmax are optional parameters
-% if they are neglected from the parameter list, then values of Fmin = 1 Hz and 
-% Fmax = 500 GHz will be set as the default values.
+% the file to be loaded, NrPorts is the number of ports of the S-parameter matrix.
+% NrPorts is optional and will be mostly read from the file extension of metadata (if available)
 %
-% format: [S,freq,Z0]=touchread(FileName,NrPorts,Fmin,Fmax)
+% format: [S, freq] = touchread(FileName, NrPorts)
 %
 % The multidimensional matrix S contains the loaded s-parameters in complex format.  The full
-% S-parameter matrix for each frequency point is returned as S(Srows,Scolomns,freq).  
+% S-parameter matrix for each frequency point is returned as S(Srows,Scolumns,freq).  
 % The variable freq contains the measurement frequencies in Hz.
 %
-% Author: Dirk de Villiers
-% Date  : 2008/06/07
+% Author: Robert Lehmensiek and Dirk de Villiers
+% Date  : 2017/11
+% Updated: 2023/11
 
 
-% Set the default values of the optional parameters
+if nargin < 1, error('touchread -> Not enough input parameters'); end
+if nargin < 2, NrPorts = 0; end
 
-if (nargin < 4), Fmax=500E9; end
-if (nargin < 3), Fmin=1; end
+[freq,S] = read(file,NrPorts);
 
-% Read the header of the Touchstone file by checking for comments
-% and the unit identifier line.  If the unit ID line is read, 
-% scan the contents to determine the format in which the two port
-% parameters are stored, as well as the unit of the measured
-% frequencies.
 
-nl = 1;
-textline_count = 0;
-FUnit = 0;
-fid = fopen(FileName);
-while nl == 1,
-    line = fgetl(fid);
-    textline_count = textline_count + 1;
-    nl = 0;
-    if strcmp(line(1),'!') == 1, nl = 1; end;
-    if strcmp(line(1),'#') == 1
-        nl = 1;
-        if (findstr(line,'HZ')  > 0), FUnit = 1E0; end
-        if (findstr(line,'Hz')  > 0), FUnit = 1E0; end
-        if (findstr(line,'GHZ') > 0), FUnit = 1E9; end
-        if (findstr(line,'GHz') > 0), FUnit = 1E9; end
-        if (findstr(line,'MHZ') > 0), FUnit = 1E6; end
-        if (findstr(line,'MHz') > 0), FUnit = 1E6; end
-        if (findstr(line,'KHZ') > 0), FUnit = 1E3; end
-        if (findstr(line,'KHz') > 0), FUnit = 1E3; end
+function [f,Smat] = read(file,NrPorts)
 
-        if findstr(line,'MA') > 0, DatFor=1; end
-        if findstr(line,'RI') > 0, DatFor=2; end
-        infoLineNr = textline_count;
+ind = findstr(file,'.');
+if isempty(ind), error('Add extension'); end
+
+fid = fopen(file, 'r');
+if fid==-1, error(['Load error -> Cannot open: ', file]); end
+
+S = fscanf(fid, '%c');
+fclose(fid);
+
+% Get all end-of-line indexes
+in2 = strfind(S,char([10]));     % for DOS: [13 10] 13 = carriage return; 10 = line feed for DOS (remember +2 in ln = )
+% for UNIX: [10] (remember +1 in ln = )
+
+[~,~,ext] = fileparts(file);
+n = sscanf(lower(ext),'.s%dp');
+if isempty(n)
+    % Try to find from the header
+    % This works for some TICRA files - add more when we find other versions
+    in1 = strfind(S,'[Number of Ports]');
+
+    ind = find(in2>in1); ind = ind(1);
+    ln = S(in1+17:in2(ind));
+
+    n = sscanf(ln,'%f');
+
+    if isempty(n), error('Wrong extension, or provide number of ports'); end
+end
+if NrPorts ~= 0, assert(NrPorts == n,'Input number of ports different from file extension - please check'); end
+
+
+% Read the # info
+in1 = strfind(S,'#');
+
+ind = find(in2>in1); ind = ind(1);
+ln = S(in1+1:in2(ind));
+
+if contains(upper(ln),'GHZ'), fu = 1e9;
+elseif contains(upper(ln),'MHZ'), fu = 1e6;
+elseif contains(upper(ln),'KHZ'), fu = 1e3;
+elseif contains(upper(ln),'HZ'), fu = 1;
+else, error('Wrong Unit')
+end
+
+if contains(upper(ln),'MA'), tp = 1;
+elseif contains(upper(ln),'RI'), tp = 2;
+elseif contains(upper(ln),'DB'), tp = 3;
+else, error('Wrong Type')
+end
+
+% Find the end of the header - can be last ! or #
+in1 = sort([strfind(S,'!'),strfind(S,'#')]);
+in1_row = strfind(S,'! row');    % Find the end of row comment positions and remove them from the vector
+in1 = setdiff(in1, in1_row);
+in1 = find(in2>in1(end)); in1 = in2(in1(1));
+% Now remove the row line comments from the actual data
+if ~isempty(in1_row)
+    diffInd = in2 - repmat(in1_row(:),1,length(in2));  % Find the number of indexes between the line ends and start of row comments
+    diffInd(diffInd < 0) = nan;  % Throw away negative values
+    nrChars = min(diffInd,[],2);  % Each row here is the number of characters between the start of the row index and end of line (should all be the same)
+    clear diffInd
+    assert(max(abs(nrChars - max(nrChars))) < eps,'Error - unknown file format where row comments are not consistantly spaced before line ends')  % Make sure...
+    % Make matrix with start of comment until one before line end
+    in3 = in1_row(:) + [0:max(nrChars-1)];
+    % Sort and reshape
+    in3 = in3.';
+    in3 = in3(:).';
+    S(in3) = ' ';
+end
+
+
+S = sscanf(S(in1+1:end),'%f');
+ind_freq = 1:2*n^2+1:length(S);
+
+f = S(ind_freq).*fu;
+
+ind = setdiff(1:length(S),ind_freq);
+S = reshape(S(ind),2*n^2,[]).';
+
+switch tp
+  case 1
+    S = S(:,[1:2:end]) .* exp(1i.*deg2rad(S(:,[2:2:end]))); 
+    
+  case 2
+    S = S(:,[1:2:end]) + 1i.*S(:,[2:2:end]); 
+    
+  case 3
+    S = lin20(S(:,[1:2:end])) .* exp(1i.*deg2rad(S(:,[2:2:end]))); 
+    
+end
+
+if n==2
+  S = [S(:,1) S(:,3) S(:,2) S(:,4)];
+end
+
+% Build up the S-matrix
+Smat = zeros(n,n,length(f));
+for rr = 1:n
+    for cc = 1:n
+        Smat(rr,cc,:) = S(:,(rr - 1).*n+cc);
     end
 end
-status = fseek(fid, 0, 'bof');
-form= '%s %s %s %s %s %f';
-snp_info = textscan(fid, form, 1, 'HeaderLines', infoLineNr-1);
-Z0 = snp_info{6};
-% Close the file
-fclose('all');
-
-% Get the full matrix from the file
-Sfmat = dlmread(FileName,'',textline_count-1,0);
-
-% Sort the matrix
-[M,N] = size(Sfmat);
-if N > 9
-    Sfmat = Sfmat(:,1:9);
-end
-[M,N] = size(Sfmat);
-lines_port = ceil(NrPorts/4);
-if NrPorts == 2
-    lines_freq = 1;
-else
-    lines_freq = lines_port*NrPorts;
-end
-NrFreqs = M/lines_freq;
-
-Sfmat_col1 = Sfmat(:,1);
-freq = Sfmat_col1(1:lines_freq:M).*FUnit;
-
-S = zeros(NrPorts,NrPorts,NrFreqs);
-
-if NrPorts == 2
-    NrFreqs = M;
-    freq = Sfmat(:,1);
-    for ii = 1:NrFreqs
-        if DatFor == 1
-            S(1,1,ii) = Sfmat(ii,2)*exp(j*Sfmat(ii,3)*pi/180);
-            S(2,1,ii) = Sfmat(ii,4)*exp(j*Sfmat(ii,5)*pi/180);
-            S(1,2,ii) = Sfmat(ii,6)*exp(j*Sfmat(ii,7)*pi/180);
-            S(2,2,ii) = Sfmat(ii,8)*exp(j*Sfmat(ii,9)*pi/180);
-        elseif DatFor == 2
-            S(1,1,ii) = Sfmat(ii,2) + j*Sfmat(ii,3);
-            S(2,1,ii) = Sfmat(ii,4) + j*Sfmat(ii,5);
-            S(1,2,ii) = Sfmat(ii,6) + j*Sfmat(ii,7);
-            S(2,2,ii) = Sfmat(ii,8) + j*Sfmat(ii,9);
-        end
-    end
-else
-    for ii = 1:NrFreqs
-        for jj = 1:NrPorts
-            first_row = ((ii-1)*lines_port*NrPorts) + (lines_port*jj - (lines_port-1));
-            if jj == 1
-                submat_temp = Sfmat(first_row:first_row+lines_port-1,:);
-                submat = [submat_temp(1,2:N);submat_temp(2:lines_port,1:N-1)];
-                if lines_port > 1
-                    submat_row = reshape(submat',1,lines_port*(N-1));
-                else
-                    submat_row = submat;
-                end
-            else
-                submat = Sfmat(first_row:first_row+lines_port-1,1:N-1);
-                if lines_port > 1
-                    submat_row = reshape(submat',1,lines_port*(N-1));
-                else
-                    submat_row = submat;
-                end
-            end
-            for kk = 1:NrPorts
-                if DatFor == 1
-                    S_row(kk) = submat_row(2*kk-1)*exp(j*submat_row(2*kk)*pi/180);
-                elseif DatFor == 2
-                    S_row(kk) = submat_row(2*kk-1) + j*submat_row(2*kk);
-                end
-            end
-            S(jj,:,ii) = S_row;
-        end
-    end
-end
 
 
-freq_range = find(freq >= Fmin & freq <= Fmax);
-freq = freq(freq_range);
-S = S(:,:,freq_range);

@@ -41,12 +41,16 @@ end
 if ~strcmp(pathName(end-4:end),'.json')
     pathName = [pathName,'.json'];
 end
-if nargin > 1
-    outName = outFilePathName;
-else
+writeOutput = true;
+if nargin < 1 || isempty(outFilePathName)
     outName = 'params';
+elseif islogical(outFilePathName) && ~outFilePathName
+    outName = [];
+    writeOutput = false;
+else
+    outName = outFilePathName;
 end
-if ~strcmp(outName(end-1:end),'.m')
+if writeOutput && ~strcmp(outName(end-1:end),'.m')
     outName = [outName,'.m'];
 end
 
@@ -119,7 +123,7 @@ while swopped
     swopped = false;
     for iStep = iSplit:Npar-1
         s = strrep(ParamStruct(iStep).expr,' ','');
-        s = split(s,{'(',')','+','*','-','/'});
+        s = split(s,{'(',')','+','*','-','/',','});
         mustMove = false;
         for ss = 1:length(s)
             mustMove = mustMove || any(strcmp(s(ss),{ParamStruct(iStep:end).name}));
@@ -135,13 +139,15 @@ while swopped
     end
 end
 
-fid = fopen(outName,'wt');
-for pp = 1:Npar
-    if isnumeric(ParamStruct(pp).expr)
-        val = num2str(ParamStruct(pp).expr);
-    else
-        val = ParamStruct(pp).expr;
+if writeOutput
+    fid = fopen(outName,'wt');
+    for pp = 1:Npar
+        if isnumeric(ParamStruct(pp).expr)
+            val = num2str(ParamStruct(pp).expr);
+        else
+            val = ParamStruct(pp).expr;
+        end
+        fprintf(fid,'%s\n',[ParamStruct(pp).name,' = ',val,'; %',ParamStruct(pp).descr]);
     end
-    fprintf(fid,'%s\n',[ParamStruct(pp).name,' = ',val,'; %',ParamStruct(pp).descr]);
+    fclose(fid);
 end
-fclose(fid);

@@ -87,13 +87,17 @@ try
     Nf = 11;
     Ncut = 37;
     f = linspace(1,1.5,Nf);
-    FF1 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_spherical'],Nf,Ncut,'freq',f,'freqUnit','GHz');
-    FF2 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_ludwig3'],Nf,Ncut,'freq',f,'freqUnit','GHz');
-    FF3 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_circular'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF1 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_spherical'],'freq',f,'freqUnit','GHz');
+    FF1_ = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_spherical'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF2 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_ludwig3'],'freq',f,'freqUnit','GHz');
+    FF2_ = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_ludwig3'],Nf,Ncut,'freq',f,'freqUnit','GHz');
+    FF3 = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_circular'],'freq',f,'freqUnit','GHz');
+    FF3_ = FarField.readGRASPcut([dataPathGRASPcut,'FFcut_circular'],Nf,Ncut,'freq',f,'freqUnit','GHz');
     disp('Pass: readGRASPcut')
     readGRASPcutPass = true;
-    clear FF1 FF2 FF3
-catch readCSTffs_errInfo
+%     keyboard
+    clear FF1 FF2 FF3 FF1_ FF2_ FF3_
+catch readGRASPcut_errInfo
     disp('FAIL: readGRASPcut')
     readGRASPcutPass = false;
 end
