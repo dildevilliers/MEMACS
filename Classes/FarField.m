@@ -5684,11 +5684,11 @@ classdef FarField
     methods (Static = true)
         %% Farfield reading methods
         function FF = readGRASPgrd(pathName,varargin)
-            % READGRASPGRD Create a FarField object from a GRASP .grd file. 
+            % READGRASPGRD Create a FarField object from a GRASP .grd or .h5 file. 
             %
             % FF = readGRASPgrd(pathName,varargin): assumes gridFormat = SphericalGrid
             % FF = readGRASPgrd(pathName,gridFormat,varargin) loads a FarField object
-            % from the GRASP .grd file at pathName. Can have several optional
+            % from the GRASP .grd/.h5 file at pathName. Can have several optional
             % arguments describing the local field as name value pairs.
             % Not all GRASP functionality supported yet...
             % 
@@ -5716,9 +5716,9 @@ classdef FarField
             % -
             %
             % Created: 2019-06-10, Dirk de Villiers
-            % Updated: 2021-11-21, Dirk de Villiers
+            % Updated: 2024-02-27, Dirk de Villiers
             %
-            % Tested : Matlab R2021a
+            % Tested : Matlab R2022b
             %  Level : 2
             %   File : testScript_FarField.m
             %
@@ -5758,7 +5758,7 @@ classdef FarField
             parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
             
             if nargin == 0
-                [name,path] = uigetfile('*.grd');
+                [name,path] = uigetfile({'*.grd;*.h5;*.hdf5;*.he5'});
                 pathName = [path,name];
             end
             parseobj.parse(pathName,varargin{:})
@@ -5774,115 +5774,175 @@ classdef FarField
             earthLocation = parseobj.Results.earthLocation;
             time = parseobj.Results.time;
             
-            if ~strcmp(pathName(end-3:end),'.grd')
-                pathName = [pathName,'.grd'];
+            [~,~,e] = fileparts(pathName);
+            if isempty(e)
+                try 
+                    [~] = h5info(pathName);
+                    e = '.h5';
+                catch
+                    % An error here means we probably have an ascii format
+                    e = '.grd';
+                end
+                pathName = [pathName,e];
             end
-            fid = fopen(pathName);
-            
-            E1 = [];
-            E2 = [];
-            E3 = [];
-            
-            freqMarker = 'FREQUENCIES';
-            startMarker = '++++';
-            
-            % Read the field header
-            while 1
-                a = fgetl(fid);
-                if strncmp(a,freqMarker,11) % Read the frequencies info
-                    freqUnit = regexp(a, '(?<=\[)[^)]*(?=\])', 'match', 'once');
-                    % Keep reading lines until all frequencies read
-                    freq = [];
+
+            switch e
+                case '.grd'
+
+                    fid = fopen(pathName);
+
+                    E1 = [];
+                    E2 = [];
+                    E3 = [];
+
+                    freqMarker = 'FREQUENCIES';
+                    startMarker = '++++';
+
+                    % Read the field header
                     while 1
                         a = fgetl(fid);
-                        if strcmp(a,startMarker) || isempty(str2num(a)), break; end
-                        freq = [freq,str2num(a)];
+                        if strncmp(a,freqMarker,11) % Read the frequencies info
+                            freqUnit = regexp(a, '(?<=\[)[^)]*(?=\])', 'match', 'once');
+                            % Keep reading lines until all frequencies read
+                            freq = [];
+                            while 1
+                                a = fgetl(fid);
+                                if strcmp(a,startMarker) || isempty(str2num(a)), break; end
+                                freq = [freq,str2num(a)];
+                            end
+                        end
+                        if strcmp(a,startMarker)
+                            a = fgetl(fid);
+                            a = fgetl(fid);
+                            fieldInfo = str2num(a);
+                            NSET = fieldInfo(1);
+                            ICOMP = fieldInfo(2);
+                            NCOMP = fieldInfo(3);
+                            IGRID = fieldInfo(4);
+                            [IX,IY] = deal(zeros(1,NSET));
+                            for ff = 1:NSET
+                                a = fgetl(fid);
+                                centreInfo = str2num(a);
+                                IX(ff) = centreInfo(1);
+                                IY(ff) = centreInfo(2);
+                            end
+                            break;
+                        end
                     end
-                end
-                if strcmp(a,startMarker)
-                    a = fgetl(fid);
-                    a = fgetl(fid);
-                    fieldInfo = str2num(a);
-                    NSET = fieldInfo(1);
-                    ICOMP = fieldInfo(2);
-                    NCOMP = fieldInfo(3);
-                    IGRID = fieldInfo(4);
-                    [IX,IY] = deal(zeros(1,NSET));
+                    % Check if all beams have the same grid
+                    cI1 = centreInfo(1,:);
+                    comp = any(bsxfun(@minus,centreInfo,cI1),2);
+                    if sum(comp) > 0
+                        error('All the field sets must have the same grid - here there are different centre points...');
+                    end
+
+                    % Front matter done - read the NSET frequency blocks
                     for ff = 1:NSET
                         a = fgetl(fid);
-                        centreInfo = str2num(a);
-                        IX(ff) = centreInfo(1);
-                        IY(ff) = centreInfo(2);
+                        gridInfo1 = str2num(a); % Must be str2num
+                        XS = gridInfo1(1);
+                        YS = gridInfo1(2);
+                        XE = gridInfo1(3);
+                        YE = gridInfo1(4);
+                        a = fgetl(fid);
+                        gridInfo2 = str2num(a); % Must be str2num
+                        NX = gridInfo2(1);
+                        NY = gridInfo2(2);
+                        KLIMIT = gridInfo2(3);
+                        if KLIMIT == 1
+                            %ToDo
+                            error('KLIMIT = 1 not implemented yet...')
+                        else
+                            IS = 1;
+                            JS = 1;
+                            [IE,IN] = deal(NX);
+                            JE = NY;
+                        end
+                        if ff == 1  % Just build the grid once - assume they are all the same (ToDo: build a check later)
+                            [DX,DY] = deal(0);
+                            if NX > 1
+                                DX = (XE-XS)/(NX - 1);
+                            end
+                            if NY > 1
+                                DY = (YE-YS)/(NY - 1);
+                            end
+                            XCEN = DX*IX(ff);
+                            YCEN = DY*IY(ff);
+                            X = XCEN + XS+DX.*((IS:IE) - 1);
+                            Y = YCEN + YS+DY.*((JS:JE) - 1);
+                            % Initialise the field variables
+                            [E1,E2] = deal(zeros(NX*NY,NSET));
+                        end
+
+                        if NCOMP == 2
+                            form = '%f %f %f %f';
+                            fieldData = textscan(fid, form, NX*NY);
+                            %                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
+                            %                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
+                            E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
+                            E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
+                        elseif NCOMP == 3
+                            form = '%f %f %f %f %f %f';
+                            fieldData = textscan(fid, form, NX*NY);
+                            %                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
+                            %                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
+                            %                     E3 = [E3,(fieldData{5} + 1i.*fieldData{6})];
+                            E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
+                            E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
+                            E3(:,ff) = fieldData{5} + 1i.*fieldData{6};
+                        end
+                        % Dummy read
+                        a = fgetl(fid);
                     end
-                    break;
-                end
-            end
-            % Check if all beams have the same grid
-            cI1 = centreInfo(1,:);
-            comp = any(bsxfun(@minus,centreInfo,cI1),2);
-            if sum(comp) > 0
-                error('All the field sets must have the same grid - here there are different centre points...');
-            end
-            
-            % Front matter done - read the NSET frequency blocks
-            for ff = 1:NSET
-                a = fgetl(fid);
-                gridInfo1 = str2num(a); % Must be str2num
-                XS = gridInfo1(1);
-                YS = gridInfo1(2);
-                XE = gridInfo1(3);
-                YE = gridInfo1(4);
-                a = fgetl(fid);
-                gridInfo2 = str2num(a); % Must be str2num
-                NX = gridInfo2(1);
-                NY = gridInfo2(2);
-                KLIMIT = gridInfo2(3);
-                if KLIMIT == 1
-                    %ToDo
-                    error('KLIMIT = 1 not implemented yet...')
-                else
-                    IS = 1;
-                    JS = 1;
-                    [IE,IN] = deal(NX);
-                    JE = NY;
-                end
-                if ff == 1  % Just build the grid once - assume they are all the same (ToDo: build a check later)
-                    [DX,DY] = deal(0);
-                    if NX > 1
-                        DX = (XE-XS)/(NX - 1);
+                    fclose(fid);
+
+
+                    % Fix the shapes of the field data
+                    for ff = 1:NSET
+                        e1 = reshape(E1(:,ff),NX,NY).';
+                        E1(:,ff) = e1(:);
+                        e2 = reshape(E2(:,ff),NX,NY).';
+                        E2(:,ff) = e2(:);
+                        if NCOMP == 3
+                            e3 = reshape(E3(:,ff),NX,NY).';
+                            E3(:,ff) = e3(:);
+                        end
                     end
-                    if NY > 1
-                        DY = (YE-YS)/(NY - 1);
-                    end
-                    XCEN = DX*IX(ff);
-                    YCEN = DY*IY(ff);
-                    X = XCEN + XS+DX.*((IS:IE) - 1);
-                    Y = YCEN + YS+DY.*((JS:JE) - 1);
-                    % Initialise the field variables
-                    [E1,E2] = deal(zeros(NX*NY,NSET));
-                end
-                
-                if NCOMP == 2
-                    form = '%f %f %f %f';
-                    fieldData = textscan(fid, form, NX*NY);
-%                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
-%                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
-                    E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
-                    E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
-                elseif NCOMP == 3
-                    form = '%f %f %f %f %f %f';
-                    fieldData = textscan(fid, form, NX*NY);
-%                     E1 = [E1,(fieldData{1} + 1i.*fieldData{2})];
-%                     E2 = [E2,(fieldData{3} + 1i.*fieldData{4})];
-%                     E3 = [E3,(fieldData{5} + 1i.*fieldData{6})];
-                    E1(:,ff) = fieldData{1} + 1i.*fieldData{2};
-                    E2(:,ff) = fieldData{3} + 1i.*fieldData{4};
-                    E3(:,ff) = fieldData{5} + 1i.*fieldData{6};
-                end
-                % Dummy read
-                a = fgetl(fid);
+
+                case {'.h5','.hdf5','.he5'}
+                    dataInfo = h5info(pathName,'/data');
+                    paramList = h5read(pathName,'/parameterlist');
+
+                    % Below from the TICRATools manual - real and imaginary read sperately, and matrix transposed
+                    dataSize = num2cell(fliplr(dataInfo.Dataspace.Size));
+                    [NF,NB,NY,NX,NCOMP] = deal(dataSize{:});
+                    assert(NB == 1,'Can only read one beam at this stage')
+
+                    fieldType = h5readatt(pathName,'/object','field_type');
+                    assert(strcmp(fieldType,'E field'),'Can only read E field types at this stage');
+
+                    gridClass = h5readatt(pathName,'/object','class');
+                    assert(strcmp(gridClass,'spherical_grid'),'Can only read spherical_grid class of grid at this stage');
+                    
+                    ICOMP = h5readatt(pathName,'/object','icomp');
+                    IGRID = h5readatt(pathName,'/object','igrid');
+                    freq = h5read(pathName,'/parameters/frequency');
+                    freqUnit = h5readatt(pathName,'/parameters/frequency','unit');
+                    X = h5read(pathName,['/parameters/',char(paramList(4))]);
+                    Y = h5read(pathName,['/parameters/',char(paramList(3))]);
+
+                    rawData = h5read(pathName,'/data');
+                    data = permute(rawData.r + 1i*rawData.i, [5 4 3 2 1]);
+                    clear rawdata
+
+                    % Hou kop!
+                    E1 = reshape(permute(data(:,:,:,:,1),[3,4,1,2]),NX*NY,NF);
+                    E2 = reshape(permute(data(:,:,:,:,2),[3,4,1,2]),NX*NY,NF);
+                    E3 = [];
+                    if NCOMP == 3, E3 = reshape(permute(data(:,:,:,:,3),[3,4,1,2]),NX*NY,NF); end
+                otherwise
+                    error(['Unknown file extension: ',e])
             end
-            fclose(fid);
             
             % Build the object
 %             [Xmat,Ymat] = ndgrid(X,Y);
@@ -5935,29 +5995,29 @@ classdef FarField
                     returnStruct = true;
             end
             
-            
-            % Fix the shapes of the field data
-            for ff = 1:NSET
-                e1 = reshape(E1(:,ff),NX,NY).';
-                E1(:,ff) = e1(:);
-                e2 = reshape(E2(:,ff),NX,NY).';
-                E2(:,ff) = e2(:);
-                if NCOMP == 3
-                    e3 = reshape(E3(:,ff),NX,NY).';
-                    E3(:,ff) = e3(:);
-                end
-            end
-            
             if returnStruct
-                FF = struct('gridFormat',gridFormat,...
-                    'NSET',NSET,'ICOMP',ICOMP,'NCOMP',NCOMP,'IGRID',IGRID,...
-                    'IX',IX,'IY',IY,...
-                    'XS',XS,'YS',YS,'XE',XE,'YE',YE,...
-                    'DX',DX,'DY',DY,'XCEN',XCEN,'YCEN',YCEN,...
-                    'NX',NX,'NY',NY,'KLIMIT',KLIMIT,...
-                    'IS',IS,'IN',IN,...
-                    'X',X,'Y',Y,...
-                    'F1',E1,'F2',E2,'F3',E3);
+                switch e
+                    case '.grd'
+                        FF = struct('gridFormat',gridFormat,...
+                            'NSET',NSET,'ICOMP',ICOMP,'NCOMP',NCOMP,'IGRID',IGRID,...
+                            'IX',IX,'IY',IY,...
+                            'XS',XS,'YS',YS,'XE',XE,'YE',YE,...
+                            'DX',DX,'DY',DY,'XCEN',XCEN,'YCEN',YCEN,...
+                            'NX',NX,'NY',NY,'KLIMIT',KLIMIT,...
+                            'IS',IS,'IN',IN,...
+                            'X',X,'Y',Y,...
+                            'freq',freq,'freqUnit',freqUnit,...
+                            'F1',E1,'F2',E2,'F3',E3);
+                    otherwise
+                        gridClass = h5readatt(pathName,'/object','class');
+                        fieldType = h5readatt(pathName,'/object','field_type');
+                        FF = struct('gridFormat',gridFormat,...
+                            'NB',NSET,'ICOMP',ICOMP,'NCOMP',NCOMP,'IGRID',IGRID,...
+                            'gridClass',gridClass,'fieldType',fieldType,...
+                            'X',X,'Y',Y,...
+                            'freq',freq,'freqUnit',freqUnit,...
+                            'F1',E1,'F2',E2,'F3',E3);
+                end
                 warning('FarField object not returned, since one or more of the .grd parameters not yet implemented. Instead, a struct with all the file data is returned. See GRASP manual for details.')
             else
                 if swopE1E2
@@ -5983,7 +6043,7 @@ classdef FarField
                     Prad = ones(size(freq)).*4*pi./(2*eta0);
                 end
                 radEff = ones(size(freq));
-                FF = FarField(x.*xScale,y.*yScale,E1,E2,freq,Prad,radEff,...
+                FF = FarField(x.*xScale,y.*yScale,E1,E2,freq(:).',Prad,radEff,...
                     'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                     'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,'E3',E3,...
                     'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
