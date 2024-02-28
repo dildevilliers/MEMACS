@@ -4890,11 +4890,18 @@ classdef FarField
             
             mustBeMember(symmetryType,{'none','electric','magnetic'})
             if ~strcmp(symmetryType,'none')
-                % Test if the input range is valid
-                tol = 10^(-obj.nSigDig);
-                % Easy to check in TrueView
-                obj1 = obj.grid2TrueView;
-                assert(all(sign(obj1.y+tol) > 0) || all(sign(obj1.y-tol) < 0),'Invalid range for XZ symmetry')
+                % Test if the input range is valid, and if not, just keep a valid half
+                phD = rad2deg(wrap2pi(obj.ph));
+                idxPos = phD >= 0;
+                idxNeg = ~idxPos;
+                npos = sum(idxPos);
+                nneg = sum(idxNeg);
+                if npos >= nneg
+                    idxDel = idxNeg;
+                else 
+                    idxDel = idxPos;
+                end
+                obj = obj.removeDirs(idxDel);
             end
             obj.symmetryXZ = symmetryType;
         end
@@ -4904,11 +4911,18 @@ classdef FarField
             
             mustBeMember(symmetryType,{'none','electric','magnetic'})
             if ~strcmp(symmetryType,'none')
-                % Test if the input range is valid
-                tol = 10^(-obj.nSigDig);
-                % Easy to check in TrueView
-                obj1 = obj.grid2TrueView;
-                assert(all(sign(obj1.x+tol) > 0) || all(sign(obj1.x-tol) < 0),'Invalid range for YZ symmetry')
+                % Test if the input range is valid, and if not, just keep a valid half
+                phD = rad2deg(wrap2pi(obj.ph));
+                idxPos = abs(phD) <= 90;
+                idxNeg = ~idxPos;
+                npos = sum(idxPos);
+                nneg = sum(idxNeg);
+                if npos >= nneg
+                    idxDel = idxNeg;
+                else 
+                    idxDel = idxPos;
+                end
+                obj = obj.removeDirs(idxDel);
             end
             obj.symmetryYZ = symmetryType;
         end
@@ -5337,9 +5351,9 @@ classdef FarField
             
             % Check on the unit sphere in cartesian
             [u,v,w] = PhTh2DirCos(obj.ph,obj.th);
-            rangeX = abs((max(u) - min(u)) - (2 - obj.symYZ)) < tol;
-            rangeY = abs((max(v) - min(v)) - (2 - obj.symXZ)) < tol;
-            rangeZ = abs((max(w) - min(w)) - (2 - obj.symXY)) < tol;
+            rangeX = abs((max(u) - min(u)) - (2 - abs(obj.symYZ))) < tol;
+            rangeY = abs((max(v) - min(v)) - (2 - abs(obj.symXZ))) < tol;
+            rangeZ = abs((max(w) - min(w)) - (2 - abs(obj.symXY))) < tol;
             y = rangeX && rangeY && rangeZ;
             
 %             y = all(abs(abs([max(u),min(u)]) - 1) < tol) && all(abs(abs([max(v),min(v)]) - 1) < tol) && all(abs(abs([max(w),min(w)]) - 1) < tol);
