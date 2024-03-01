@@ -625,7 +625,7 @@ classdef FarField
             if nargin > 4 && ~isempty(E3in)
                 obj.E3(iSet) = E3in;
             end
-            if ~isempty(obj.xBase) || ~isempty(obj.E1Base)
+            if false && ~isempty(obj.xBase) || ~isempty(obj.E1Base)
                 warning('FarField:baseRemoveWarning','setEfield will remove the base grid from the object, since the operation is performed on the current grid, and the base typically becomes invalid')
             end
             obj = obj.clearBase;
