@@ -1826,7 +1826,40 @@ classdef FarField
             obj.y = deg2rad(yRound);
         end
         
-        function obj = copyAndInsertXcut(obj1,xvalCopy,xvalPaste,tol)
+%         function obj = copyAndInsertXcut(obj1,xvalCopy,xvalPaste,tol)
+%             % COPYANDINSERTXCUT Copy a FarField x-cut into another position.
+%             
+%             % Use this to copy an X cut into another position.  Typically
+%             % handy when some transformation does not include the closing
+%             % cut - that is the 0 and 360 or -180 and 180 cuts.  Can in
+%             % principle be used to do random stuff - so careful.
+%             
+%             if nargin < 4
+%                 tol = mean(diff(unique(obj1.x)));
+%             end
+%             % Make a whole new object to initialise the base
+%             % correctly - that is, no base after this change since it
+%             % changed the grid size
+%             inInd = find(abs(obj1.x - xvalCopy) < tol./10);
+%             xNew = [obj1.x;xvalPaste.*ones(size(inInd))];
+%             yNew = [obj1.y;obj1.y(inInd)];
+%             E1New = [obj1.E1;obj1.E1(inInd,:)];
+%             if ~isempty(obj1.E2)
+%                 E2New = [obj1.E2;obj1.E2(inInd,:)];
+%             else
+%                 E2New = [];
+%             end
+%             if ~isempty(obj1.E3)
+%                 E3New = [obj1.E3;obj1.E3(inInd,:)];
+%             else
+%                 E3New = [];
+%             end
+%             obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
+%                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
+%                 'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+%             obj = obj.sortGrid;
+%         end
+        function obj = copyAndInsertXcut(obj,xvalCopy,xvalPaste,tol)
             % COPYANDINSERTXCUT Copy a FarField x-cut into another position.
             
             % Use this to copy an X cut into another position.  Typically
@@ -1835,32 +1868,66 @@ classdef FarField
             % principle be used to do random stuff - so careful.
             
             if nargin < 4
-                tol = mean(diff(unique(obj1.x)));
+                tol = mean(diff(unique(obj.x)));
             end
-            % Make a whole new object to initialise the base
-            % correctly - that is, no base after this change since it
-            % changed the grid size
-            inInd = find(abs(obj1.x - xvalCopy) < tol./10);
-            xNew = [obj1.x;xvalPaste.*ones(size(inInd))];
-            yNew = [obj1.y;obj1.y(inInd)];
-            E1New = [obj1.E1;obj1.E1(inInd,:)];
-            if ~isempty(obj1.E2)
-                E2New = [obj1.E2;obj1.E2(inInd,:)];
+            
+            inInd = find(abs(obj.x - xvalCopy) < tol./10);
+            xNew = [obj.x;xvalPaste.*ones(size(inInd))];
+            yNew = [obj.y;obj.y(inInd)];
+            E1New = [obj.E1;obj.E1(inInd,:)];
+            if ~isempty(obj.E2)
+                E2New = [obj.E2;obj.E2(inInd,:)];
             else
                 E2New = [];
             end
-            if ~isempty(obj1.E3)
-                E3New = [obj1.E3;obj1.E3(inInd,:)];
+            if ~isempty(obj.E3)
+                E3New = [obj.E3;obj.E3(inInd,:)];
             else
                 E3New = [];
             end
-            obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
-                'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
-                'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+            obj.x = xNew;
+            obj.y = yNew;
+            obj.E1 = E1New;
+            obj.E2 = E2New;
+            obj.E3 = E3New;
             obj = obj.sortGrid;
+            obj = obj.clearBase;  % Grid changed
         end
         
-        function obj = copyAndInsertYcut(obj1,yvalCopy,yvalPaste,tol)
+%         function obj = copyAndInsertYcut(obj1,yvalCopy,yvalPaste,tol)
+%             % COPYANDINSERTYCUT Copy a FarField y-cut into another position.
+%             
+%             % Use this to copy an X cut into another position.  Typically
+%             % handy when some transformation does not include the closing
+%             % cut - that is the 0 and 360 or -180 and 180 cuts.  Can in
+%             % principle be used to do random stuff - so careful.
+%             
+%             if nargin < 4
+%                 tol = mean(diff(unique(obj1.y)));
+%             end
+%             % Make a whole new object to initialise the base
+%             % correctly - that is, no base after this change since it
+%             % changed the grid size
+%             inInd = find(abs(obj1.y - yvalCopy) < tol);
+%             xNew = [obj1.x;obj1.x(inInd)];
+%             yNew = [obj1.y;yvalPaste.*ones(size(inInd))];
+%             E1New = [obj1.E1;obj1.E1(inInd,:)];
+%             if ~isempty(obj1.E2)
+%                 E2New = [obj1.E2;obj1.E2(inInd,:)];
+%             else
+%                 E2New = [];
+%             end
+%             if ~isempty(obj1.E3)
+%                 E3New = [obj1.E3;obj1.E3(inInd,:)];
+%             else
+%                 E3New = [];
+%             end
+%             obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
+%                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
+%                 'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+%             obj = obj.sortGrid;
+%         end
+        function obj = copyAndInsertYcut(obj,yvalCopy,yvalPaste,tol)
             % COPYANDINSERTYCUT Copy a FarField y-cut into another position.
             
             % Use this to copy an X cut into another position.  Typically
@@ -1869,29 +1936,32 @@ classdef FarField
             % principle be used to do random stuff - so careful.
             
             if nargin < 4
-                tol = mean(diff(unique(obj1.y)));
+                tol = mean(diff(unique(obj.y)));
             end
             % Make a whole new object to initialise the base
             % correctly - that is, no base after this change since it
             % changed the grid size
-            inInd = find(abs(obj1.y - yvalCopy) < tol);
-            xNew = [obj1.x;obj1.x(inInd)];
-            yNew = [obj1.y;yvalPaste.*ones(size(inInd))];
-            E1New = [obj1.E1;obj1.E1(inInd,:)];
-            if ~isempty(obj1.E2)
-                E2New = [obj1.E2;obj1.E2(inInd,:)];
+            inInd = find(abs(obj.y - yvalCopy) < tol);
+            xNew = [obj.x;obj.x(inInd)];
+            yNew = [obj.y;yvalPaste.*ones(size(inInd))];
+            E1New = [obj.E1;obj.E1(inInd,:)];
+            if ~isempty(obj.E2)
+                E2New = [obj.E2;obj.E2(inInd,:)];
             else
                 E2New = [];
             end
-            if ~isempty(obj1.E3)
-                E3New = [obj1.E3;obj1.E3(inInd,:)];
+            if ~isempty(obj.E3)
+                E3New = [obj.E3;obj.E3(inInd,:)];
             else
                 E3New = [];
             end
-            obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
-                'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
-                'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
+            obj.x = xNew;
+            obj.y = yNew;
+            obj.E1 = E1New;
+            obj.E2 = E2New;
+            obj.E3 = E3New;
             obj = obj.sortGrid;
+            obj = obj.clearBase;  % Grid changed
         end
         
         function obj = setYrange(obj,type)
@@ -8887,7 +8957,7 @@ classdef FarField
                 end
                 if max(obj.y) - min(obj.y) <= pi+median(diff(unique(obj.y)))/2
                     % Not larger than 180 span
-                    if min(obj.y) < 0 && max(obj.y) > 0 % Also check if we are straddling 0 and incomplete
+                    if false && min(obj.y) < 0 && max(obj.y) > 0 % Also check if we are straddling 0 and incomplete
                         yRangeType = '360';
                     else
                         yRangeType = '180';
