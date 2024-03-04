@@ -4901,7 +4901,10 @@ classdef FarField
                 else 
                     idxDel = idxPos;
                 end
-                obj = obj.removeDirs(idxDel);
+                % Remove duplicates
+                [~,IA] = uniquetol([phD(~idxDel),obj.th(~idxDel)],'ByRows',true);
+                iD = ~ismember((1:obj.Nang).',IA);
+                obj = obj.removeDirs(iD);
             end
             obj.symmetryXZ = symmetryType;
         end
@@ -4922,7 +4925,10 @@ classdef FarField
                 else 
                     idxDel = idxPos;
                 end
-                obj = obj.removeDirs(idxDel);
+                % Remove duplicates
+                [~,IA] = uniquetol([phD(~idxDel),obj.th(~idxDel)],'ByRows',true);
+                iD = ~ismember((1:obj.Nang).',IA);
+                obj = obj.removeDirs(iD);
             end
             obj.symmetryYZ = symmetryType;
         end
