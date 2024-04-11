@@ -214,7 +214,7 @@ classdef FarField
             expected_polType = {'linear','circular','slant','none'};
             parseobj.addParameter('polType','linear', @(x) any(validatestring(x,expected_polType,'FarField','polType')));
             
-            expected_gridType = {'PhTh','DirCos','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
+            expected_gridType = {'PhTh','DirCos','DirCosNorm','AzEl','ElAz','Horiz','TrueView','ArcSin','Mollweide','RAdec','GalLongLat'};
             parseobj.addParameter('gridType','PhTh', @(x) any(validatestring(x,expected_gridType,'FarField','gridType')));
             
             expected_freqUnit = {'Hz','kHz','MHz','GHz','THz'};
@@ -231,6 +231,7 @@ classdef FarField
             typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'FarField');
             parseobj.addParameter('r',1,typeValidation_scalar);
             parseobj.addParameter('slant',pi/4,typeValidation_scalar);
+            parseobj.addOptional('DirCosNorm_D',[],typeValidation_scalar);
             
             typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','orientation');
             parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
@@ -309,6 +310,12 @@ classdef FarField
                 obj.slant = inStruct.slant;
             else
                 obj.slant = parseobj.Results.slant;
+            end
+            if isfield(inStruct,'DirCosNorm_D') && ~isempty(inStruct.DirCosNorm_D)
+                validateattributes(inStruct.DirCosNorm_D,{'numeric'},{'real','finite','nonnan','scalar'},'FarField','inputStruct.DirCosNorm_D')
+                obj.DirCosNorm_D = inStruct.DirCosNorm_D;
+            else
+                obj.DirCosNorm_D = parseobj.Results.DirCosNorm_D;
             end
             if isfield(inStruct,'orientation') && ~isempty(inStruct.orientation)
                 validateattributes(inStruct.orientation,{'numeric'},{'real','finite','nonnan','size',[1,3]},'FarField','inputStruct.orientation')
