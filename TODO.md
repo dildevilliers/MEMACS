@@ -130,6 +130,7 @@
 ## ArraySystem
 - [ ] Expand plotting option for line styles etc.
 - [ ] Automate the time scale to Engineering units
+- [ ] Consider making freqSamp observable, or setAccess = private (since t is dependent on it)
 
 ## ArrayBeamformer
 - [ ] Implement for analog arrays

@@ -56,6 +56,14 @@ classdef ArrayDBE
             P = portPower(y); % [Nscan x 1]
         end
         
+         function obj = calLinScan(obj,x)
+            % Run this to calculate the calibration vector
+            for aa = 1:size(x,1)
+                obj.calVect(aa) = mean(x(1,:)./x(aa,:));
+            end
+            obj.arraySys = obj.arraySys.setChannelPhasors(obj.calVect);
+         end
+        
         %% Plotting
         function plotPortPSD(obj,x,portNumber,overSampFact)
             if nargin < 4
@@ -77,14 +85,6 @@ classdef ArrayDBE
             P = scanBeam(obj,freqRF,th,ph,x,calVect);
             plot(rad2deg(th),P), grid on
             xlabel('\theta^\circ')
-        end
-        
-        function obj = calLinScan(obj,x)
-            % Run this to calculate the calibration vector
-            for aa = 1:size(x,1)
-                obj.calVect(aa) = mean(x(1,:)./x(aa,:));
-            end
-            obj.arraySys = obj.arraySys.setChannelPhasors(obj.calVect);
         end
         
         function plotCalVect(obj)
