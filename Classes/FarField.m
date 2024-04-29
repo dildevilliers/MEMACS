@@ -6537,7 +6537,7 @@ classdef FarField
             end
             fid = fopen(pathName);
             if (fid==-1)
-                error(['Unable to open data file ', fileName, '!']);
+                error(['Unable to open data file ', pathName, '!']);
             end
             
             %===================================================================
