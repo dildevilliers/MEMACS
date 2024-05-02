@@ -880,6 +880,27 @@ classdef FarField
             psi(iCP) = 0;   % Meaningless
         end
         
+        function [IXR] = getIXR(obj1,obj2)
+            % GET IXR calculates the IXR of the two beams in obj1 and obj2
+            % IXR has the same dimensions as the fields in the input objects [Nang x Nf], and is in linear scale
+
+            assert(isGridEqual(obj1,obj2),'Input objects must have the same grids in angle and frequency')
+
+            J(1,1,:) = obj1.E1(:);
+            J(1,2,:) = obj1.E2(:);
+            J(2,1,:) = obj2.E1(:);
+            J(2,2,:) = obj2.E2(:);
+            
+            [~,S] = pagesvd(J);
+            % Get diagonal only
+            Sd(:,1) = S(1,1,:);
+            Sd(:,2) = S(2,2,:);
+            smax = max(Sd,[],2);
+            smin = min(Sd,[],2);
+
+            IXR = ((smax + smin)./(smax - smin)).^2;
+            IXR = reshape(IXR,obj1.Nang,obj1.Nf);
+        end
         %% Performance metrics
         function [SLL1,SLL2,SLLstruct] = getSLL(obj)
             % GETSLL Get the sidelobe level of the beam
