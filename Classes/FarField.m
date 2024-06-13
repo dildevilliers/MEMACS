@@ -1029,7 +1029,7 @@ classdef FarField
             
             BWfull = NaN(obj.Nx,obj.Nf,length(dBlevel));
             BW = NaN(length(dBlevel),obj.Nf);
-            nullPos = obj.yRange(2); % Deafault the null position to the edge of the y-range
+            nullPos = obj.Ny; % Default the null position to the end of the y-range
             try  % Can sometimes crash at a variety of places for strange beams - just return NaNs
                 for ff = 1:obj.Nf
                     % Get normalized dB directivity
