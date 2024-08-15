@@ -3624,10 +3624,14 @@ classdef FarField
             
             % Estimate a nice step size
             thRange = (max(FF.y) - min(FF.y));
-            if strncmp(FF.symmetryBOR,'BOR',3)
-                Nstep = round(FF.Nang/2);
+            if FF.isGridUniform
+                Nstep = FF.Ny;
             else
-                Nstep = round(sqrt(FF.Nang));
+                if strncmp(FF.symmetryBOR,'BOR',3)
+                    Nstep = round(FF.Nang/2);
+                else
+                    Nstep = round(sqrt(FF.Nang));
+                end
             end
             Nstep = Nstep + 1-mod(Nstep,2);
             step = thRange/(Nstep-1);
