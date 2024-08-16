@@ -3624,7 +3624,7 @@ classdef FarField
             
             % Estimate a nice step size
             thRange = (max(FF.y) - min(FF.y));
-            if FF.isGridUniform
+            if (FF.Nx*FF.Ny == FF.Nang) %FF.isGridUniform
                 Nstep = FF.Ny;
             else
                 if strncmp(FF.symmetryBOR,'BOR',3)
@@ -3691,7 +3691,7 @@ classdef FarField
             switch FF.gridType
                 case{'PhTh','AzEl','ElAz'}
                     % Shift the pattern onto a symmetrical grid
-                    if ~FF.isGridUniform
+                    if (FF.Nx*FF.Ny ~= FF.Nang)  %~FF.isGridUniform
                         FF = currentForm2Base(FF,step);
 %                     else
 %                         FF = FF.reset2Base;
@@ -5170,7 +5170,8 @@ classdef FarField
             tol = 10^(-obj.nSigDig+1);
             assert(strcmp(obj.gridType,'PhTh'),'getBORpattern only operates on PhTh grid patterns');
             assert(abs(max(obj.x) - min(obj.x)) - 2*pi < tol,'The ph cuts must span 2*pi for BOR expansion');
-            assert(obj.isGridUniform,'A plaid, monotonic, uniform grid is expected for BOR expansion');
+%             assert(obj.isGridUniform,'A plaid, monotonic, uniform grid is expected for BOR expansion');
+            assert(obj.Nx*obj.Ny == obj.Nang,'A uniform grid is expected for BOR expansion');
             assert(strcmp(obj.coorType,'spherical'),'getBORpattern only operates on spherical coorType');
             
             Nph = obj.Nx;
@@ -5334,7 +5335,7 @@ classdef FarField
         function [A1,B1,C1,D1] = getBOR1comps(obj1)
             % GETBOR1COMPS Returns components of a BOR1 pattern.
             
-            assert(strcmp(obj1.symmetryBOR,'BOR1'),'Input object not BOR1 symmetric')
+            assert(strncmp(obj1.symmetryBOR,'BOR1',4),'Input object not BOR1 symmetric')
             assert(strcmp(obj1.gridType,'PhTh'),'BOR1 patterns must be specified on a PhTh grid')
             assert(strcmp(obj1.coorType,'spherical'),'BOR1 patterns must be specified in a spherical coordinate system')
             assert(isequal(unique(obj1.x),[0;pi/2]),'Expect ph cuts only at 0 and pi/2')
