@@ -4531,7 +4531,7 @@ classdef FarField
             obj = obj.setBase;
         end
         
-        %% Maths - all overloaded methods
+        %% Maths - all overloaded and other basic mathematical operator methods
         function obj = plus(obj1,obj2)
             % PLUS Add two FarFields
             
@@ -4722,6 +4722,40 @@ classdef FarField
 %             T = FF_T.Prad;
         end
         
+        function [obj,maxVals,normVal] = diffNorm(obj1,obj2)
+            % DIFFNORM calculated the normalised difference between the inputs obj1 and obj2
+            % obj = (obj1 - obj2)/|maxAbs(obj1)|
+            % Here |maxAbs(obj1)| means the maximum total field strength:
+            % (max(sqrt(|obj1.E1|.^2 + |obj1.E2|.^2 + |obj1.E3|.^2))) is used for normalisation on a per frequency basis
+            % maxVals is a [3 x Nf] matrix returning the maximum value of [E1;E2;E3] in the output object for easy reference
+
+            [~,~,level] = mathSetup(obj1,obj2);
+
+            assert(level == 0,'Input fields must have the same grids and types');
+
+            normVal = abs(obj1.E1).^2;
+            if ~isempty(obj1.E2), normVal = normVal + abs(obj1.E2).^2; end
+            if ~isempty(obj1.E3), normVal = normVal + abs(obj1.E3).^2; end
+            normVal = sqrt(max(normVal));
+            
+            [E2_,E3_] = deal([]);
+            E1_ = bsxfun(@rdivide,(obj1.E1 - obj2.E1),normVal);
+            if ~isempty(obj1.E2), E2_ = bsxfun(@rdivide,(obj1.E2 - obj2.E2),normVal); end
+            if ~isempty(obj1.E3), E3_ = bsxfun(@rdivide,(obj1.E3 - obj2.E3),normVal); end
+            
+            obj = obj1;
+            obj.E1 = E1_;
+            obj.E2 = E2_;
+            obj.E3 = E3_;
+            
+            if nargout > 1
+                maxVals = zeros(3,obj.Nf);
+                maxVals(1,:) = max(abs(E1_));
+                if ~isempty(obj.E2), maxVals(2,:) = max(abs(E2_)); end
+                if ~isempty(obj.E3), maxVals(3,:) = max(abs(E3_)); end
+            end
+        end
+
         %% Frequency and field modifications
         function obj = getFi(obj1,freqIndex)
             % GETFI Returns an object only containing the results in
@@ -4937,7 +4971,7 @@ classdef FarField
             % Inputs
             % - obj1: FarField object
             % - sampleFactor: Integer down-sampling factor. Scalar or 2
-            %                 element vector indicating x- and y-donw sampling
+            %                 element vector indicating x- and y-down sampling
             %
             % Outputs
             % - obj:  Sub-sampled FarField object
