@@ -5275,6 +5275,7 @@ classdef FarField
                 BORcomps.C = Cn;
                 BORcomps.D = Dn;
                 BORcomps.th = th_vect;
+                BORcomps.freq = obj.freqHz;
                 BORcomps.BORpower = BORpower;
                 BORcomps.iMax = iMax;
             end
@@ -7978,6 +7979,86 @@ classdef FarField
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
         
+        function FF = fromBORcomps(BORcomps,phVect)
+            % FROMBORCOMPS Create a FarField object from a obj.getBORpattern struct
+            %
+            % FF = fromStruct(FFpattern) loads a FarField object
+            % from the struct in FFpattern.  The struct should have (some of) the
+            % fields defined in the method FarField.getFarFieldStruct
+            % 
+            % Inputs
+            % - BORcomps: Struct containing the following fields:
+            %   -- A,B,C,D: The A, B, C, and D matrices of size [Ncomps x Nth x Nf]
+            %   -- th: th angles in rad [Nth x 1]
+            %   -- BORpower: Radiated power in each mode in Watt [Ncomps x Nf]
+            %   -- freq: Frequency in Hz [1 x Nf]
+            %   -- iMax: Maximum mode number to consider for reconstruction per frequency [1 x Nf]
+            % - phVect: vector of ph values for the expansion in rad [Nph x 1]
+            %
+            % Outputs
+            % - FF:    Farfield object
+            %
+            % Dependencies
+            % -
+            %
+            % Created: 2024-08-26, Dirk de Villiers
+            % Updated: 2024-08-26, Dirk de Villiers
+            %
+            % Tested : Matlab R2022b
+            %  Level : 0
+            %   File : 
+            %
+            % Example
+            %   FF = FarField;
+            %   FFpattern = FF.getFarFieldStruct;
+            %   FF1 = FarField.fromStruct(FFpattern);
+            %   FF1.plot
+
+
+            if nargin < 2 || isempty(phVect), phVect = deg2rad(0:5:360); end
+
+            Nf = numel(BORcomps.freq);
+            Nth = numel(BORcomps.th);
+            
+            assert(size(BORcomps.A,2) == Nth,['BORcomps.A must have Nth = ',num2str(Nth), ' elements in dimension 2'])
+            assert(size(BORcomps.A,3) == Nf,['BORcomps.A must have Nf = ',num2str(Nf), ' elements in dimension 3'])
+            assert(all(size(BORcomps.B) == size(BORcomps.A)),'size(BORcomps.B) must equal size(BORcomps.A)')
+            assert(all(size(BORcomps.C) == size(BORcomps.A)),'size(BORcomps.C) must equal size(BORcomps.A)')
+            assert(all(size(BORcomps.D) == size(BORcomps.A)),'size(BORcomps.D) must equal size(BORcomps.A)')
+            
+            minComp = 0;
+            
+            N = numel(phVect(:));
+            An = repmat(BORcomps.A,1,N,1);
+            Bn = repmat(BORcomps.B,1,N,1);
+            Cn = repmat(BORcomps.C,1,N,1);
+            Dn = repmat(BORcomps.D,1,N,1);
+            [X1,X2] = meshgrid(phVect(:),BORcomps.th(:));
+
+            % Update the input GenField object for output
+            nph = bsxfun(@times,(minComp:max(BORcomps.iMax)).',X1(:).');  % Ncomp-by-Nang
+            sinph = repmat(sin(nph),1,1,Nf);     % Ncomp-by-Nang-by-Nf
+            cosph = repmat(cos(nph),1,1,Nf);     % Ncomp-by-Nang-by-Nf
+            % Build the fields from all the remaining modal coefficients
+            % repmat out in columns to generate the values for different
+            % requested angles
+            E1_ = An.*sinph + Bn.*cosph;
+            E2_ = Cn.*cosph - Dn.*sinph;
+            % Sum up...
+            E1_ = squeeze(sum(E1_,1));
+            E2_ = squeeze(sum(E2_,1));
+            if Nf == 1
+                E1_ = E1_(:);
+                E2_ = E2_(:);
+            end
+
+            % This might be inaccurate for fields not on the full sphere...
+            P = sum(BORcomps.BORpower,1);
+
+            FF = FarField(X1(:),X2(:),E1_,E2_,BORcomps.freq,P);
+
+        end
+
         % Analytic pattern functions
         function FF = SimpleTaper(varargin)
             % SIMPLETAPER creates a simple tapered pattern
