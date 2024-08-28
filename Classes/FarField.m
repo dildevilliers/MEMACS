@@ -8036,7 +8036,7 @@ classdef FarField
             [X1,X2] = meshgrid(phVect(:),BORcomps.th(:));
 
             % Update the input GenField object for output
-            nph = bsxfun(@times,(minComp:max(BORcomps.iMax)).',X1(:).');  % Ncomp-by-Nang
+            nph = bsxfun(@times,(minComp:max(BORcomps.iMax-1)).',X1(:).');  % Ncomp-by-Nang
             sinph = repmat(sin(nph),1,1,Nf);     % Ncomp-by-Nang-by-Nf
             cosph = repmat(cos(nph),1,1,Nf);     % Ncomp-by-Nang-by-Nf
             % Build the fields from all the remaining modal coefficients
