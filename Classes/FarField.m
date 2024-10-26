@@ -793,6 +793,8 @@ classdef FarField
             % function [AR] = getAxialRatio(obj)
             % returns the Axial Ratio (linear) [Nang x Nf]
             assert(~strcmp(obj.coorType,'power'),'AR undefined for power only patterns')
+            obj = obj.coor2spherical;
+            obj = obj.pol2linear;
             AR = sqrt((abs(obj.E1).^2 + abs(obj.E2).^2 + abs(obj.E1.^2 + obj.E2.^2))./(abs(obj.E1).^2 + abs(obj.E2).^2 - abs(obj.E1.^2 + obj.E2.^2)));
         end
         
@@ -802,6 +804,8 @@ classdef FarField
             % function [ARinv] = getAxialRatioInv(obj)
             % returns the inverted Axial Ratio in ARinv [Nang x Nf]
             assert(~strcmp(obj.coorType,'power'),'AR undefined for power only patterns')
+            obj = obj.coor2spherical;
+            obj = obj.pol2linear;
             ARinv = sqrt((abs(obj.E1).^2 + abs(obj.E2).^2 - abs(obj.E1.^2 + obj.E2.^2))./(abs(obj.E1).^2 + abs(obj.E2).^2 + abs(obj.E1.^2 + obj.E2.^2)));
         end
         
@@ -7170,6 +7174,8 @@ classdef FarField
                         case 'Eth-Eph'
                             coorType = 'spherical';
                     end
+                case ','
+                    coorType = 'power';
                 otherwise
                     error(['Unknown coordinate type found: ',D{5}{1}])
             end
@@ -7222,6 +7228,9 @@ classdef FarField
                     DATA2(iPhaseChange,4) = DATA2(iPhaseChange,4) + phaseChange;
                     E1 = lin20(DATA1(:,3)).*exp(1i.*deg2rad(DATA1(:,4)));
                     E2 = lin20(DATA2(:,3)).*exp(1i.*deg2rad(DATA2(:,4)));
+                case {'power'}
+                    E1 = lin20(DATA1(:,3)).*exp(1i.*deg2rad(DATA1(:,4)));
+                    E2 = [];
             end
             
             % Calculate the power and scaling
@@ -7229,7 +7238,9 @@ classdef FarField
             directivityDir = [0,0];     % Assume this thing gives directivity at broadside
             iDir = intersect(find(x == directivityDir(1)),find(y == directivityDir(2)));
             if ~isempty(iDir)
-                Prad = 4*pi*r.^2.*(abs(E1(iDir(1))).^2 + abs(E2(iDir(1))).^2)./(2.*376.7303.*D0);
+                E_ = abs(E1(iDir(1))).^2;
+                if ~isempty(E2), E_ = E_ + abs(E2(iDir(1))).^2; end
+                Prad = 4*pi*r.^2.*(E_)./(2.*376.7303.*D0);
             else
                 % Just use the maximum for directivity
                 Prad = 4*pi*r.^2.*max(abs(E1).^2 + abs(E2).^2)./(2.*376.7303.*D0);
@@ -8955,7 +8966,7 @@ classdef FarField
                 % Fix E-field signs
                 iE = repmat(ismember((1:obj.Nang).',iShift(:)),1,obj.Nf);
                 obj.E1(iE) = -obj.E1(iE);
-                obj.E2(iE) = -obj.E2(iE);
+                if ~isempty(obj.E2), obj.E2(iE) = -obj.E2(iE); end
 
                 obj.x(iShift) = xshift(obj.x(iShift));
                 obj.y(iShift) = yshift(obj.y(iShift));
@@ -8963,16 +8974,17 @@ classdef FarField
                     iin = find(abs(abs(obj.x) - pi/2) < tol);
                     xAdd = xshift(obj.x(iin));
                     yAdd = yshift(obj.y(iin));
+                    E2in = [];
                     if strcmp(obj.gridType,'PhTh')
                         % Negative sign for y < 0, positive for the rest
                         ySignChange = 0;
                         E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(yAdd < (ySignChange-tol)));
-                        E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd < (ySignChange-tol)));
+                        if ~isempty(obj.E2), E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(yAdd < (ySignChange-tol))); end
                     else
                         % Negative sign for |y| > pi/2, positive for the rest
                         ySignChange = pi/2;
                         E1in = bsxfun(@times,obj.E1(iin,:),1-2.*(abs(yAdd) > (ySignChange-tol)));
-                        E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(abs(yAdd) > (ySignChange-tol)));
+                        if ~isempty(obj.E2), E2in = bsxfun(@times,obj.E2(iin,:),1-2.*(abs(yAdd) > (ySignChange-tol))); end
                     end
                     obj = insertMissingCuts(obj,iin,xAdd,yAdd,E1in,E2in);
                 end
@@ -8987,7 +8999,8 @@ classdef FarField
                     else
                         iy0 = [];
                     end
-                    [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+                    [xy0,yy0,E1y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:));
+                    if ~isempty(obj.E2), E2y0 = obj.E2(iy0,:); else, E2y0 = []; end
                     yy0 = -yy0;
                 end
                 obj = insertDirs(obj,xy0,yy0,E1y0,E2y0);
