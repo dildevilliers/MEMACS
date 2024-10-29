@@ -7166,7 +7166,7 @@ classdef FarField
                 otherwise
                     error(['Unknown grid type found: ',D{3}{1}])
             end
-            switch D{5}{1}
+            switch D{5}{1}(1:2)
                 case 'L2'
                     switch D{6}{1}(1:end-1)
                         case 'Az/El'
@@ -7174,6 +7174,8 @@ classdef FarField
                         case 'Eth-Eph'
                             coorType = 'spherical';
                     end
+                case 'L3'
+                    coorType = 'Ludwig3';
                 case ','
                     coorType = 'power';
                 otherwise
@@ -7223,7 +7225,7 @@ classdef FarField
                     y = deg2rad(DATA1(:,2));
             end
             switch coorType
-                case {'spherical','Ludwig2AE'}
+                case {'spherical','Ludwig2AE','Ludwig3'}
                     DATA1(iPhaseChange,4) = DATA1(iPhaseChange,4) + phaseChange;
                     DATA2(iPhaseChange,4) = DATA2(iPhaseChange,4) + phaseChange;
                     E1 = lin20(DATA1(:,3)).*exp(1i.*deg2rad(DATA1(:,4)));
