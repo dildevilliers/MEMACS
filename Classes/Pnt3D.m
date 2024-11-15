@@ -10,11 +10,8 @@ classdef Pnt3D
         x double = 0 % x value in m
         y double = 0 % y value in m
         z double = 0 % z value in m
-%         th % polar angle in radians
-%         ph % azimuth angle in radians
-%         el % elevation angle in radians
-%         r  % distance from origin
-%         rho % distance from z-axis
+
+        kdtree struct  % k-d tree to structure the data
     end
     
     properties (Dependent = true)
@@ -23,6 +20,7 @@ classdef Pnt3D
         el % elevation angle in radians
         r  % distance from origin
         rho % distance from z-axis
+        N  % number of points
     end
     
     methods
@@ -94,12 +92,17 @@ classdef Pnt3D
         function rho = get.rho(obj)
             rho = hypot(obj.x,obj.y);
         end
+
+        function N = get.N(obj)
+            N = numel(obj.x);
+        end
         
         %% Property setters
         function obj = setX(obj,x)
             %SETX  Set the x-value of the object
             % obj = setX(obj,x)
             assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
+            obj.kdtree = [];
             obj.x = (obj.z+eps(realmin))./(obj.z+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*x;
         end
         
@@ -107,6 +110,7 @@ classdef Pnt3D
             %SETY  Set the y-value of the object
             % obj = setY(obj,y)
             assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
+            obj.kdtree = [];
             obj.y = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.z+eps(realmin))./(obj.z+eps(realmin)).*y;
         end
         
@@ -114,6 +118,7 @@ classdef Pnt3D
             %SETZ  Set the z-value of the object
             % obj = setZ(obj,z)
             assert(numel(obj) == 1,'Can only set a single object - not a vector of objects')
+            obj.kdtree = [];
             obj.z = (obj.x+eps(realmin))./(obj.x+eps(realmin)).*(obj.y+eps(realmin))./(obj.y+eps(realmin)).*z;
         end
         
@@ -146,6 +151,7 @@ classdef Pnt3D
             %   p1 = p.getNpts([1;3])
             
             assert(numel(obj) == 1,'Can only get N points for a single object - not a vector of objects')
+            obj.kdtree = [];
             obj = Pnt3D(obj.x(I),obj.y(I),obj.z(I));
         end
         
@@ -178,9 +184,17 @@ classdef Pnt3D
             assert(numel(obj) == 1,'Can only get point matrix for a single object - not a vector of objects')
             X = [obj.x(:),obj.y(:),obj.z(:)].';
         end
+
+        function obj = buildKDTree(obj)
+            % builds the kd-tree to structure the data for fast searching
+            % in other methods
+            
+            obj.kdtree = buildKDTree(obj.pointMatrix.', 0);
+        end
         
         %% Overloaded methods
         function obj = plus(obj,obj2)
+            obj.kdtree = [];
             if numel(obj) == 1 && numel(obj2) == 1
                 obj.x = obj.x+obj2.x;
                 obj.y = obj.y+obj2.y;
@@ -195,6 +209,7 @@ classdef Pnt3D
         end
         
         function obj = minus(obj,obj2)
+            obj.kdtree = [];
             if numel(obj) == 1 && numel(obj2) == 1
                 obj.x = obj.x-obj2.x;
                 obj.y = obj.y-obj2.y;
@@ -209,6 +224,7 @@ classdef Pnt3D
         end
         
         function obj = mean(obj)
+            obj.kdtree = [];
             if length(obj) > 1, obj = fuse(obj); end
             obj.x = mean(obj.x);
             obj.y = mean(obj.y);
@@ -233,6 +249,7 @@ classdef Pnt3D
         end
         
         function obj = unique(obj)
+            obj.kdtree = [];
             if numel(obj) == 1 
                 xyz = obj.pointMatrix;
                 xyzu = unique(xyz.','rows','stable');
@@ -289,6 +306,7 @@ classdef Pnt3D
             %   scaleVal = [3,3,0.5].';
             %   ps = p.scale(scaleVal)
             
+            obj.kdtree = [];
             if isscalar(scaleVal)
                 scaleVal = ones(3,1).*scaleVal;
             else
@@ -441,6 +459,7 @@ classdef Pnt3D
             %   p1.plot('marker','.')
             %   coorBase.plot, coorNew.plot
             
+            obj.kdtree = [];
             if nargin == 2
                 coor_base = CoordinateSystem();
             end
@@ -472,6 +491,24 @@ classdef Pnt3D
             obj.x = reshape(Uprime(1,:),size(obj));
             obj.y = reshape(Uprime(2,:),size(obj));
             obj.z = reshape(Uprime(3,:),size(obj));
+        end
+
+        function [obj, pointMatrix, distances] = findKNN(obj,P,k)
+            % Returns the k-nearest neighbours to the provided point P
+            % P can be 3-element vector or Pnt3D with one point
+
+            if numel(P) == 3
+                P = P(:).';
+            elseif isa(P,'Pnt3D')
+                assert(P.N == 1,'You can only pass a single point for P')
+                P = P.pointMatrix.';
+            else
+                error('Unknown format for P')
+            end
+            
+            if isempty(obj.kdtree), obj = obj.buildKDTree; end
+            [pointMatrix, distances] = knnSearchKDTree(obj.kdtree, P, k);
+            obj = Pnt3D(pointMatrix.');
         end
 
         %% Plotting
@@ -772,6 +809,7 @@ classdef Pnt3D
             %  p = Pnt3D(x,0,0)
             %  p1 = p.split
             
+            obj.kdtree = [];
             if ~isempty(obj1)
                 obj(numel(obj1.x)) = Pnt3D;
                 for pp = 1:numel(obj)
@@ -813,6 +851,7 @@ classdef Pnt3D
             %  end
             %  p1 = p.fuse
             
+            obj.kdtree = [];
             xi = reshape([obj1.x],size(obj1));
             yi = reshape([obj1.y],size(obj1));
             zi = reshape([obj1.z],size(obj1));

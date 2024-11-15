@@ -220,11 +220,43 @@ catch plotter_errInfo
     plotterPass = false;
 end
 
+%% k-nn test - just run through
+
+% Generate random 3D point cloud
+try
+    pointCloud = rand(1e5, 3);
+
+    P = Pnt3D(pointCloud.');
+
+    tic
+    P = P.buildKDTree;
+    kdTreeBuildTime = toc
+
+    Pquery = P.getNpts(378);
+    k = 10;
+    tic
+    [Pknn, pointMatrix, distances] = P.findKNN(Pquery,k);
+    knnFindTime = toc
+
+    figure
+    P.plot, hold on
+    Pquery.plot('marker','*','markeredgecolor','r')
+    Pknn.plot('marker','o','markeredgecolor','b')
+
+    disp('Pass: knn')
+    knnPass = true;
+catch plotter_errInfo
+    disp('FAIL: plotters')
+    knnPass = false;
+end
+
+
+
 
 %% Final test
 Pnt3DPass = all([constructorPass,setterPass,...
     getNptsPass,pointMatrixPass,plusPass,minusPass,sizePass,...
-    isequalPass,scalePass,distanceCartPass,addVectPass,changeBasePass,plotterPass]);
+    isequalPass,scalePass,distanceCartPass,addVectPass,changeBasePass,plotterPass,knnPass]);
 if Pnt3DPass
     disp('Pass: Pnt3D');
 else
