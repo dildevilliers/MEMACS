@@ -809,7 +809,6 @@ classdef Pnt3D
             %  p = Pnt3D(x,0,0)
             %  p1 = p.split
             
-            obj.kdtree = [];
             if ~isempty(obj1)
                 obj(numel(obj1.x)) = Pnt3D;
                 for pp = 1:numel(obj)
