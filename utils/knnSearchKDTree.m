@@ -1,4 +1,4 @@
-function [nearestPoints, distances] = knnSearchKDTree(tree, queryPoint, k)
+function [nearestPoints, distances, indexes] = knnSearchKDTree(tree, queryPoint, k)
 % KNNSEARCHKDTREE finds the k-nearest neighbors using a k-d tree.
 % Inputs:
 %   - tree: k-d tree built using buildKDTree.
@@ -7,6 +7,7 @@ function [nearestPoints, distances] = knnSearchKDTree(tree, queryPoint, k)
 % Outputs:
 %   - nearestPoints: k nearest points (Nx3 matrix).
 %   - distances: Distances to the k nearest points.
+%   - indexes: Indexes of the k nearest points in the original tree
 
     % Priority queue for k-nearest neighbors (max-heap)
     maxHeap = PriorityQueue(k);
@@ -21,7 +22,7 @@ function [nearestPoints, distances] = knnSearchKDTree(tree, queryPoint, k)
         distance = norm(node.point - queryPoint);
 
         % Add current point to the max-heap
-        maxHeap.insert(node.point, distance);
+        maxHeap.insert(node.point, distance, node.index);
 
         % Determine which branch to search first
         axis = node.axis;
@@ -47,5 +48,5 @@ function [nearestPoints, distances] = knnSearchKDTree(tree, queryPoint, k)
     recursiveSearch(tree);
 
     % Extract results from the max-heap
-    [nearestPoints, distances] = maxHeap.getElements();
+    [nearestPoints, distances, indexes] = maxHeap.getElements();
 end
