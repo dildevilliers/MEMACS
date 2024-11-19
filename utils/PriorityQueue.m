@@ -8,10 +8,11 @@ classdef PriorityQueue < handle
     end
     
     methods
-        function obj = PriorityQueue(capacity)
+        function obj = PriorityQueue(capacity,Ndims)
+            if nargin < 2 || isempty(Ndims), Ndims = 3; end
             obj.Capacity = capacity;
             obj.Keys = inf(capacity, 1); % Max-heap
-            obj.Values = zeros(capacity, 3); % Store 3D points
+            obj.Values = zeros(capacity, Ndims); % Store 3D points
             obj.Indexes = zeros(capacity, 1); % Store 3D points
             obj.Size = 0;
         end

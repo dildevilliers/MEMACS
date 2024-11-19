@@ -10,7 +10,7 @@ function [nearestPoints, distances, indexes] = knnSearchKDTree(tree, queryPoint,
 %   - indexes: Indexes of the k nearest points in the original tree
 
     % Priority queue for k-nearest neighbors (max-heap)
-    maxHeap = PriorityQueue(k);
+    maxHeap = PriorityQueue(k,size(tree.point,2));
 
     % Recursive search
     function recursiveSearch(node)
