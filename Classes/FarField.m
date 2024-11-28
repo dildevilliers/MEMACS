@@ -3391,7 +3391,9 @@ classdef FarField
                                 if strcmp(output,'XP_CO') || strcmp(output,'CO_XP')
                                     limitHandle([0,dynamicRange_dB] - norm.*dynamicRange_dB);
                                 else
-                                    limitHandle([maxVal-dynamicRange_dB,maxVal]);
+                                    if isfinite(maxVal)
+                                        limitHandle([maxVal-dynamicRange_dB,maxVal]);
+                                    end
                                 end
                             case 'lin'
                                 linHandle = str2func(['lin',num2str(dBscale)]);
@@ -3771,7 +3773,9 @@ classdef FarField
             if ~norm
                 yLims = yLims + normVal;
             end
-            ylim(yLims)
+            if all(isfinite(yLims))
+                ylim(yLims)
+            end
             
         end
 
@@ -4506,6 +4510,44 @@ classdef FarField
             obj = obj.setRangeSph(xRangeTypeIn,yRangeTypeIn);
         end
         
+        function obj = rotatePeakToZenith(obj)
+            % ROTATEPEAKTOZENITH rotates a beam, which has a peak near zenith,
+            % to place the peak exactly at zenith.
+            % Only works for PhTh grids and will give strange answers for bad beams
+            % It is assumed the pattern is highly directional with a single clear beam peak
+            % Rotation is done in 2 steps - first xz-plane then yz-plane    
+            
+            assert(obj.isGridUniform,'Only works for uniform grids at present')   % Could interpolate, so check
+            assert(strcmp(obj.gridType,'PhTh'),'Only works for PhTh grids at present')  % Others may work, but have to check
+            
+            % First find the peak in the xz-plane: phi = 0. Average over frequency.
+            obj0 = obj.range360sym;
+            obj0 = obj0.buildInterpAng('spline');
+            yi = linspace(obj0.yRange(1),obj0.yRange(2),10*obj0.Ny);
+            objXZ = obj0.evalInterpAng(zeros(size(yi)),yi);
+            [~,iPeak] = max(objXZ.getDirectivity);
+            thPeak0 = objXZ.y(iPeak);
+            thPeak0 = mean(thPeak0);
+
+            % Now rotate the original beam there
+            C0 = CoordinateSystem;
+            C0 = C0.roty(thPeak0);
+            obj = obj.rotate(C0,true);
+
+            % Do the same for the yz-plane
+            obj90 = obj.range360sym;
+            obj90 = obj90.buildInterpAng('spline');
+            objYZ = obj90.evalInterpAng(ones(size(yi)).*pi/2,yi);
+            [~,iPeak] = max(objYZ.getDirectivity);
+            thPeak90 = objYZ.y(iPeak);
+            thPeak90 = mean(thPeak90);
+
+            % Now rotate the original beam there
+            C90 = CoordinateSystem;
+            C90 = C90.rotx(thPeak90);
+            obj = obj.rotate(C90,true);
+        end
+
         function obj = shift(obj,shiftVect)
             % SHIFT Shifts the FarField by a specified distance.
             
@@ -4662,6 +4704,23 @@ classdef FarField
                 obj(ss) = setBase(obj(ss));
             end
         end
+
+        function obj = scaleToPeak(obj)
+            % SCALETOPEAK scales the pattern to have a gain of 0 dB at all frequencies
+
+            normVal = abs(obj.E1).^2;
+            if ~isempty(obj.E2), normVal = normVal + abs(obj.E2).^2; end
+            if ~isempty(obj.E3), normVal = normVal + abs(obj.E3).^2; end
+            normVal = sqrt(max(normVal));
+
+            obj.E1 = bsxfun(@rdivide,(obj.E1),normVal);
+            if ~isempty(obj.E2), obj.E2 = bsxfun(@rdivide,(obj.E2),normVal); end
+            if ~isempty(obj.E3), obj.E3 = bsxfun(@rdivide,(obj.E3),normVal); end
+
+%             obj.Prad = obj.Prad.*normVal.^2;
+
+            obj = obj.setBase;
+        end
         
         function [normE] = norm(obj,Ntype)
             % NORM Calculate the vector norm of the three E-field components.
@@ -4758,6 +4817,32 @@ classdef FarField
                 if ~isempty(obj.E2), maxVals(2,:) = max(abs(E2_)); end
                 if ~isempty(obj.E3), maxVals(3,:) = max(abs(E3_)); end
             end
+        end
+
+        function [obj,D1,D2] = errBeam(obj1,obj2)
+            % ERRBEAM calculated the normalised difference error beam between the inputs obj1 and obj2
+            % This is what SARAO and SKAO uses to quantify beam accuracy
+            % Both objects are cast to power beams - called D1 and D2
+            % obj = D1(th-th_rot,phi)./D1(th_rot) - D2(th,phi)./D2(th = 0)
+            % th_rot is the rotation angle to align the beam of D1 to that of D2
+            % D2 is assumed the nominal beam, and not rotated
+            
+            
+
+            [~,~,level] = mathSetup(obj1,obj2);
+
+            assert(level == 0,'Input fields must have the same grids and types');
+
+            D1 = obj1.rotatePeakToZenith;
+            
+            D1 = D1.coor2power;
+            D2 = obj2.coor2power;
+
+            D1 = D1.scaleToPeak;
+            D2 = D2.scaleToPeak;
+
+            obj = D1;
+            obj.E1 = sqrt(D1.getDirectivity - D2.getDirectivity);
         end
 
         %% Frequency and field modifications
