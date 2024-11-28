@@ -8961,7 +8961,8 @@ classdef FarField
                     % ensure a smooth pole
                     ixPoleCuts = find(abs(obj.x) <= pi/2+tol);
                     iy0 = intersect(find(abs(obj.y - 0) < tol),ixPoleCuts);
-                    [xy0,yy0,E1y0,E2y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:),obj.E2(iy0,:));
+                    [xy0,yy0,E1y0] = deal(obj.x(iy0),obj.y(iy0),obj.E1(iy0,:));
+                    if ~isempty(obj.E2), E2y0 = obj.E2(iy0,:); else, E2y0 = []; end
                 else
                     yshift = @(y) (sign(y) + ~sign(y)).*pi-y; % Make the sign(y) = 0 -> 1
                 end
