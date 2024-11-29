@@ -4531,7 +4531,7 @@ classdef FarField
 
             % Now rotate the original beam there
             C0 = CoordinateSystem;
-            C0 = C0.roty(thPeak0);
+            C0 = C0.roty(-thPeak0);
             obj = obj.rotate(C0,true);
 
             % Do the same for the yz-plane
@@ -4540,7 +4540,7 @@ classdef FarField
             objYZ = obj90.evalInterpAng(ones(size(yi)).*pi/2,yi);
             [~,iPeak] = max(objYZ.getDirectivity);
             thPeak90 = objYZ.y(iPeak);
-            thPeak90 = mean(thPeak90);
+            thPeak90 = mean(-thPeak90);
 
             % Now rotate the original beam there
             C90 = CoordinateSystem;
