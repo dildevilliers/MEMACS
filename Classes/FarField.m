@@ -3335,11 +3335,11 @@ classdef FarField
                             case 'dB'
                                 if strcmp(output,'XP_CO') || strcmp(output,'CO_XP')
                                     rangeZ = [0,dynamicRange_dB] - norm.*dynamicRange_dB;
-                                    caxis(rangeZ);
+                                    clim(rangeZ);
                                     %                         zlim(rangeZ);
                                 else
                                     rangeZ = [maxVal-dynamicRange_dB,maxVal];
-                                    caxis(rangeZ);
+                                    clim(rangeZ);
                                     %                         zlim(rangeZ);
                                 end
                             case 'lin'
@@ -3348,12 +3348,14 @@ classdef FarField
                                     dr = linHandle(dynamicRange_dB);
                                     if strcmp(output,'XP_CO') || strcmp(output,'CO_XP')
                                         rangeZ = [0,dr];
-                                        caxis(rangeZ);
+                                        clim(rangeZ);
                                         %                             zlim(rangeZ);
                                     else
                                         rangeZ = [maxVal/dr,maxVal];
                                         if ~(strcmp(outputType,'real') || strcmp(outputType,'imag'))
-                                            caxis(rangeZ);
+                                            if all(isfinite(rangeZ)) && diff(rangeZ) > 0
+                                                clim(rangeZ);
+                                            end
                                         end
                                         %                             zlim([rangeZ]);
                                     end
