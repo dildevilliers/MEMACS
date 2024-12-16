@@ -850,11 +850,15 @@ classdef Pnt3D
             %  end
             %  p1 = p.fuse
             
-            xi = reshape([obj1.x],size(obj1));
-            yi = reshape([obj1.y],size(obj1));
-            zi = reshape([obj1.z],size(obj1));
-            assert(numel(xi) == numel(obj1),'Each object in the input array may only have a single element');
-            obj = Pnt3D(xi,yi,zi);
+            if isempty(obj1)
+                obj = obj1;
+            else
+                xi = reshape([obj1.x],size(obj1));
+                yi = reshape([obj1.y],size(obj1));
+                zi = reshape([obj1.z],size(obj1));
+                assert(numel(xi) == numel(obj1),'Each object in the input array may only have a single element');
+                obj = Pnt3D(xi,yi,zi);
+            end
         end
         
         %% Deprecated
