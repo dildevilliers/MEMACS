@@ -7,10 +7,8 @@ if nargin < 3 || isempty(coor_base)
     coor_base = CoordinateSystem();
 end
 
-p0base = Pnt3D;
-p1base = p0base.addVect(Vin);
+Pbase = [0,0,0;Vin(:).'].';
+Pb = Pnt3D(Pbase(1,:),Pbase(2,:),Pbase(3,:));
+Pn = pointMatrix(Pb.changeBase(coor_new,coor_base));
+Vout = Pn(:,2:end) - Pn(:,1);
 
-p0new = p0base.changeBase(coor_new,coor_base);
-p1new = p1base.changeBase(coor_new,coor_base);
-
-Vout = pointMatrix(p1new - p0new);
