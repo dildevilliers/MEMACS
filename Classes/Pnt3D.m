@@ -460,31 +460,54 @@ classdef Pnt3D
             %   coorBase.plot, coorNew.plot
             
             if ~isempty(obj.kdtree),obj.kdtree = []; end
-            if nargin == 2
-                coor_base = CoordinateSystem();
+            
+            if nargin < 3
+                coor_base = [];
             end
             
-            cG = CoordinateSystem;
-            % Go from base to global
-            if ~isequal(coor_base,cG)
+            % cG = CoordinateSystem;
+            % % Go from base to global
+            % if ~isequal(coor_base,cG)
+            %     Ubase = pointMatrix(obj);
+            %     % Rotate the points in the origin reference
+            %     Q = dirCosine(cG,coor_base);
+            %     Uprime = Q\Ubase;
+            %     % Move to new coordinate base
+            %     Uglob = Uprime + coor_base.origin.pointMatrix;
+            % else
+            %     Uglob = pointMatrix(obj);
+            % end
+            % % Go from global to coorNew
+            % if ~isequal(coor_new,cG)
+            %     % Move points to new coordinate origin reference
+            %     U = Uglob - coor_new.origin.pointMatrix;
+            %     % Rotate the points in the origin reference
+            %     Q = dirCosine(coor_new,cG);
+            %     Uprime = Q\U;
+            % else
+            %     Uprime = Uglob;
+            % end
+
+
+            if isempty(coor_base)
+                Uglob = pointMatrix(obj);
+            else
                 Ubase = pointMatrix(obj);
                 % Rotate the points in the origin reference
-                Q = dirCosine(cG,coor_base);
+                Q = dirCosine([],coor_base);
                 Uprime = Q\Ubase;
                 % Move to new coordinate base
                 Uglob = Uprime + coor_base.origin.pointMatrix;
-            else
-                Uglob = pointMatrix(obj);
             end
             % Go from global to coorNew
-            if ~isequal(coor_new,cG)
+            if isempty(coor_new)
+                Uprime = Uglob;
+            else
                 % Move points to new coordinate origin reference
                 U = Uglob - coor_new.origin.pointMatrix;
                 % Rotate the points in the origin reference
-                Q = dirCosine(coor_new,cG);
+                Q = dirCosine(coor_new,[]);
                 Uprime = Q\U;
-            else
-                Uprime = Uglob;
             end
             
             % Make the object
