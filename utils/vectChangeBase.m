@@ -4,7 +4,7 @@ function Vout = vectChangeBase(Vin,coor_new,coor_base)
 assert(size(Vin,1) == 3,'Vin must have 3 rows')
 
 if nargin < 3 || isempty(coor_base)
-    coor_base = CoordinateSystem();
+    coor_base = [];
 end
 
 Pbase = [0,0,0;Vin(:).'].';
