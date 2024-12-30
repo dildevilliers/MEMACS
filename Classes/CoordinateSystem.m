@@ -629,7 +629,7 @@ classdef CoordinateSystem
            
            % Now get ph
            % Get the vector which is x rotated by ph in the x-y plane
-           if all(abs(z) - abs(z1) < eps)  % This should be more reliable than isequal 
+           if all(abs(z) - abs(z1) <= eps)  % This should be more reliable than isequal 
                x_ph = x1;
            else
                Nz = cross(z,z1);
