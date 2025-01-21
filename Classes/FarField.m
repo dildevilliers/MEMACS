@@ -5050,7 +5050,7 @@ classdef FarField
             end
         end
         
-        function obj = underSampleGrid(obj1,sampleFactor)
+        function obj = underSampleGrid(obj,sampleFactor)
             % UNDERSAMPLEGRID undersamples the grid by specified factor.
             %
             % obj = underSampleGrid(obj1,sampleFactor) returns a new object
@@ -5083,31 +5083,33 @@ classdef FarField
             %  F1
             
             arguments
-                obj1 (1,1) FarField
+                obj (:,:) FarField
                 sampleFactor (1,:) {mustBeNumeric,mustBeReal,mustBeInteger,mustBePositive} = 1
             end
             
             if numel(sampleFactor) == 1, sampleFactor = [1,1].*sampleFactor; end
 
-            % Figure out the grid situation
-            if obj1.isGridUniform
-                % Set logical index vectors
-                ix = false(1,obj1.Nx);
-                iy = false(1,obj1.Ny);
-                ix(1:sampleFactor(1):end) = true;
-                iy(1:sampleFactor(2):end) = true;
-                assert(ix(end) && iy(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
-                [Ix,Iy] = ndgrid(ix,iy);
-                I = transpose(Ix & Iy);
-                obj = obj1.getGridIndex(I(:));
-                
-%                 iGrid = false(obj1.Ny,1);
-%                 iGrid(1:sampleFactor:end) = true;
-%                 assert(iGrid(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
-%                 iGrid = repmat(iGrid,obj1.Nx,1);
-%                 obj = obj1.getGridIndex(iGrid);
-            else
-                error('Not implemented for non-uniform grids yet')
+            for ff = 1:numel(obj)
+                % Figure out the grid situation
+                if obj(ff).isGridUniform
+                    % Set logical index vectors
+                    ix = false(1,obj(ff).Nx);
+                    iy = false(1,obj(ff).Ny);
+                    ix(1:sampleFactor(1):end) = true;
+                    iy(1:sampleFactor(2):end) = true;
+                    assert(ix(end) && iy(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
+                    [Ix,Iy] = ndgrid(ix,iy);
+                    I = transpose(Ix & Iy);
+                    obj(ff) = obj(ff).getGridIndex(I(:));
+
+                    %                 iGrid = false(obj1.Ny,1);
+                    %                 iGrid(1:sampleFactor:end) = true;
+                    %                 assert(iGrid(end),'Not implemented for sampleFactors that do not divide up the grid perfectly yet')
+                    %                 iGrid = repmat(iGrid,obj1.Nx,1);
+                    %                 obj = obj1.getGridIndex(iGrid);
+                else
+                    error('Not implemented for non-uniform grids yet')
+                end
             end
         end
         
