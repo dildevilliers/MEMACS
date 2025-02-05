@@ -6680,22 +6680,29 @@ classdef FarField
             
             % Read the main header info
             coorSysMarker = '#Coordinate System:';
+            originMarker = '#Origin:';
             freqMarker = '#Frequency:';
             NthMarker = '#No. of Theta Samples:';
             NphMarker = '#No. of Phi Samples:';
             fieldMarker = '#"Theta""Phi"';
-            
+
             %===================================================================
             % LOAD DATA
             %===================================================================
-            
+
             fCount = 0;
             read = 1;
+
             while read
                 a = fgetl(fid);
                 if a == -1
                     read = 0;
                     break;
+                end
+                if strncmp(a,originMarker,length(originMarker)) % Read the coordinate system type
+                  NthMarker = '#No. of Theta'' Samples:';
+                  NphMarker = '#No. of Phi'' Samples:';
+                  fieldMarker = '#"Theta''""Phi''"';
                 end
                 if strncmp(a,coorSysMarker,length(coorSysMarker)) % Read the coordinate system type
                     coorSysCell = textscan(a,'%s%s%s');
@@ -6713,11 +6720,11 @@ classdef FarField
                     NphCell = textscan(a,'%s%s%s%s%n');
                     Nph = NphCell{5};
                 end
-                
+
                 %     if strncmp(a,fieldMarker,length(fieldMarker))
                 aNoSpace = a;
                 aNoSpace(ismember(a,' ')) = [];
-                if strncmp(aNoSpace,fieldMarker,13)
+                if strncmp(aNoSpace,fieldMarker,length(fieldMarker))
                     %         keyboard;
                     %         fieldHeader = strsplit(a);
                     %         Ncomp = length(fieldHeader)-1;  % Count how many columns to expect from the header
