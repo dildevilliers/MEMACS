@@ -1318,6 +1318,10 @@ classdef FarField
                 case 2
                     rim = rimInfo;
                     iOut = find(~rim.isInRim(X(:),Y(:)));
+                    
+                    rimP = rim.cartRim(Nrim);
+                    xR = rimP.x;
+                    yR = rimP.y;
                 case 3
                     rPR = rimInfo.PR.getPointCloudRim(Nrim);
                     xR = rPR.x - rimInfo.PR.coor.origin.x;
