@@ -1348,12 +1348,13 @@ classdef FarField
             if normVal == 0
                 normFact = sqrt(PnormFact);
             else
-                [maxEx,iNx] = max(abs(Eax(:)));
-                [maxEy,iNy] = max(abs(Eay(:)));
+                % Just scale in amplitude, ont in phase since scaling in phase of the peak value can cause jumps in the field phase for small changes
+                [maxEx] = max(abs(Eax(:)));
+                [maxEy] = max(abs(Eay(:)));
                 if maxEx > maxEy
-                    normFact = normVal./Eax(iNx);
+                    normFact = normVal./maxEx;
                 else
-                    normFact = normVal./Eay(iNy);
+                    normFact = normVal./maxEy;
                 end
             end
             Eax = Eax.*normFact; Eay = Eay.*normFact;
