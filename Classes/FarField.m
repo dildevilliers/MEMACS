@@ -6762,6 +6762,8 @@ classdef FarField
                     end
                 end
             end
+            fclose(fid);
+
             % Build the object
             x = ph(:,1);
             y = th(:,1);
@@ -7307,6 +7309,7 @@ classdef FarField
             % Read second pol data
             DATA2 = fscanf(fid,'%f%f%f%f',[4, x1N*x2N]).';
             
+            fclose(fid);
             
             % Sort and format the data
             iPhaseChange = [];
