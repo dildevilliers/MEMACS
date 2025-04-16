@@ -21,6 +21,8 @@ classdef Pnt3D
         r  % distance from origin
         rho % distance from z-axis
         N  % number of points
+
+        distInfo  % struct containing min, max, and aeverage distance between points
     end
     
     methods
@@ -95,6 +97,60 @@ classdef Pnt3D
 
         function N = get.N(obj)
             N = numel(obj.x);
+        end
+
+        function distInfo = get.distInfo(obj)
+
+            if obj.N == 1
+                distInfo.min = 0;
+                distInfo.max = 0;
+                distInfo.avg = 0;
+            else
+                % Batch calculation to not use too much memory (ChatGPT help...)
+                batchSize = 500; % Adjust as per memory constraints, but 500 seems pretty quick for ~10 000 points
+
+                % Get data
+                N_ = obj.N;
+                X = obj.pointMatrix;
+                % Initialize
+                minDist2 = inf;
+                maxDist2 = -inf;
+                sumDist = 0;
+                numPairs = 0;
+
+                for i = 1:batchSize:N_
+                    i_end = min(i + batchSize - 1, N_);
+                    Xi = X(:, i:i_end);
+
+                    for j = i:batchSize:N_
+                        j_end = min(j + batchSize - 1, N_);
+                        Xj = X(:, j:j_end);
+
+                        % Compute pairwise differences vectorized
+                        Diffs = permute(Xi, [1, 3, 2]) - permute(Xj, [1, 2, 3]);
+                        dist2 = sum(Diffs.^2, 1);
+                        dist2 = reshape(dist2, size(Xi,2), size(Xj,2));
+
+                        if i == j
+                            idx = triu(true(size(dist2)), 1);
+                            dist2 = dist2(idx);
+                        else
+                            dist2 = dist2(:);
+                        end
+
+                        if ~isempty(dist2)
+                            minDist2 = min(minDist2, min(dist2));
+                            maxDist2 = max(maxDist2, max(dist2));
+                            sumDist = sumDist + sum(sqrt(dist2));
+                            numPairs = numPairs + numel(dist2);
+                        end
+                    end
+                end
+                % Outputs
+                distInfo.min = sqrt(minDist2);
+                distInfo.max = sqrt(maxDist2);
+                distInfo.avg = sumDist / numPairs;
+            end
         end
         
         %% Property setters
