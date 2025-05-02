@@ -24,6 +24,7 @@ classdef Pnt3D
 
         distInfo  % struct containing min, max, and aeverage distance between points
         diameter  % Estimate of the longest distance between any two points in the set
+        dMin      % Smallest distance between any two points
     end
     
     methods
@@ -162,6 +163,20 @@ classdef Pnt3D
             [furthest1, ~, ~] = kfpSearchKDTree(obj.kdtree, initialPoint, 1);
             % STEP 3: Now, find furthest point from furthest1
             [~, diameter, ~] = kfpSearchKDTree(obj.kdtree, furthest1, 1);
+        end
+
+        function dMin = get.dMin(obj)
+            
+            dI = obj.distInfo;
+            dMin = dI.min;
+
+            % % Below is typically slower...
+            % if isempty(obj.kdtree), obj = obj.buildKDTree; end
+            % dMin = inf;
+            % for nn = 1:obj.N
+            %     [~, dMin_, ~] = knnSearchKDTree(obj.kdtree, [obj.x(nn),obj.y(nn),obj.z(nn)], 2);  % exclude the test point every time
+            %     dMin = min([dMin,dMin_(2)]);
+            % end
         end
         
         %% Property setters
