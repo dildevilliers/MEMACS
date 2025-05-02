@@ -23,6 +23,7 @@ classdef Pnt3D
         N  % number of points
 
         distInfo  % struct containing min, max, and aeverage distance between points
+        diameter  % Estimate of the longest distance between any two points in the set
     end
     
     methods
@@ -151,6 +152,16 @@ classdef Pnt3D
                 distInfo.max = sqrt(maxDist2);
                 distInfo.avg = sumDist / numPairs;
             end
+        end
+
+        function diameter = get.diameter(obj)
+            if isempty(obj.kdtree), obj = obj.buildKDTree; end
+            % STEP 1:Start from a mean point somewhere in the cloud
+            initialPoint = mean([obj.x(:),obj.y(:),obj.z(:)]);
+            % STEP 2: Find furthest point from the initial point
+            [furthest1, ~, ~] = kfpSearchKDTree(obj.kdtree, initialPoint, 1);
+            % STEP 3: Now, find furthest point from furthest1
+            [~, diameter, ~] = kfpSearchKDTree(obj.kdtree, furthest1, 1);
         end
         
         %% Property setters
@@ -572,9 +583,13 @@ classdef Pnt3D
             obj.z = reshape(Uprime(3,:),size(obj));
         end
 
-        function [obj, pointMatrix, distances] = findKNN(obj,P,k)
+        function [obj, pointMatrix, distances] = findKNN(obj,P,k,furthestFlag)
             % Returns the k-nearest neighbours to the provided point P
             % P can be 3-element vector or Pnt3D with one point
+            % inverseDistFlag = true will return the furthest points - default false
+
+            if nargin < 4 || isempty(furthestFlag), furthestFlag = false; end
+            assert(islogical(furthestFlag),'inverseDistFlag must be a logical')
 
             if numel(P) == 3
                 P = P(:).';
@@ -586,7 +601,11 @@ classdef Pnt3D
             end
             
             if isempty(obj.kdtree), obj = obj.buildKDTree; end
-            [pointMatrix, distances] = knnSearchKDTree(obj.kdtree, P, k);
+            if furthestFlag
+                [pointMatrix, distances] = kfpSearchKDTree(obj.kdtree, P, k);
+            else
+                [pointMatrix, distances] = knnSearchKDTree(obj.kdtree, P, k);
+            end
             obj = Pnt3D(pointMatrix.');
         end
 

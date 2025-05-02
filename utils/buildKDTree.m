@@ -34,5 +34,21 @@ function tree = buildKDTree(points, depth, indices)
     tree.axis = axis;
     tree.left = buildKDTree(sortedPoints(1:medianIdx-1, :), depth + 1, sortedIndices(1:medianIdx-1));
     tree.right = buildKDTree(sortedPoints(medianIdx+1:end, :), depth + 1, sortedIndices(medianIdx+1:end));
+
+    % Compute and store bounding box ( for furthest point searches)
+    minBound = tree.point;
+    maxBound = tree.point;
+    
+    if ~isempty(tree.left)
+        minBound = min(minBound, tree.left.bounds(1,:));
+        maxBound = max(maxBound, tree.left.bounds(2,:));
+    end
+    
+    if ~isempty(tree.right)
+        minBound = min(minBound, tree.right.bounds(1,:));
+        maxBound = max(maxBound, tree.right.bounds(2,:));
+    end
+
+    tree.bounds = [minBound; maxBound];
 end
 

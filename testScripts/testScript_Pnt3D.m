@@ -238,15 +238,20 @@ try
     [Pknn, pointMatrix, distances] = P.findKNN(Pquery,k);
     knnFindTime = toc
 
+    tic
+    [PknnFar, pointMatrixFar, distancesFar] = P.findKNN(Pquery,k,true);
+    knnFarFindTime = toc
+
     figure
     P.plot, hold on
     Pquery.plot('marker','*','markeredgecolor','r')
     Pknn.plot('marker','o','markeredgecolor','b')
+    PknnFar.plot('marker','o','markeredgecolor','m')
 
     disp('Pass: knn')
     knnPass = true;
 catch plotter_errInfo
-    disp('FAIL: plotters')
+    disp('FAIL: knn')
     knnPass = false;
 end
 

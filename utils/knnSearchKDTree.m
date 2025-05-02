@@ -26,7 +26,7 @@ function [nearestPoints, distances, indexes] = knnSearchKDTree(tree, queryPoint,
 
         % Determine which branch to search first
         axis = node.axis;
-        if queryPoint(axis) < node.point(axis)
+        if queryPoint(axis) < node.point(axis) 
             primary = node.left;
             secondary = node.right;
         else
@@ -39,7 +39,7 @@ function [nearestPoints, distances, indexes] = knnSearchKDTree(tree, queryPoint,
 
         % Check if we need to explore the secondary branch
         if maxHeap.isNotFull() || ...
-           abs(queryPoint(axis) - node.point(axis)) < maxHeap.maxKey()
+                (abs(queryPoint(axis) - node.point(axis)) < maxHeap.maxKey()) 
             recursiveSearch(secondary);
         end
     end
