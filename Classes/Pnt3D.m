@@ -25,6 +25,7 @@ classdef Pnt3D
         distInfo  % struct containing min, max, and aeverage distance between points
         diameter  % Estimate of the longest distance between any two points in the set
         dMin      % Smallest distance between any two points
+        dMinN     % Vector of smallest distances from each point to its nearest neighbour 
     end
     
     methods
@@ -170,13 +171,17 @@ classdef Pnt3D
             dI = obj.distInfo;
             dMin = dI.min;
 
-            % % Below is typically slower...
-            % if isempty(obj.kdtree), obj = obj.buildKDTree; end
-            % dMin = inf;
-            % for nn = 1:obj.N
-            %     [~, dMin_, ~] = knnSearchKDTree(obj.kdtree, [obj.x(nn),obj.y(nn),obj.z(nn)], 2);  % exclude the test point every time
-            %     dMin = min([dMin,dMin_(2)]);
-            % end
+            % Using dMinN is typically slower...
+        end
+
+        function dMinN = get.dMinN(obj)
+            
+            if isempty(obj.kdtree), obj = obj.buildKDTree; end
+            dMinN = inf(1,obj.N);
+            for nn = 1:obj.N
+                [~, dMinN_, ~] = knnSearchKDTree(obj.kdtree, [obj.x(nn),obj.y(nn),obj.z(nn)], 2);  % exclude the test point every time
+                dMinN(nn) = dMinN_(2);
+            end
         end
         
         %% Property setters
