@@ -64,8 +64,10 @@ while keepReading
         break; 
     elseif contains(line,'real_variable')
         parCount = parCount + 1;
-        data = textscan(line, '%s %s');
-        paramName = data{1}{1};
+        % data = textscan(line, '%s %s');
+        % paramName = data{1}{1};
+        data = textscan(line, '%s');
+        paramName = data{1}{end-1};
         skipLines = true;
         while skipLines
             line = fgetl(fid);  % Dummy past the bracket or comments
