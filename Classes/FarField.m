@@ -2920,7 +2920,7 @@ classdef FarField
             typeValidationnorm = @(x) validateattributes(x,{'logical','numeric'},{'binary','nonempty','numel',1},'plot','norm');
             addParameter(parseobj,'norm',false,typeValidationnorm );
             
-            typeValidationnorm = @(x) validateattributes(x,{'numeric'},{'real','numel',1},'plot','normVal');
+            typeValidationnorm = @(x) validateattributes(x,{'numeric'},{'real'},'plot','normVal');
             addParameter(parseobj,'normVal',[],typeValidationnorm );
             
             typeValidationDR = @(x) validateattributes(x,{'numeric'},{'real','positive','nonempty','numel',1},'plot','dynamicRange_dB');
@@ -3692,6 +3692,25 @@ classdef FarField
                     ylabText = ['|XP/CO| (dB)' ];
                     dBhandle = @dB10;
             end
+
+            normVal = [];
+            if norm
+                % Handle normalisation
+                if strcmp(output,'E1')
+                    [Z,~,~] = FF.getEfield;
+                elseif strcmp(output,'E2')
+                    [~,Z,~] = FF.getEfield;
+                elseif strcmp(output,'E3')
+                    [~,~,Z] = FF.getEfield;
+                else
+                    outputHandle = str2func(['get',output]);
+                    Z = outputHandle(FF);
+                end
+                Z = Z(:,freqIndex);
+                Zplot = abs(Z);
+                Znorm = max(Zplot);
+                normVal = dBhandle(Znorm);
+            end
             
             % Expand symmetry (TODO: the rest of them...)
             if strncmp(FF.symmetryBOR,'BOR',3)
@@ -3717,27 +3736,29 @@ classdef FarField
                     % Main component
                     plotData1 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal1),...
-                        'LineStyle','-','Color','k');
-                    normVal = dBhandle(plotData1.normVali);
-                    plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        'LineStyle','-','Color','k','normVal',normVal);
+                    % normVal = dBhandle(plotData1.normVal);
+                    plotData2 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal2),...
                         'LineStyle','-','Color','r','normVal',normVal);
-                    plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                    plotData3 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal3),...
                         'LineStyle','-','Color','b','normVal',normVal);
                     
+                    maxVal = max(dBhandle([plotData1.normVali,plotData2.normVali,plotData3.normVali]));
                     if plotSec
                         % 2nd Component
-                        plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        plotData1 = plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal1),...
                             'LineStyle','--','Color','k','normVal',normVal);
                         hold on
-                        plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        plotData2 = plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal2),...
                             'LineStyle','--','Color','r','normVal',normVal);
-                        plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        plotData3 = plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal3),...
                             'LineStyle','--','Color','b','normVal',normVal);
+                        maxVal = max([maxVal,dBhandle([plotData1.normVali,plotData2.normVali,plotData3.normVali])]);
                     end
                     % Add the legend
                     xUnit = '^\circ';
@@ -3749,19 +3770,21 @@ classdef FarField
                     % Main component
                     plotData1 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal),...
-                        'cutConstant','x','LineStyle','-','Color','k');
-                    normVal = dBhandle(plotData1.normVali);
-                    plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        'cutConstant','x','LineStyle','-','Color','k','normVal',normVal);
+                    % normVal = dBhandle(plotData1.normVal);
+                    plotData2 = plot(FF,'output',Emain,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                         'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(yVal),...
-                        'cutConstant','y','LineStyle','-','Color','r')
+                        'cutConstant','y','LineStyle','-','Color','r','normVal',normVal);
+                    maxVal = max(dBhandle([plotData1.normVali,plotData2.normVali]));
                     if plotSec
                         % 2nd Component
-                        plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                        plotData1 = plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(xVal),...
-                            'cutConstant','x','LineStyle','--','Color','k')
-                        plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
+                            'cutConstant','x','LineStyle','--','Color','k','normVal',normVal);
+                        plotData2 = plot(FF,'output',Esec,'outputType','mag','plotType',plotType,'scaleMag','dB','norm',norm,...
                             'step',step,'dynamicRange_dB',dynamicRange_dB,'freqIndex',freqIndex,'cutValue',deg2rad(yVal),...
-                            'cutConstant','y','LineStyle','--','Color','r')
+                            'cutConstant','y','LineStyle','--','Color','r','normVal',normVal);
+                        maxVal = max([maxVal,dBhandle([plotData1.normVali,plotData2.normVali])]);
                     end
                     
                     % Add the legend
@@ -3778,7 +3801,7 @@ classdef FarField
             title([titTextCell{1},'Hz'])
             yLims = [-dynamicRange_dB,0];
             if ~norm
-                yLims = yLims + normVal;
+                yLims = yLims + maxVal;
             end
             if all(isfinite(yLims))
                 ylim(yLims)
