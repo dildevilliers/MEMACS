@@ -1863,39 +1863,6 @@ classdef FarField
             obj.y = deg2rad(yRound);
         end
         
-%         function obj = copyAndInsertXcut(obj1,xvalCopy,xvalPaste,tol)
-%             % COPYANDINSERTXCUT Copy a FarField x-cut into another position.
-%             
-%             % Use this to copy an X cut into another position.  Typically
-%             % handy when some transformation does not include the closing
-%             % cut - that is the 0 and 360 or -180 and 180 cuts.  Can in
-%             % principle be used to do random stuff - so careful.
-%             
-%             if nargin < 4
-%                 tol = mean(diff(unique(obj1.x)));
-%             end
-%             % Make a whole new object to initialise the base
-%             % correctly - that is, no base after this change since it
-%             % changed the grid size
-%             inInd = find(abs(obj1.x - xvalCopy) < tol./10);
-%             xNew = [obj1.x;xvalPaste.*ones(size(inInd))];
-%             yNew = [obj1.y;obj1.y(inInd)];
-%             E1New = [obj1.E1;obj1.E1(inInd,:)];
-%             if ~isempty(obj1.E2)
-%                 E2New = [obj1.E2;obj1.E2(inInd,:)];
-%             else
-%                 E2New = [];
-%             end
-%             if ~isempty(obj1.E3)
-%                 E3New = [obj1.E3;obj1.E3(inInd,:)];
-%             else
-%                 E3New = [];
-%             end
-%             obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
-%                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
-%                 'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
-%             obj = obj.sortGrid;
-%         end
         function obj = copyAndInsertXcut(obj,xvalCopy,xvalPaste,tol)
             % COPYANDINSERTXCUT Copy a FarField x-cut into another position.
             
@@ -1931,39 +1898,6 @@ classdef FarField
             obj = obj.clearBase;  % Grid changed
         end
         
-%         function obj = copyAndInsertYcut(obj1,yvalCopy,yvalPaste,tol)
-%             % COPYANDINSERTYCUT Copy a FarField y-cut into another position.
-%             
-%             % Use this to copy an X cut into another position.  Typically
-%             % handy when some transformation does not include the closing
-%             % cut - that is the 0 and 360 or -180 and 180 cuts.  Can in
-%             % principle be used to do random stuff - so careful.
-%             
-%             if nargin < 4
-%                 tol = mean(diff(unique(obj1.y)));
-%             end
-%             % Make a whole new object to initialise the base
-%             % correctly - that is, no base after this change since it
-%             % changed the grid size
-%             inInd = find(abs(obj1.y - yvalCopy) < tol);
-%             xNew = [obj1.x;obj1.x(inInd)];
-%             yNew = [obj1.y;yvalPaste.*ones(size(inInd))];
-%             E1New = [obj1.E1;obj1.E1(inInd,:)];
-%             if ~isempty(obj1.E2)
-%                 E2New = [obj1.E2;obj1.E2(inInd,:)];
-%             else
-%                 E2New = [];
-%             end
-%             if ~isempty(obj1.E3)
-%                 E3New = [obj1.E3;obj1.E3(inInd,:)];
-%             else
-%                 E3New = [];
-%             end
-%             obj = FarField(xNew,yNew,E1New,E2New,obj1.freq,obj1.Prad,obj1.radEff,...
-%                 'coorType',obj1.coorType,'polType',obj1.polType,'gridType',obj1.gridType,'freqUnit',obj1.freqUnit,'r',1,...
-%                 'slant',obj1.slant,'orientation',obj1.orientation,'earthLocation',obj1.earthLocation,'time',obj1.time);
-%             obj = obj.sortGrid;
-%         end
         function obj = copyAndInsertYcut(obj,yvalCopy,yvalPaste,tol)
             % COPYANDINSERTYCUT Copy a FarField y-cut into another position.
             
@@ -5122,56 +5056,19 @@ classdef FarField
         function obj = setSymmetryXZ(obj,symmetryType)
             % SETSYMMETRYXZ Specify symmetry along the XZ plane.
             
-            mustBeMember(symmetryType,{'none','electric','magnetic'})
-            if ~strcmp(symmetryType,'none')
-                % Test if the input range is valid, and if not, just keep a valid half
-                phD = rad2deg(wrap2pi(obj.ph));
-                idxPos = phD >= 0;
-                idxNeg = ~idxPos;
-                npos = sum(idxPos);
-                nneg = sum(idxNeg);
-                if npos >= nneg
-                    idxDel = idxNeg;
-                else 
-                    idxDel = idxPos;
-                end
-                % Remove duplicates
-                [~,IA] = uniquetol([phD(~idxDel),obj.th(~idxDel)],'ByRows',true);
-                iD = ~ismember((1:obj.Nang).',IA);
-                obj = obj.removeDirs(iD);
-            end
-            obj.symmetryXZ = symmetryType;
+            obj = obj.setSymmetry(symmetryType,'XZ');
         end
         
         function obj = setSymmetryYZ(obj,symmetryType)
             % SETSYMMETRYYZ Specify symmetry along the YZ plane.
-            
-            mustBeMember(symmetryType,{'none','electric','magnetic'})
-            if ~strcmp(symmetryType,'none')
-                % Test if the input range is valid, and if not, just keep a valid half
-                phD = rad2deg(wrap2pi(obj.ph));
-                idxPos = abs(phD) <= 90;
-                idxNeg = ~idxPos;
-                npos = sum(idxPos);
-                nneg = sum(idxNeg);
-                if npos >= nneg
-                    idxDel = idxNeg;
-                else 
-                    idxDel = idxPos;
-                end
-                % Remove duplicates
-                [~,IA] = uniquetol([phD(~idxDel),obj.th(~idxDel)],'ByRows',true);
-                iD = ~ismember((1:obj.Nang).',IA);
-                obj = obj.removeDirs(iD);
-            end
-            obj.symmetryYZ = symmetryType;
+
+            obj = obj.setSymmetry(symmetryType,'YZ');
         end
         
         function obj = setSymmetryXY(obj,symmetryType)
             % SETSYMMETRYXY Specify symmetry along the XY plane.
             
-            mustBeMember(symmetryType,{'none','electric','magnetic'})
-            %             warning('function: setSymmetryXY not implemented yet - unchanged object returned');
+            obj = obj.setSymmetry(symmetryType,'XY');
         end
         
         function obj = mirrorSymmetricPattern(obj1)
@@ -5181,7 +5078,7 @@ classdef FarField
             % Returns the full pattern mirrored according to the symmetry
             % definitions
             
-            if ~obj1.symXZ && ~obj1.symYZ && ~obj1.symXZ
+            if ~obj1.symXZ && ~obj1.symYZ && ~obj1.symXY
                 obj = obj1; return;
             elseif strcmp(obj1.gridType,'PhTh') && strcmp(obj1.coorType,'spherical') && strcmp(obj1.yRangeType,'180') && obj1.isGridUniform
                 % Make a very fast version for this since it is used very
@@ -5208,6 +5105,26 @@ classdef FarField
                     if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3]; end
                     obj1.Prad = obj1.Prad*1;
                     obj1.symmetryYZ = 'none';
+                end
+                if obj1.symXY
+                    % Are we in top half?
+                    [u,v,w] = PhTh2DirCos(obj1.ph,obj1.th);
+                    idxw0 = abs(w) < eps;
+                        
+                    u = [u; u(~idxw0)];
+                    v = [v; v(~idxw0)];
+                    w = [w; -w(~idxw0)];
+
+                    xRangeTypeIn = obj1.xRangeType;
+                    [ph_,th_] = DirCos2PhTh(u,v,w);
+                    obj1.x = ph_;
+                    obj1.y = th_;
+                    obj1.E1 = [obj1.E1;-obj1.symXY.*obj1.E1(~idxw0,:)];
+                    obj1.E2 = [obj1.E2;obj1.symXY.*obj1.E2(~idxw0,:)];
+                    if ~isempty(obj1.E3), obj1.E3 = [obj1.E3;obj1.E3(~idxw0)]; end
+                    obj1.Prad = obj1.Prad*1;
+                    obj1.symmetryXY = 'none';
+                    obj1 = obj1.setRangeSph(xRangeTypeIn);
                 end
                 obj1 = obj1.sortGrid;
                 obj = obj1;
@@ -5251,6 +5168,9 @@ classdef FarField
                     YIn = [YIn;YIn];
                     E1In = [E1In;-obj1.symYZ.*E1In];  % Mirror according to symmetry
                     if ~isempty(E2In), E2In = [E2In;obj1.symYZ.*E2In]; end % Mirror according to symmetry
+                end
+                if obj1.symXY
+                    error('XY symmetry not yet implemented for general grids/coordinates. Only for PhTh and spherical cases.')
                 end
                 % Object for grid/coor transformation
                 objD = FarField(XIn,YIn,E1In,E2In,obj1.freq,obj1.Prad.*symFact,obj1.radEff,...
@@ -9342,6 +9262,43 @@ classdef FarField
                 stepy = diff(obj.yRange)/(N-1);
             end
         end
+    
+        function obj = setSymmetry(obj,symmetryType,symmetryPlane)
+            % SETSYMMETRYXY Specify symmetry along the XY plane.
+            
+            mustBeMember(symmetryType,{'none','electric','magnetic'})
+            if ~strcmp(symmetryType,'none')
+                % Test if the input range is valid, and if not, just keep a valid half
+                switch symmetryPlane
+                    case 'XZ'
+                        phD = rad2deg(wrap2pi(obj.ph));
+                        idxPos = phD >= 0;
+                        obj.symmetryXZ = symmetryType;
+                    case 'YZ'
+                        phD = rad2deg(wrap2pi(obj.ph));
+                        idxPos = abs(phD) <= 90;
+                        obj.symmetryYZ = symmetryType;
+                    case 'XY'
+                        [~,~,w] = PhTh2DirCos(obj.ph,obj.th);
+                        idxPos = w >= 0;
+                        obj.symmetryXY = symmetryType;
+                    otherwise
+                        eroor('I should not be here')
+                end
+                idxNeg = ~idxPos;
+                npos = sum(idxPos);
+                nneg = sum(idxNeg);
+                if npos >= nneg
+                    idxDel = idxNeg;
+                else 
+                    idxDel = idxPos;
+                end
+                obj = obj.removeDirs(idxDel);
+                obj = obj.sortGrid;
+            end
+            
+        end
+
     end
     
     methods (Static = true)
