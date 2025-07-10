@@ -384,7 +384,9 @@ classdef FarField
                 assert(all(sign(u+tol) > 0) || all(sign(u-tol) < 0),'Invalid range for YZ symmetry')
             end
             if ~strcmp(obj.symmetryXY,'none')
-                error('function: setSymmetryXY not implemented yet - please redefine with the full field and symmetryXY = none');
+                [~,~,w] = getDirCos(obj);
+                assert(all(sign(w+tol) > 0) || all(sign(w-tol) < 0),'Invalid range for XY symmetry')
+                % error('function: setSymmetryXY not implemented yet - please redefine with the full field and symmetryXY = none');
             end
             if strcmp(obj.symmetryBOR,'BOR0')
                 assert(any(obj.gridType,'PhTh'),'BOR0 symmetry only defined for PhTh grids here')
@@ -905,6 +907,7 @@ classdef FarField
             IXR = ((smax + smin)./(smax - smin)).^2;
             IXR = reshape(IXR,obj1.Nang,obj1.Nf);
         end
+        
         %% Performance metrics
         function [SLL1,SLL2,SLLstruct] = getSLL(obj)
             % GETSLL Get the sidelobe level of the beam
@@ -4487,6 +4490,38 @@ classdef FarField
             C90 = CoordinateSystem;
             C90 = C90.rotx(thPeak90);
             obj = obj.rotate(C90,true);
+
+
+            % % TODO: implement Robert's code below rather than the code above
+            % [pk,ind] = max(FF.getDirectivity);
+            % th_p = FF.th(ind);
+            % ph_p = FF.ph(ind);
+            % 
+            % bw = sqrt((4*pi)/pk);  % [rad] approximate beamwidth for an antenna with a symmetric quasi-pencil beam
+            % del_ph = diff(FF.xRange)/(FF.Nx-1);
+            % 
+            % % FF1 = FF.range360sym;
+            % FF1 = FF.buildInterpAng('spline');
+            % th_i = linspace(th_p-bw/10,th_p+bw/10,1001);  % search over a tenth of the bw
+            % ph_i = linspace(ph_p-del_ph*2,ph_p+del_ph*2,1001);  % search over a few ph angles (?)
+            % 
+            % [X,Y] = ndgrid(ph_i,th_i);
+            % 
+            % FF1 = FF1.evalInterpAng(X(:),Y(:));
+            % [~,ind] = max(FF1.getDirectivity);
+            % th_p1 = FF1.th(ind);
+            % ph_p1 = FF1.ph(ind);
+            % 
+            % [x,y,z] = PhTh2DirCos(ph_p1,th_p1);
+            % 
+            % C0 = CoordinateSystem;
+            % C0 = C0.roty(-x);
+            % FF1 = FF.rotate(C0,true);
+            % 
+            % C90 = CoordinateSystem;
+            % C90 = C90.rotx(y);
+            % FF1 = FF1.rotate(C90,true);
+
         end
 
         function obj = shift(obj,shiftVect)
