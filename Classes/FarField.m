@@ -1070,7 +1070,7 @@ classdef FarField
             end
         end
         
-        function [apEff] = getApEff(obj,apArea,pol)
+        function [apEff,thPeak] = getApEff(obj,apArea,pol)
             % GETAPEFF Get the aperture efficiency of the beam
             %
             % [apEff] = getApEff(obj,apArea,pol) calculates the aperture
@@ -1145,6 +1145,9 @@ classdef FarField
             apEff.raw = dMax.*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);
             apEff.th0 = mean(scaleFact.*Pval(obj.th == 0,:),1).*(obj.c0./obj.freqHz).^2./(4.*pi.*apArea);    
             
+            if nargout > 1
+                thPeak = obj.th(iPeak).';
+            end
             % TODO: quadratic fit below 
 %             if strcmp(obj.gridType,'PhTh')
 %                 for ff = 1:obj.Nf
