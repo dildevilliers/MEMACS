@@ -1,11 +1,11 @@
-function [S, freq] = touchread(file, NrPorts)
+function [S, freq, Z0, Nstruct] = touchread(file, NrPorts)
 %
 % TOUCHREAD(...) loads the measured s-parameter data from a text file with Touchstone
 % format.  FileName is a text variable containing the full path and filename of 
 % the file to be loaded, NrPorts is the number of ports of the S-parameter matrix.
 % NrPorts is optional and will be mostly read from the file extension of metadata (if available)
 %
-% format: [S, freq] = touchread(FileName, NrPorts)
+% format: [S, freq, Z0, NoiseStruct] = touchread(FileName, NrPorts)
 %
 % The multidimensional matrix S contains the loaded s-parameters in complex format.  The full
 % S-parameter matrix for each frequency point is returned as S(Srows,Scolumns,freq).  
@@ -13,16 +13,16 @@ function [S, freq] = touchread(file, NrPorts)
 %
 % Author: Robert Lehmensiek and Dirk de Villiers
 % Date  : 2017/11
-% Updated: 2023/11
+% Updated: 2025/09
 
 
 if nargin < 1, error('touchread -> Not enough input parameters'); end
 if nargin < 2, NrPorts = 0; end
 
-[freq,S] = read(file,NrPorts);
+[freq,S,Z0,Nstruct] = read(file,NrPorts);
 
 
-function [f,Smat] = read(file,NrPorts)
+function [f,Smat,Z0,Nstruct] = read(file,NrPorts)
 
 ind = findstr(file,'.');
 if isempty(ind), error('Add extension'); end
@@ -30,11 +30,11 @@ if isempty(ind), error('Add extension'); end
 fid = fopen(file, 'r');
 if fid==-1, error(['Load error -> Cannot open: ', file]); end
 
-S = fscanf(fid, '%c');
+Sin = fscanf(fid, '%c');
 fclose(fid);
 
 % Get all end-of-line indexes
-in2 = strfind(S,char([10]));     % for DOS: [13 10] 13 = carriage return; 10 = line feed for DOS (remember +2 in ln = )
+in2 = strfind(Sin,char([10]));     % for DOS: [13 10] 13 = carriage return; 10 = line feed for DOS (remember +2 in ln = )
 % for UNIX: [10] (remember +1 in ln = )
 
 [~,~,ext] = fileparts(file);
@@ -42,10 +42,10 @@ n = sscanf(lower(ext),'.s%dp');
 if isempty(n)
     % Try to find from the header
     % This works for some TICRA files - add more when we find other versions
-    in1 = strfind(S,'[Number of Ports]');
+    in1 = strfind(Sin,'[Number of Ports]');
 
     ind = find(in2>in1); ind = ind(1);
-    ln = S(in1+17:in2(ind));
+    ln = Sin(in1+17:in2(ind));
 
     n = sscanf(ln,'%f');
 
@@ -54,11 +54,11 @@ end
 if NrPorts ~= 0, assert(NrPorts == n,'Input number of ports different from file extension - please check'); end
 
 
-% Read the # info
-in1 = strfind(S,'#');
+% Read the # info - option line
+in1 = strfind(Sin,'#');
 
 ind = find(in2>in1); ind = ind(1);
-ln = S(in1+1:in2(ind));
+ln = Sin(in1+1:in2(ind));
 
 if contains(upper(ln),'GHZ'), fu = 1e9;
 elseif contains(upper(ln),'MHZ'), fu = 1e6;
@@ -73,12 +73,28 @@ elseif contains(upper(ln),'DB'), tp = 3;
 else, error('Wrong Type')
 end
 
+% Get Z0
+LN = strsplit(ln,' ');
+LN = LN(~cellfun(@isempty,LN));
+Nz = numel(LN) - 4;
+Z0 = nan(1,Nz);
+for zz = 1:Nz
+    Z0_ = sscanf(LN{4+zz},'%f');
+    if ~isempty(Z0_)
+        Z0(zz) = Z0_;
+    end
+end
+
+
 % Find the end of the header - can be last ! or #
-in1 = sort([strfind(S,'!'),strfind(S,'#')]);
-in1_row = strfind(S,'! row');    % Find the end of row comment positions and remove them from the vector
+in1 = sort([strfind(Sin,'!'),strfind(Sin,'#')]);
+in1_row = strfind(Sin,'! row');    % Find the end of row comment positions and remove them from the vector
 in1 = setdiff(in1, in1_row);
+in1_noise = strfind(lower(Sin),'! noise');  % Find noise parameter positions and remove them from the vector
+if ~isempty(in1_noise), in1_ = in1; in1 = in1(in1 < in1_noise);  end
 in1 = find(in2>in1(end)); in1 = in2(in1(1));
 % Now remove the row line comments from the actual data
+S = Sin;
 if ~isempty(in1_row)
     diffInd = in2 - repmat(in1_row(:),1,length(in2));  % Find the number of indexes between the line ends and start of row comments
     diffInd(diffInd < 0) = nan;  % Throw away negative values
@@ -92,7 +108,6 @@ if ~isempty(in1_row)
     in3 = in3(:).';
     S(in3) = ' ';
 end
-
 
 S = sscanf(S(in1+1:end),'%f');
 ind_freq = 1:2*n^2+1:length(S);
@@ -127,3 +142,23 @@ for rr = 1:n
 end
 
 
+% Read noise parameters if present
+if ~isempty(in1_noise)
+    touchVersion = 1;
+    if contains(lower(Sin),'version'), touchVersion = 2; end
+
+    in1_ = find(in2>in1_(end)); in1_ = in2(in1_(1));
+    N = sscanf(Sin(in1_(end)+1:end),'%f');
+    N = reshape(N,5,numel(N)/5).';
+
+    Nstruct.freq = N(:,1).*fu;
+    Nstruct.Fmin = N(:,2);
+    Nstruct.GamOpt = N(:,3).*exp(1i.*deg2rad(N(:,4)));
+    Rn = N(:,5);
+    if touchVersion == 1
+        Rn = Rn.*Z0;
+    end
+    Nstruct.Rn = Rn;
+else
+    Nstruct = [];
+end
