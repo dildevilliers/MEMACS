@@ -56,6 +56,8 @@ classdef FarField
         Ny          % Number of unique y points
         Nang        % Number of point combinations (total number of directions)
         freqHz      % Frequency in Hz
+        lambda      % Wavelength in m
+        k           % Free space propagation constant
         Directivity_dBi % Directivity in dBi
         Gain_dB         % Gain in dB 
         radEff_dB       % Radiation efficiency in dB    
@@ -453,6 +455,14 @@ classdef FarField
                     freqMult = 1e12;
             end
             freqHz = obj.freq*freqMult;
+        end
+
+        function lambda = get.lambda(obj)
+            lambda = obj.c0./obj.freqHz;
+        end
+        
+        function k = get.k(obj)
+            k = 2.*pi./obj.lambda;
         end
         
         function Directivity_dBi = get.Directivity_dBi(obj)
