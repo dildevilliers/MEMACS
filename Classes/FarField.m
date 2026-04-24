@@ -1034,7 +1034,7 @@ classdef FarField
             
             % TODO: get more accurate first null position
             
-            assert(obj.isGridUniform,'Uniform grid expected for SLL calculation')
+            assert(obj.isGridUniform,'Uniform grid expected for Beamwidth calculation')
             
             if nargin < 2
                 dBlevel = -3;
@@ -1052,8 +1052,11 @@ classdef FarField
                     % Get normalized dB directivity
                     D = reshape(dB10(obj.getFi(ff).getDirectivity),obj.Ny,obj.Nx) - obj.Directivity_dBi(ff);
                     for xx = 1:obj.Nx
-                        % Get a single cut
+                        % Get a single cut - narmalize again in case the
+                        % Directivity is wrong due to weird power from hand
+                        % inputs of beams
                         dvect = D(:,xx);
+                        dvect = dvect - max(dvect);
                         % Find the first null - the difference in pattern must be positive
                         % after a negative difference...
                         ddif = diff(sign(diff(dvect)));
@@ -8994,6 +8997,14 @@ classdef FarField
                         obj = insertMissingCuts(obj,iin,xAdd,yAdd);
                     end
                 end
+                % Remove redundant points (if they are here)
+                idxRem = obj.x < 0 | obj.x > 2*pi | obj.y < 0 | obj.y > pi;
+                obj.x(idxRem) = [];
+                obj.y(idxRem) = [];
+                obj.E1(idxRem,:) = [];
+                if ~isempty(obj.E2), obj.E2(idxRem,:) = []; end
+                if ~isempty(obj.E3), obj.E3(idxRem,:) = []; end
+
                 % Sort
                 obj = obj.sortGrid;
                 % Reset coordinate Type
