@@ -5551,7 +5551,8 @@ classdef FarField
         function y = isGrid4pi(obj)
             % ISGRID4PI Check if the data is defined over a full sphere.
             
-            tol = 10^(-obj.nSigDig);
+            % tol = 10^(-obj.nSigDig);
+            tol = 0.5/(2*obj.Ny);   % Better for all sizes of grids
             
 %             % Set to the PhTh coordinate system - this is how most data
 %             % will be generated anyway.
