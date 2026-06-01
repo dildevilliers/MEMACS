@@ -7,7 +7,7 @@ classdef CoordinateSystem
     properties
       origin(1,1) Pnt3D = Pnt3D(0,0,0) % Coordinate system origin position
       base = [] % Coordinate system in which this one is defined. Empty implies the global system.
-      axisText(1,3) char = 'xyz'
+      axisText(1,3) string = ["x" "y" "z"]
     end
    
     properties (SetAccess = private)
