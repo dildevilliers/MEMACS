@@ -1056,11 +1056,15 @@ classdef FarField
                         % Directivity is wrong due to weird power from hand
                         % inputs of beams
                         dvect = D(:,xx);
-                        dvect = dvect - max(dvect);
+                        [val,idx] = max(dvect);
+                        dvect = dvect - val;
                         % Find the first null - the difference in pattern must be positive
                         % after a negative difference...
                         ddif = diff(sign(diff(dvect)));
-                        nP = find(ddif == 2,1);
+                        nP_ = find(ddif == 2);
+                        % Only consider values larger than the peak
+                        % position
+                        nP = nP_(find(nP_ > idx,1));
                         if ~isempty(nP), nullPos = nP; end
                         % Interpolate up to the null (ang as function of level)
                         angVect = obj.y(1:nullPos);
