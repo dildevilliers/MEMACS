@@ -6592,18 +6592,13 @@ classdef FarField
         end
         
         function FF = readFEKOffe(pathName,varargin)
-            % READFEKOFFE Create a FarFiled object from a FEKO .ffe file.
-            
-            %Name: readFEKOffe.m
-            %Description:
-            %   Function to create a Farfield object from a FEKO .ffe far-field output
-            %   file.
-            %Inputs:
-            % th: column vector [Nang x 1] of th angles in rad
-            % ph: column vector [Nang x 1] of ph angles in rad
-            %Outputs:
-            % --FF: Farfield object containing parameters as derived from target .ffe
-            % file.
+            % READFEKOFFE Create a FarField object from a FEKO .ffe file.
+            %
+            % Optimised for very large FFE files. Header lines are read with
+            % fgetl, while each numerical field block is parsed in one bulk
+            % textscan call. Only the data actually required by FarField are
+            % retained (theta/phi for the first block, complex Etheta/Ephi for
+            % every block, and total directivity when available for Prad).
             
             % Parsing through the inputs
             parseobj = inputParser;
@@ -6649,116 +6644,398 @@ classdef FarField
             time = parseobj.Results.time;
             
             eta0 = 3.767303134749689e+02;
+            inv2eta0 = 1/(2*eta0);
+            deg2radFact = pi/180;
             
-            %Open the data file
-            if ~strcmp(pathName(end-3:end),'.ffe')
+            % Open the data file
+            if length(pathName) < 4 || ~strcmpi(pathName(end-3:end),'.ffe')
                 pathName = [pathName,'.ffe'];
             end
-            fid = fopen(pathName);
-            if (fid==-1)
-                error(['Unable to open data file ' fileName '!']);
+            fid = fopen(pathName,'r');
+            if fid == -1
+                error(['Unable to open data file ',pathName,'!']);
             end
+            cleanupObj = onCleanup(@() fclose(fid)); %#ok<NASGU>
             
-            % Read the main header info
+            fileInfo = dir(pathName);
+            fileBytes = fileInfo.bytes;
+            
+            % Header markers
             coorSysMarker = '#Coordinate System:';
             originMarker = '#Origin:';
             freqMarker = '#Frequency:';
             NthMarker = '#No. of Theta Samples:';
             NphMarker = '#No. of Phi Samples:';
             fieldMarker = '#"Theta""Phi"';
-
+            
             %===================================================================
             % LOAD DATA
             %===================================================================
-
             fCount = 0;
-            read = 1;
-
-            while read
+            Nth = [];
+            Nph = [];
+            Nang = [];
+            currentFreq = [];
+            currentBlockStart = 0;
+            coorType = '';
+            havePrad = true;
+            nAlloc = 0;
+            
+            % These are created after the first numerical block, when Nang
+            % and a good estimate of the number of frequency blocks are known.
+            x = [];
+            y = [];
+            Eth = [];
+            Eph = [];
+            freq = [];
+            Prad = [];
+            
+            while true
+                linePos = ftell(fid);
                 a = fgetl(fid);
-                if a == -1
-                    read = 0;
-                    break;
+                if ~ischar(a)
+                    break
                 end
-                if strncmp(a,originMarker,length(originMarker)) % Read the coordinate system type
-                  NthMarker = '#No. of Theta'' Samples:';
-                  NphMarker = '#No. of Phi'' Samples:';
-                  fieldMarker = '#"Theta''""Phi''"';
+                
+                if strncmp(a,originMarker,length(originMarker))
+                    % Local/primed angular coordinate labels
+                    NthMarker = '#No. of Theta'' Samples:';
+                    NphMarker = '#No. of Phi'' Samples:';
+                    fieldMarker = '#"Theta''""Phi''"';
+                    continue
                 end
-                if strncmp(a,coorSysMarker,length(coorSysMarker)) % Read the coordinate system type
-                    coorSysCell = textscan(a,'%s%s%s');
-                    coorType = coorSysCell{3};
+                
+                if strncmp(a,coorSysMarker,length(coorSysMarker))
+                    coorType = strtrim(a(length(coorSysMarker)+1:end));
+                    continue
                 end
-                if strncmp(a,freqMarker,length(freqMarker)) % Read the number of frequencies
-                    freqCell = textscan(a,'%s%n');
-                    freq(fCount+1) = freqCell{2};
+                
+                if strncmp(a,freqMarker,length(freqMarker))
+                    currentFreq = sscanf(a(length(freqMarker)+1:end),'%f',1);
+                    currentBlockStart = linePos;
+                    continue
                 end
+                
                 if strncmp(a,NthMarker,length(NthMarker))
-                    NthCell = textscan(a,'%s%s%s%s%n');
-                    Nth = NthCell{5};
+                    Nth = sscanf(a(length(NthMarker)+1:end),'%d',1);
+                    continue
                 end
+                
                 if strncmp(a,NphMarker,length(NphMarker))
-                    NphCell = textscan(a,'%s%s%s%s%n');
-                    Nph = NphCell{5};
+                    Nph = sscanf(a(length(NphMarker)+1:end),'%d',1);
+                    continue
                 end
-
-                %     if strncmp(a,fieldMarker,length(fieldMarker))
-                aNoSpace = a;
-                aNoSpace(ismember(a,' ')) = [];
-                if strncmp(aNoSpace,fieldMarker,length(fieldMarker))
-                    %         keyboard;
-                    %         fieldHeader = strsplit(a);
-                    %         Ncomp = length(fieldHeader)-1;  % Count how many columns to expect from the header
-                    Ncomp = sum(ismember(a,'"'))/2; % Count how many columns to expect from the header
-                    getP = false;
-                    if Ncomp >=9, getP = true; end  % Assume column 9 is directivity..
-                    if fCount == 0
-                        % Initialise matrices
-                        NfInit = 1; % Use as initial maximum guess...
-                        [th,ph,Eth,Eph,Dth,Dph,Dtotclear] = deal(zeros(Nth*Nph,NfInit));
-                        fData = zeros(Nth*Nph,Ncomp,NfInit);
-                        Prad = zeros(1,NfInit);
+                
+                % Remove whitespace only from the short header line. This
+                % retains compatibility with both ordinary and primed FEKO
+                % theta/phi column names.
+                aNoSpace = a(~isspace(a));
+                if ~strncmp(aNoSpace,fieldMarker,length(fieldMarker))
+                    continue
+                end
+                
+                if isempty(Nth) || isempty(Nph)
+                    error('FFE data header encountered before sample counts were defined.');
+                end
+                if isempty(currentFreq)
+                    error('FFE data header encountered before frequency was defined.');
+                end
+                
+                Ncomp = sum(a == '"')/2;
+                if Ncomp < 6
+                    error('FFE field block contains only %d columns; at least 6 are required.',Ncomp);
+                end
+                getP = (Ncomp >= 9);  % Existing convention: column 9 = total directivity
+                havePrad = havePrad && getP;
+                nRows = Nth*Nph;
+                
+                % Build a format that parses all FEKO values but stores only
+                % those needed. This avoids the huge [Nang x Ncomp x Nf]
+                % fData array used by the previous implementation.
+                if fCount == 0
+                    % Keep theta, phi, Re/Im(Etheta), Re/Im(Ephi)
+                    fmt = repmat('%f',1,6);
+                    if Ncomp >= 7, fmt = [fmt,'%*f']; end
+                    if Ncomp >= 8, fmt = [fmt,'%*f']; end
+                    if Ncomp >= 9, fmt = [fmt,'%f'];  end  % total directivity
+                    if Ncomp > 9,  fmt = [fmt,repmat('%*f',1,Ncomp-9)]; end
+                else
+                    % theta and phi are identical-grid information already
+                    % retained from the first block, so discard them here.
+                    fmt = [repmat('%*f',1,2),repmat('%f',1,4)];
+                    if Ncomp >= 7, fmt = [fmt,'%*f']; end
+                    if Ncomp >= 8, fmt = [fmt,'%*f']; end
+                    if Ncomp >= 9, fmt = [fmt,'%f'];  end  % total directivity
+                    if Ncomp > 9,  fmt = [fmt,repmat('%*f',1,Ncomp-9)]; end
+                end
+                
+                C = textscan(fid,fmt,nRows,'CollectOutput',true);
+                data = C{1};
+                if size(data,1) ~= nRows
+                    error('Incomplete FFE data block at frequency %.12g Hz: expected %d rows, read %d.',...
+                        currentFreq,nRows,size(data,1));
+                end
+                
+                fCount = fCount + 1;
+                
+                if fCount == 1
+                    Nang = nRows;
+                    x = data(:,2).*deg2radFact;
+                    y = data(:,1).*deg2radFact;
+                    
+                    % Estimate Nf from the byte size of the first complete
+                    % frequency block. FEKO frequency blocks normally have
+                    % identical grids/column counts, making this estimate very
+                    % accurate and avoiding repeated growth/copying of huge arrays.
+                    firstBlockBytes = ftell(fid) - currentBlockStart;
+                    if firstBlockBytes > 0 && currentBlockStart >= 0
+                        nAlloc = max(1,ceil((fileBytes-currentBlockStart)/firstBlockBytes));
+                    else
+                        nAlloc = 1;
                     end
-                    fCount = fCount + 1;
-                    fDataForm = repmat('%f',1,Ncomp);
-                    fData(:,:,fCount) = fscanf(fid,fDataForm,[Ncomp,Nth*Nph])';
-                    th(:,fCount) = deg2rad(fData(:,1,fCount));
-                    ph(:,fCount) = deg2rad(fData(:,2,fCount));
-                    Eth(:,fCount) = fData(:,3,fCount) + 1i.*fData(:,4,fCount);
-                    Eph(:,fCount) = fData(:,5,fCount) + 1i.*fData(:,6,fCount);
-                    %         Dth(:,fCount) = fData(:,7,fCount);
-                    %         Dph(:,fCount) = fData(:,8,fCount);
-                    %         Dtot(:,fCount) = fData(:,9,fCount);
-                    % Get the power from the directivity/gain
+                    
+                    Eth = complex(zeros(Nang,nAlloc));
+                    Eph = complex(zeros(Nang,nAlloc));
+                    freq = zeros(1,nAlloc);
+                    Prad = zeros(1,nAlloc);
+                    
+                    Eth(:,1) = complex(data(:,3),data(:,4));
+                    Eph(:,1) = complex(data(:,5),data(:,6));
+                    freq(1) = currentFreq;
+                    
                     if getP
-                        U = 1/(2*eta0).*(abs(Eth(:,fCount)).^2 + abs(Eph(:,fCount)).^2);
-                        Prad(fCount) = median(4.*pi.*U./10.^(fData(:,9,fCount)./10));
-                    else 
-                        Prad = [];
+                        % Compute U directly from real/imaginary parts to avoid
+                        % temporary abs(complex).^2 arrays.
+                        U = inv2eta0.*(data(:,3).^2 + data(:,4).^2 + ...
+                            data(:,5).^2 + data(:,6).^2);
+                        Prad(1) = median(4*pi.*U.*10.^(-data(:,7)./10));
+                    end
+                else
+                    if nRows ~= Nang
+                        error('FFE angular grid size changes between frequency blocks (%d versus %d samples).',Nang,nRows);
+                    end
+                    
+                    % Fallback growth only if the file-size estimate was low.
+                    % Usually this branch is never entered.
+                    if fCount > nAlloc
+                        newAlloc = max(fCount,ceil(1.25*nAlloc));
+                        Eth(:,newAlloc) = complex(0);
+                        Eph(:,newAlloc) = complex(0);
+                        freq(newAlloc) = 0;
+                        Prad(newAlloc) = 0;
+                        nAlloc = newAlloc;
+                    end
+                    
+                    Eth(:,fCount) = complex(data(:,1),data(:,2));
+                    Eph(:,fCount) = complex(data(:,3),data(:,4));
+                    freq(fCount) = currentFreq;
+                    
+                    if getP
+                        U = inv2eta0.*(data(:,1).^2 + data(:,2).^2 + ...
+                            data(:,3).^2 + data(:,4).^2);
+                        Prad(fCount) = median(4*pi.*U.*10.^(-data(:,5)./10));
                     end
                 end
             end
-            fclose(fid);
-
-            % Build the object
-            x = ph(:,1);
-            y = th(:,1);
             
+            if fCount == 0
+                error('No far-field data blocks were found in %s.',pathName);
+            end
+            
+            % Remove any unused preallocated columns.
+            Eth = Eth(:,1:fCount);
+            Eph = Eph(:,1:fCount);
+            freq = freq(1:fCount);
+            if havePrad
+                Prad = Prad(1:fCount);
+            else
+                Prad = [];
+            end
+            
+            % Build the object
             E1 = Eth;
             E2 = Eph;
-           
-            coorType = lower(coorType); %coordinate system string fetched from header text of .ffe file
-            polType = 'linear'; %It seems that FEKO always outputs linear polarised fields (corresponding to th-ph coordinates)
-            gridType = 'PhTh'; %It seems that FEKO always outputs .ffe field values in theta-phi form, so this is hardcoded as such
-            %NB: Prad defined earlier
-            radEff = ones(size(freq)); %replace with manual radiation efficiency calculation
-            freqUnit = 'Hz'; %It seems that FEKO always outputs frequencies in Hz, so this is hardcoded as such
+            
+            coorType = lower(coorType); % coordinate system string fetched from .ffe header
+            polType = 'linear';         % FEKO .ffe fields are theta/phi linear components
+            gridType = 'PhTh';          % FEKO .ffe field values are theta/phi coordinates
+            radEff = ones(size(freq));
+            freqUnit = 'Hz';
             
             FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
-                'coorType',coorType{1},'polType',polType,'gridType',gridType,'freqUnit',freqUnit,'r',1,...
+                'coorType',coorType,'polType',polType,'gridType',gridType,'freqUnit',freqUnit,...
                 'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
                 'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
         end
+        
+        % function FF = readFEKOffe(pathName,varargin)
+        %     % READFEKOFFE Create a FarFiled object from a FEKO .ffe file.
+        % 
+        %     %Name: readFEKOffe.m
+        %     %Description:
+        %     %   Function to create a Farfield object from a FEKO .ffe far-field output
+        %     %   file.
+        %     %Inputs:
+        %     % th: column vector [Nang x 1] of th angles in rad
+        %     % ph: column vector [Nang x 1] of ph angles in rad
+        %     %Outputs:
+        %     % --FF: Farfield object containing parameters as derived from target .ffe
+        %     % file.
+        % 
+        %     % Parsing through the inputs
+        %     parseobj = inputParser;
+        %     parseobj.FunctionName = 'readFEKOffe';
+        % 
+        %     typeValidator_pathName = @(x) isa(x,'char');
+        %     parseobj.addRequired('pathname',typeValidator_pathName);
+        % 
+        %     expected_symPlane = {'none','electric','magnetic'};
+        %     parseobj.addParameter('symmetryXZ','none', @(x) any(validatestring(x,expected_symPlane)));
+        %     parseobj.addParameter('symmetryYZ','none', @(x) any(validatestring(x,expected_symPlane)));
+        %     parseobj.addParameter('symmetryXY','none', @(x) any(validatestring(x,expected_symPlane)));
+        % 
+        %     expected_symBOR = {'none','BOR0','BOR1'};
+        %     parseobj.addParameter('symmetryBOR','none', @(x) any(validatestring(x,expected_symBOR)));
+        % 
+        %     typeValidation_scalar = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','scalar'},'readGRASPcut');
+        %     parseobj.addParameter('r',1,typeValidation_scalar);
+        % 
+        %     typeValidation_orientation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+        %     parseobj.addParameter('orientation',[0,0,0],typeValidation_orientation);
+        % 
+        %     typeValidation_earthLocation = @(x) validateattributes(x,{'numeric'},{'real','finite','nonnan','size',[1,3]},'readGRASPcut');
+        %     parseobj.addParameter('earthLocation',[deg2rad(18.86) deg2rad(-33.93) 300],typeValidation_earthLocation);
+        % 
+        %     typeValidation_time = @(x) isa(x,'datetime');
+        %     parseobj.addParameter('time',datetime(2018,7,22,0,0,0),typeValidation_time);
+        % 
+        %     if nargin == 0
+        %         [name,path] = uigetfile('*.ffe');
+        %         pathName = [path,name];
+        %     end
+        %     parseobj.parse(pathName,varargin{:})
+        % 
+        %     pathName = parseobj.Results.pathname;
+        %     symmetryXZ = parseobj.Results.symmetryXZ;
+        %     symmetryYZ = parseobj.Results.symmetryYZ;
+        %     symmetryXY = parseobj.Results.symmetryXY;
+        %     symmetryBOR = parseobj.Results.symmetryBOR;
+        %     r = parseobj.Results.r;
+        %     orientation = parseobj.Results.orientation;
+        %     earthLocation = parseobj.Results.earthLocation;
+        %     time = parseobj.Results.time;
+        % 
+        %     eta0 = 3.767303134749689e+02;
+        % 
+        %     %Open the data file
+        %     if ~strcmp(pathName(end-3:end),'.ffe')
+        %         pathName = [pathName,'.ffe'];
+        %     end
+        %     fid = fopen(pathName);
+        %     if (fid==-1)
+        %         error(['Unable to open data file ' fileName '!']);
+        %     end
+        % 
+        %     % Read the main header info
+        %     coorSysMarker = '#Coordinate System:';
+        %     originMarker = '#Origin:';
+        %     freqMarker = '#Frequency:';
+        %     NthMarker = '#No. of Theta Samples:';
+        %     NphMarker = '#No. of Phi Samples:';
+        %     fieldMarker = '#"Theta""Phi"';
+        % 
+        %     %===================================================================
+        %     % LOAD DATA
+        %     %===================================================================
+        % 
+        %     fCount = 0;
+        %     read = 1;
+        % 
+        %     while read
+        %         a = fgetl(fid);
+        %         if a == -1
+        %             read = 0;
+        %             break;
+        %         end
+        %         if strncmp(a,originMarker,length(originMarker)) % Read the coordinate system type
+        %           NthMarker = '#No. of Theta'' Samples:';
+        %           NphMarker = '#No. of Phi'' Samples:';
+        %           fieldMarker = '#"Theta''""Phi''"';
+        %         end
+        %         if strncmp(a,coorSysMarker,length(coorSysMarker)) % Read the coordinate system type
+        %             coorSysCell = textscan(a,'%s%s%s');
+        %             coorType = coorSysCell{3};
+        %         end
+        %         if strncmp(a,freqMarker,length(freqMarker)) % Read the number of frequencies
+        %             freqCell = textscan(a,'%s%n');
+        %             freq(fCount+1) = freqCell{2};
+        %         end
+        %         if strncmp(a,NthMarker,length(NthMarker))
+        %             NthCell = textscan(a,'%s%s%s%s%n');
+        %             Nth = NthCell{5};
+        %         end
+        %         if strncmp(a,NphMarker,length(NphMarker))
+        %             NphCell = textscan(a,'%s%s%s%s%n');
+        %             Nph = NphCell{5};
+        %         end
+        % 
+        %         %     if strncmp(a,fieldMarker,length(fieldMarker))
+        %         aNoSpace = a;
+        %         aNoSpace(ismember(a,' ')) = [];
+        %         if strncmp(aNoSpace,fieldMarker,length(fieldMarker))
+        %             %         keyboard;
+        %             %         fieldHeader = strsplit(a);
+        %             %         Ncomp = length(fieldHeader)-1;  % Count how many columns to expect from the header
+        %             Ncomp = sum(ismember(a,'"'))/2; % Count how many columns to expect from the header
+        %             getP = false;
+        %             if Ncomp >=9, getP = true; end  % Assume column 9 is directivity..
+        %             if fCount == 0
+        %                 % Initialise matrices
+        %                 NfInit = 1; % Use as initial maximum guess...
+        %                 [th,ph,Eth,Eph,Dth,Dph,Dtotclear] = deal(zeros(Nth*Nph,NfInit));
+        %                 fData = zeros(Nth*Nph,Ncomp,NfInit);
+        %                 Prad = zeros(1,NfInit);
+        %             end
+        %             fCount = fCount + 1;
+        %             fDataForm = repmat('%f',1,Ncomp);
+        %             fData(:,:,fCount) = fscanf(fid,fDataForm,[Ncomp,Nth*Nph])';
+        %             th(:,fCount) = deg2rad(fData(:,1,fCount));
+        %             ph(:,fCount) = deg2rad(fData(:,2,fCount));
+        %             Eth(:,fCount) = fData(:,3,fCount) + 1i.*fData(:,4,fCount);
+        %             Eph(:,fCount) = fData(:,5,fCount) + 1i.*fData(:,6,fCount);
+        %             %         Dth(:,fCount) = fData(:,7,fCount);
+        %             %         Dph(:,fCount) = fData(:,8,fCount);
+        %             %         Dtot(:,fCount) = fData(:,9,fCount);
+        %             % Get the power from the directivity/gain
+        %             if getP
+        %                 U = 1/(2*eta0).*(abs(Eth(:,fCount)).^2 + abs(Eph(:,fCount)).^2);
+        %                 Prad(fCount) = median(4.*pi.*U./10.^(fData(:,9,fCount)./10));
+        %             else 
+        %                 Prad = [];
+        %             end
+        %         end
+        %     end
+        %     fclose(fid);
+        % 
+        %     % Build the object
+        %     x = ph(:,1);
+        %     y = th(:,1);
+        % 
+        %     E1 = Eth;
+        %     E2 = Eph;
+        % 
+        %     coorType = lower(coorType); %coordinate system string fetched from header text of .ffe file
+        %     polType = 'linear'; %It seems that FEKO always outputs linear polarised fields (corresponding to th-ph coordinates)
+        %     gridType = 'PhTh'; %It seems that FEKO always outputs .ffe field values in theta-phi form, so this is hardcoded as such
+        %     %NB: Prad defined earlier
+        %     radEff = ones(size(freq)); %replace with manual radiation efficiency calculation
+        %     freqUnit = 'Hz'; %It seems that FEKO always outputs frequencies in Hz, so this is hardcoded as such
+        % 
+        %     FF = FarField(x,y,E1,E2,freq,Prad,radEff,...
+        %         'coorType',coorType{1},'polType',polType,'gridType',gridType,'freqUnit',freqUnit,'r',1,...
+        %         'symmetryXZ',symmetryXZ,'symmetryYZ',symmetryYZ,'symmetryXY',symmetryXY,'symmetryBOR',symmetryBOR,...
+        %         'r',r,'orientation',orientation,'earthLocation',earthLocation,'time',time);
+        % end
 
         function FF = readCSTffs(pathName,varargin)
             % READCSTFFS Create a FarField object from a CST .ffs file.

@@ -66,6 +66,17 @@ else
     constructorPass = false;
 end
 
+% FEKO constructors
+try
+    FF = FarField.readFEKOffe([dataPathFEKO,'DipPhiRot0_Nf']);
+    disp('Pass: readFEKOffe')
+    readFEKOffePass = true;
+    clear FF
+catch readCSTffs_errInfo
+    disp('FAIL: readFEKOffe')
+    readFEKOffePass = false;
+end
+
 % GRASP constructors
 try
     FF1 = FarField.readGRASPgrd([dataPathGRASPgrd,'FF_phth_spherical_pos180']);
@@ -793,7 +804,7 @@ clear FF FF1 FF2
 
 
 %% Final test
-FarFieldPass = all([constructorPass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,readFITSpass,FarFieldfromStructPass,...
+FarFieldPass = all([constructorPass,readFEKOffePass,readGRASPgrdPass,readGRASPcutPass,readCSTffsPass,readCSTtxtPass,readNFSscanPass,readFITSpass,FarFieldfromStructPass,...
     bwPass,sllPass,apFieldPass,...
     pradIntPass,setPowerPass,...
     gridTransPass,coorTransPass,polTransPass...
