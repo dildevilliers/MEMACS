@@ -1279,3 +1279,1766 @@ function testDirectivitySinTheta(testCase)
         RelTol=1e-4);
 
 end
+
+%% Radiation efficiency and gain
+
+function testDefaultEtaRad(testCase)
+
+    SF = makeSimpleField();
+
+    verifyEqual(testCase, SF.etaRad, 1);
+
+end
+
+
+function testEtaRadConstructor(testCase)
+
+    SF = SphereField( ...
+        0, 90, ...
+        0, 1, ...
+        1e9, ...
+        etaRad = 0.75);
+
+    verifyEqual(testCase, SF.etaRad, 0.75);
+
+end
+
+
+function testEtaRadMultipleFrequencies(testCase)
+
+    ph = [0; 90];
+    th = [45; 45];
+
+    freq = [1e9 2e9 3e9];
+
+    Eph = zeros(2,3);
+    Eth = ones(2,3);
+
+    etaRad = [0.5 0.7 0.9];
+
+    SF = SphereField( ...
+        ph, th, ...
+        Eph, Eth, ...
+        freq, ...
+        etaRad = etaRad);
+
+    verifyEqual(testCase, SF.etaRad, etaRad);
+
+end
+
+
+function testEtaRadSizeMismatch(testCase)
+
+    ph = [0; 90];
+    th = [45; 45];
+
+    Eph = ones(2,2);
+    Eth = ones(2,2);
+
+    verifyError(testCase, ...
+        @() SphereField( ...
+            ph, th, ...
+            Eph, Eth, ...
+            [1e9 2e9], ...
+            etaRad = [0.5 0.6 0.7]), ...
+        'SphereField:EtaRadSizeMismatch');
+
+end
+
+
+function testEtaRadGreaterThanOneRejected(testCase)
+
+    verifyError(testCase, ...
+        @() SphereField( ...
+            0, 90, ...
+            0, 1, ...
+            1e9, ...
+            etaRad = 1.1), ...
+        'SphereField:InvalidEtaRad');
+
+end
+
+
+function testNegativeEtaRadRejected(testCase)
+
+    verifyError(testCase, ...
+        @() SphereField( ...
+            0, 90, ...
+            0, 1, ...
+            1e9, ...
+            etaRad = -0.1), ...
+        'SphereField:InvalidEtaRad');
+
+end
+
+
+function testGainUnityEfficiency(testCase)
+
+    phVec = 0:2:360;
+    thVec = 0:2:180;
+
+    [PH,TH] = meshgrid(phVec,thVec);
+
+    Eth = sind(TH);
+    Eph = zeros(size(Eth));
+
+    SF = SphereField( ...
+        PH, TH, ...
+        Eph(:), Eth(:), ...
+        1e9, ...
+        etaRad = 1);
+
+    D = SF.getDirectivity( ...
+        PowerSource = "integrated");
+
+    G = SF.getGain( ...
+        PowerSource = "integrated");
+
+    verifyEqual(testCase, ...
+        G, D, ...
+        RelTol = 1e-14);
+
+end
+
+
+function testGainRadiationEfficiency(testCase)
+
+    phVec = 0:2:360;
+    thVec = 0:2:180;
+
+    [PH,TH] = meshgrid(phVec,thVec);
+
+    Eth = sind(TH);
+    Eph = zeros(size(Eth));
+
+    etaRad = 0.6;
+
+    SF = SphereField( ...
+        PH, TH, ...
+        Eph(:), Eth(:), ...
+        1e9, ...
+        etaRad = etaRad);
+
+    D = SF.getDirectivity( ...
+        PowerSource = "integrated");
+
+    G = SF.getGain( ...
+        PowerSource = "integrated");
+
+    verifyEqual(testCase, ...
+        G, etaRad*D, ...
+        RelTol = 1e-14);
+
+end
+
+
+function testGainMultipleFrequencies(testCase)
+
+    phVec = 0:2:360;
+    thVec = 0:2:180;
+
+    [PH,TH] = meshgrid(phVec,thVec);
+
+    E1 = sind(TH);
+
+    Eth = [ ...
+        E1(:), ...
+        2*E1(:), ...
+        3*E1(:)];
+
+    Eph = zeros(size(Eth));
+
+    etaRad = [0.4 0.6 0.8];
+
+    SF = SphereField( ...
+        PH, TH, ...
+        Eph, Eth, ...
+        [1e9 2e9 3e9], ...
+        etaRad = etaRad);
+
+    D = SF.getDirectivity( ...
+        PowerSource = "integrated");
+
+    G = SF.getGain( ...
+        PowerSource = "integrated");
+
+    expected = D .* reshape(etaRad,1,[]);
+
+    verifyEqual(testCase, ...
+        G, expected, ...
+        RelTol = 1e-14);
+
+end
+
+
+function testMaxGainSinTheta(testCase)
+
+    phVec = 0:2:360;
+    thVec = 0:2:180;
+
+    [PH,TH] = meshgrid(phVec,thVec);
+
+    Eth = sind(TH);
+    Eph = zeros(size(Eth));
+
+    etaRad = 0.8;
+
+    SF = SphereField( ...
+        PH, TH, ...
+        Eph(:), Eth(:), ...
+        1e9, ...
+        etaRad = etaRad);
+
+    G = SF.getGain( ...
+        PowerSource = "integrated");
+
+    % sin(theta) pattern has Dmax = 1.5.
+    GmaxExact = etaRad * 1.5;
+
+    verifyEqual(testCase, ...
+        max(G), ...
+        GmaxExact, ...
+        RelTol = 1e-4);
+
+end
+
+%% Linear field basis
+
+function testSphericalBasis(testCase)
+
+    SF = SphereField( ...
+        [0;45], ...
+        [30;60], ...
+        [1;2], ...      % Eph
+        [3;4], ...      % Eth
+        1e9);
+
+    [E1,E2,E3,info] = ...
+        SF.getLinearBasis(Basis = "spherical");
+
+    verifyEqual(testCase,E1,SF.Eth);
+    verifyEqual(testCase,E2,SF.Eph);
+    verifyEmpty(testCase,E3);
+
+    verifyEqual(testCase, ...
+        info.componentNames, ...
+        ["Eth","Eph"]);
+
+end
+
+function testLudwig1BasisAtZAxis(testCase)
+
+    SF = SphereField( ...
+        0, 0, ...
+        3, ...      % Eph
+        2, ...      % Eth
+        1e9);
+
+    [Ex,Ey,Ez,info] = ...
+        SF.getLinearBasis(Basis = "Ludwig1");
+
+    verifyEqual(testCase,Ex,2,AbsTol=1e-14);
+    verifyEqual(testCase,Ey,3,AbsTol=1e-14);
+    verifyEqual(testCase,Ez,0,AbsTol=1e-14);
+
+    verifyEqual(testCase, ...
+        info.componentNames, ...
+        ["Ex","Ey","Ez"]);
+
+end
+
+function testLudwig1BasisAtXAxis(testCase)
+
+    SF = SphereField( ...
+        0, 90, ...
+        3, ...      % Eph
+        2, ...      % Eth
+        1e9);
+
+    [Ex,Ey,Ez] = ...
+        SF.getLinearBasis(Basis = "Ludwig1");
+
+    verifyEqual(testCase,Ex,0,AbsTol=1e-14);
+    verifyEqual(testCase,Ey,3,AbsTol=1e-14);
+    verifyEqual(testCase,Ez,-2,AbsTol=1e-14);
+
+end
+
+function testLudwig1MatchesCartesianPattern(testCase)
+
+    ph = [0;30;90;170];
+    th = [10;40;90;130];
+
+    Eph = [1;2;3;4] + 1i*[2;1;4;3];
+    Eth = [5;6;7;8] - 1i*[1;3;2;4];
+
+    SF = SphereField( ...
+        ph,th,Eph,Eth,1e9);
+
+    [Ex,Ey,Ez] = ...
+        SF.getLinearBasis(Basis = "Ludwig1");
+
+    Ecart = SF.getCartesianE();
+
+    FFfact = ...
+        exp(-1i*SF.wavenumber*SF.r)/SF.r;
+
+    Epattern = Ecart(:,:,1) ./ FFfact;
+
+    verifyEqual(testCase, ...
+        [Ex.';Ey.';Ez.'], ...
+        Epattern, ...
+        AbsTol=1e-13);
+
+end
+
+function testLudwig3PhiZero(testCase)
+
+    SF = SphereField( ...
+        0, 45, ...
+        3, ...       % Eph
+        2, ...       % Eth
+        1e9);
+
+    [Eh,Ev] = ...
+        SF.getLinearBasis(Basis = "Ludwig3");
+
+    verifyEqual(testCase,Eh,2,AbsTol=1e-14);
+    verifyEqual(testCase,Ev,3,AbsTol=1e-14);
+
+end
+
+function testLudwig3Phi90(testCase)
+
+    SF = SphereField( ...
+        90, 45, ...
+        3, ...
+        2, ...
+        1e9);
+
+    [Eh,Ev] = ...
+        SF.getLinearBasis(Basis = "Ludwig3");
+
+    verifyEqual(testCase,Eh,-3,AbsTol=1e-14);
+    verifyEqual(testCase,Ev, 2,AbsTol=1e-14);
+
+end
+
+function testLudwig3PreservesMagnitude(testCase)
+
+    SF = makeComplexField();
+
+    [Eh,Ev] = ...
+        SF.getLinearBasis(Basis = "Ludwig3");
+
+    magSph = ...
+        abs(SF.Eth).^2 + abs(SF.Eph).^2;
+
+    magL3 = ...
+        abs(Eh).^2 + abs(Ev).^2;
+
+    verifyEqual(testCase, ...
+        magL3,magSph, ...
+        AbsTol=1e-13);
+
+end
+
+function testLudwig2AEPhiZero(testCase)
+
+    SF = SphereField( ...
+        0, 40, ...
+        3, ...
+        2, ...
+        1e9);
+
+    [Eaz,Eel] = ...
+        SF.getLinearBasis(Basis = "Ludwig2AE");
+
+    verifyEqual(testCase,Eaz,2,AbsTol=1e-14);
+    verifyEqual(testCase,Eel,3,AbsTol=1e-14);
+
+end
+
+function testLudwig2AESingularity(testCase)
+
+    SF = SphereField( ...
+        90, 90, ...
+        3, ...       % Eph
+        2, ...       % Eth
+        1e9);
+
+    [Eaz,Eel] = ...
+        SF.getLinearBasis(Basis = "Ludwig2AE");
+
+    verifyEqual(testCase,Eaz, 3,AbsTol=1e-14);
+    verifyEqual(testCase,Eel,-2,AbsTol=1e-14);
+
+    verifyTrue(testCase,isfinite(Eaz));
+    verifyTrue(testCase,isfinite(Eel));
+
+end
+
+function testLudwig2EAPhi90(testCase)
+
+    SF = SphereField( ...
+        90, 40, ...
+        3, ...
+        2, ...
+        1e9);
+
+    [Eal,Eep] = ...
+        SF.getLinearBasis(Basis = "Ludwig2EA");
+
+    verifyEqual(testCase,Eal,-3,AbsTol=1e-14);
+    verifyEqual(testCase,Eep, 2,AbsTol=1e-14);
+
+end
+
+function testLudwig2EASingularity(testCase)
+
+    SF = SphereField( ...
+        0, 90, ...
+        3, ...
+        2, ...
+        1e9);
+
+    [Eal,Eep] = ...
+        SF.getLinearBasis(Basis = "Ludwig2EA");
+
+    verifyEqual(testCase,Eal,-2,AbsTol=1e-14);
+    verifyEqual(testCase,Eep,-3,AbsTol=1e-14);
+
+    verifyTrue(testCase,isfinite(Eal));
+    verifyTrue(testCase,isfinite(Eep));
+
+end
+
+function testLudwig2PreservesMagnitude(testCase)
+
+    SF = makeComplexField();
+
+    mag0 = ...
+        abs(SF.Eth).^2 + abs(SF.Eph).^2;
+
+    [E1,E2] = ...
+        SF.getLinearBasis(Basis = "Ludwig2AE");
+
+    verifyEqual(testCase, ...
+        abs(E1).^2 + abs(E2).^2, ...
+        mag0, ...
+        AbsTol=1e-12);
+
+    [E1,E2] = ...
+        SF.getLinearBasis(Basis = "Ludwig2EA");
+
+    verifyEqual(testCase, ...
+        abs(E1).^2 + abs(E2).^2, ...
+        mag0, ...
+        AbsTol=1e-12);
+
+end
+
+function SF = makeComplexField()
+
+    ph = [10;35;70;120;210;300];
+    th = [15;35;55;75;110;145];
+
+    Eph = ...
+        [1;2;3;4;5;6] ...
+        + 1i*[3;1;4;2;6;5];
+
+    Eth = ...
+        [6;5;4;3;2;1] ...
+        - 1i*[1;3;2;5;4;6];
+
+    SF = SphereField( ...
+        ph,th,Eph,Eth,1e9);
+
+end
+
+%% Polarization projection
+
+function testGetFieldLinear(testCase)
+    SF = makeComplexField();
+    [E1,E2,E3,info] = SF.getField(Basis="spherical",Polarization="linear");
+    verifyEqual(testCase,E1,SF.Eth);
+    verifyEqual(testCase,E2,SF.Eph);
+    verifyEmpty(testCase,E3);
+    verifyEqual(testCase,info.polarization,"linear");
+end
+
+function testCircularPureRHCP(testCase)
+    % IEEE RHCP: E2 lags E1 by 90 deg for exp(+jwt).
+    SF = SphereField(0,45,-1i,1,1e9);
+    [ER,EL] = SF.getField(Basis="spherical",Polarization="circular");
+    verifyEqual(testCase,ER,sqrt(2),AbsTol=1e-14);
+    verifyEqual(testCase,EL,0,AbsTol=1e-14);
+end
+
+function testCircularPureLHCP(testCase)
+    SF = SphereField(0,45,1i,1,1e9);
+    [ER,EL] = SF.getField(Basis="spherical",Polarization="circular");
+    verifyEqual(testCase,ER,0,AbsTol=1e-14);
+    verifyEqual(testCase,EL,sqrt(2),AbsTol=1e-14);
+end
+
+function testCircularComponentNames(testCase)
+    SF = makeSimpleField();
+    [~,~,~,info] = SF.getField(Polarization="circular");
+    verifyEqual(testCase,info.componentNames,["RHCP","LHCP"]);
+    verifyEqual(testCase,info.convention,"IEEE");
+end
+
+function testCircularPreservesPower(testCase)
+    SF = makeComplexField();
+    [ER,EL] = SF.getField(Basis="Ludwig3",Polarization="circular");
+    [E1,E2] = SF.getLinearBasis(Basis="Ludwig3");
+    verifyEqual(testCase,abs(ER).^2+abs(EL).^2,abs(E1).^2+abs(E2).^2,AbsTol=1e-12);
+end
+
+function testSlantZero(testCase)
+    SF = makeComplexField();
+    [Es,Eo] = SF.getField(Basis="spherical",Polarization="slant",SlantAngle=0);
+    verifyEqual(testCase,Es,SF.Eth);
+    verifyEqual(testCase,Eo,SF.Eph);
+end
+
+function testSlant90(testCase)
+    SF = makeComplexField();
+    [Es,Eo] = SF.getField(Basis="spherical",Polarization="slant",SlantAngle=90);
+    verifyEqual(testCase,Es,SF.Eph,AbsTol=1e-14);
+    verifyEqual(testCase,Eo,-SF.Eth,AbsTol=1e-14);
+end
+
+function testSlant45(testCase)
+    SF = SphereField(0,45,0,1,1e9);
+    [Es,Eo] = SF.getField(Polarization="slant",SlantAngle=45);
+    verifyEqual(testCase,Es,1/sqrt(2),AbsTol=1e-14);
+    verifyEqual(testCase,Eo,-1/sqrt(2),AbsTol=1e-14);
+end
+
+function testSlantPreservesPower(testCase)
+    SF = makeComplexField();
+    [Es,Eo] = SF.getField(Basis="Ludwig3",Polarization="slant",SlantAngle=37);
+    [E1,E2] = SF.getLinearBasis(Basis="Ludwig3");
+    verifyEqual(testCase,abs(Es).^2+abs(Eo).^2,abs(E1).^2+abs(E2).^2,AbsTol=1e-12);
+end
+
+function testLudwig1CircularRejected(testCase)
+    SF = makeSimpleField();
+    verifyError(testCase,@() SF.getField(Basis="Ludwig1",Polarization="circular"),'SphereField:PolarizationRequiresTransverseBasis');
+end
+
+function testLudwig1SlantRejected(testCase)
+    SF = makeSimpleField();
+    verifyError(testCase,@() SF.getField(Basis="Ludwig1",Polarization="slant"),'SphereField:PolarizationRequiresTransverseBasis');
+end
+
+%% Coordinate views
+
+function testCoordinatesPhTh(testCase)
+    SF = SphereField([0;45;180],[10;30;90],[1;1;1],[1;1;1],1e9);
+    C = SF.getCoordinates(Coordinates="PhTh");
+
+    verifyEqual(testCase,C.x,SF.ph);
+    verifyEqual(testCase,C.y,SF.th);
+    verifyEqual(testCase,C.xName,"phi");
+    verifyEqual(testCase,C.yName,"theta");
+    verifyEqual(testCase,C.xUnit,"deg");
+    verifyEqual(testCase,C.yUnit,"deg");
+end
+
+function testCoordinatesDirCosAxes(testCase)
+    SF = SphereField([0;90;0],[90;90;0],zeros(3,1),ones(3,1),1e9);
+    C = SF.getCoordinates(Coordinates="DirCos");
+
+    verifyEqual(testCase,C.x,[1;0;0],AbsTol=1e-14);
+    verifyEqual(testCase,C.y,[0;1;0],AbsTol=1e-14);
+    verifyEqual(testCase,C.z,[0;0;1],AbsTol=1e-14);
+end
+
+function testCoordinatesDirCosMatchesDirections(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="DirCos");
+    rHat = SF.getCartesianDirections();
+
+    verifyEqual(testCase,[C.x.';C.y.';C.z.'],rHat,AbsTol=1e-14);
+end
+
+function testCoordinatesAzElKnownPoints(testCase)
+    SF = SphereField([0;90;180],[90;90;90],zeros(3,1),ones(3,1),1e9);
+    C = SF.getCoordinates(Coordinates="AzEl");
+
+    verifyEqual(testCase,C.x,[90;0;-90],AbsTol=1e-12);
+    verifyEqual(testCase,C.y,[0;90;0],AbsTol=1e-12);
+end
+
+function testCoordinatesAzElPreservesDirection(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="AzEl");
+
+    u = cosd(C.y).*sind(C.x);
+    v = sind(C.y);
+    w = cosd(C.y).*cosd(C.x);
+
+    rHat = SF.getCartesianDirections();
+    verifyEqual(testCase,[u.';v.';w.'],rHat,AbsTol=1e-13);
+end
+
+function testCoordinatesElAzPreservesDirection(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="ElAz");
+
+    u = sind(C.y);
+    v = cosd(C.y).*sind(C.x);
+    w = cosd(C.y).*cosd(C.x);
+
+    rHat = SF.getCartesianDirections();
+    verifyEqual(testCase,[u.';v.';w.'],rHat,AbsTol=1e-13);
+end
+
+function testCoordinatesTrueView(testCase)
+    SF = SphereField([0;90;180;270],30*ones(4,1),zeros(4,1),ones(4,1),1e9);
+    C = SF.getCoordinates(Coordinates="TrueView");
+
+    verifyEqual(testCase,C.x,[30;0;-30;0],AbsTol=1e-13);
+    verifyEqual(testCase,C.y,[0;30;0;-30],AbsTol=1e-13);
+end
+
+function testCoordinatesTrueViewRadius(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="TrueView");
+
+    thRecovered = hypot(C.x,C.y);
+    verifyEqual(testCase,thRecovered,SF.th,AbsTol=1e-13);
+end
+
+function testCoordinatesArcSin(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="ArcSin");
+    D = SF.getCoordinates(Coordinates="DirCos");
+
+    verifyEqual(testCase,sind(C.x),D.x,AbsTol=1e-14);
+    verifyEqual(testCase,sind(C.y),D.y,AbsTol=1e-14);
+end
+
+function testCoordinatesPreserveSampleCount(testCase)
+    SF = makeComplexField();
+    coordinateTypes = ["PhTh","AzEl","ElAz","DirCos","TrueView","ArcSin"];
+
+    for cc = coordinateTypes
+        C = SF.getCoordinates(Coordinates=cc);
+        verifySize(testCase,C.x,[SF.Np 1]);
+        verifySize(testCase,C.y,[SF.Np 1]);
+    end
+end
+
+function testCoordinateStructuredTopology(testCase)
+    SF = makeGridField(0:10:360,0:10:180);
+
+    coordinateTypes = ["PhTh","AzEl","ElAz","DirCos","TrueView","ArcSin"];
+    for cc = coordinateTypes
+        C = SF.getCoordinates(Coordinates=cc);
+        verifyTrue(testCase,C.hasStructuredTopology);
+    end
+end
+
+function testCoordinateUnstructuredTopology(testCase)
+    SF = makeComplexField();
+    C = SF.getCoordinates(Coordinates="AzEl");
+    verifyFalse(testCase,C.hasStructuredTopology);
+end
+
+function testGetDataPatternComplex(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="pattern",Quantity="complex");
+    verifyEqual(testCase,D.values(:,:,1),SF.Eth);
+    verifyEqual(testCase,D.values(:,:,2),SF.Eph);
+    verifyEqual(testCase,D.valueUnit,"V");
+    verifyEqual(testCase,D.fieldType,"pattern");
+end
+
+function testGetDataPhysicalField(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="field",Quantity="complex");
+    [Eph,Eth] = SF.getEfield();
+    verifyEqual(testCase,D.values(:,:,1),Eth);
+    verifyEqual(testCase,D.values(:,:,2),Eph);
+    verifyEqual(testCase,D.valueUnit,"V/m");
+    verifyEqual(testCase,D.fieldType,"field");
+end
+
+function testGetDataPatternReal(testCase)
+    SF = makeComplexField();
+    D = SF.getData(Quantity="real");
+    verifyEqual(testCase,D.values(:,:,1),real(SF.Eth));
+    verifyEqual(testCase,D.values(:,:,2),real(SF.Eph));
+end
+
+function testGetDataPatternImag(testCase)
+    SF = makeComplexField();
+    D = SF.getData(Quantity="imag");
+    verifyEqual(testCase,D.values(:,:,1),imag(SF.Eth));
+    verifyEqual(testCase,D.values(:,:,2),imag(SF.Eph));
+end
+
+function testGetDataPhysicalReal(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="field",Quantity="real");
+    [Eph,Eth] = SF.getEfield();
+    verifyEqual(testCase,D.values(:,:,1),real(Eth));
+    verifyEqual(testCase,D.values(:,:,2),real(Eph));
+end
+
+function testGetDataPhysicalImag(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="field",Quantity="imag");
+    [Eph,Eth] = SF.getEfield();
+    verifyEqual(testCase,D.values(:,:,1),imag(Eth));
+    verifyEqual(testCase,D.values(:,:,2),imag(Eph));
+end
+
+function testGetDataPatternMagnitude(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="pattern",Quantity="magnitude");
+    verifyEqual(testCase,D.values(:,:,1),abs(SF.Eth));
+    verifyEqual(testCase,D.values(:,:,2),abs(SF.Eph));
+end
+
+function testGetDataPhysicalMagnitude(testCase)
+    SF = makeComplexField();
+    D = SF.getData(FieldType="field",Quantity="magnitude");
+    [Eph,Eth] = SF.getEfield();
+    verifyEqual(testCase,D.values(:,:,1),abs(Eth));
+    verifyEqual(testCase,D.values(:,:,2),abs(Eph));
+end
+
+function testGetDataPatternIndependentOfRadius(testCase)
+    SF1 = SphereField(0,45,2+1i,3-2i,1e9,r=1);
+    SF2 = SphereField(0,45,2+1i,3-2i,1e9,r=10);
+
+    D1 = SF1.getData(FieldType="pattern");
+    D2 = SF2.getData(FieldType="pattern");
+    verifyEqual(testCase,D1.values,D2.values);
+end
+
+function testGetDataFieldScalesWithRadius(testCase)
+    SF1 = SphereField(0,45,2+1i,3-2i,1e9,r=1);
+    SF2 = SphereField(0,45,2+1i,3-2i,1e9,r=10);
+
+    D1 = SF1.getData(FieldType="field",Quantity="magnitude");
+    D2 = SF2.getData(FieldType="field",Quantity="magnitude");
+    verifyEqual(testCase,D2.values,D1.values/10,RelTol=1e-14);
+end
+
+function testGetDataComponentSelection(testCase)
+    SF = makeComplexField();
+    D = SF.getData(Basis="Ludwig3",ComponentIndex=2);
+    [~,Ev] = SF.getLinearBasis(Basis="Ludwig3");
+    verifyEqual(testCase,D.values,Ev);
+    verifyEqual(testCase,D.componentNames,"Ev");
+end
+
+function testGetDataCircularComponentSelection(testCase)
+    SF = makeComplexField();
+    D = SF.getData(Polarization="circular",ComponentIndex=1);
+    [ER,~] = SF.getField(Polarization="circular");
+    verifyEqual(testCase,D.values,ER);
+    verifyEqual(testCase,D.componentNames,"RHCP");
+end
+
+function testGetDataUnknownComponent(testCase)
+    SF = makeComplexField();
+    verifyError(testCase,@() SF.getData(ComponentIndex=3),'SphereField:InvalidComponentIndex');
+end
+
+function testGetDataMagnitudeDB20(testCase)
+    SF = makeComplexField();
+    Dlin = SF.getData(Quantity="magnitude");
+    DdB = SF.getData(Quantity="magnitude",Scale="dB20");
+    verifyEqual(testCase,DdB.values,20*log10(Dlin.values),AbsTol=1e-13);
+    verifyEqual(testCase,DdB.valueUnit,"dB");
+end
+
+function testGetDataDirectivityDB10(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    Dlin = SF.getData(Quantity="directivity");
+    DdB = SF.getData(Quantity="directivity",Scale="dB10");
+    verifyEqual(testCase,DdB.values,10*log10(Dlin.values),AbsTol=1e-13);
+end
+
+function testGetDataInvalidDB20(testCase)
+    SF = makeComplexField();
+    verifyError(testCase,@() SF.getData(Quantity="real",Scale="dB20"),'SphereField:InvalidScale');
+end
+
+function testGetDataInvalidDB10(testCase)
+    SF = makeComplexField();
+    verifyError(testCase,@() SF.getData(Quantity="magnitude",Scale="dB10"),'SphereField:InvalidScale');
+end
+
+function testFullSpherePositive180(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    G = SF.getGridView("fullSphere",PhiRange="positive",ThetaRange="180");
+    verifyEqual(testCase,G.phVec,(0:10:360));
+    verifyEqual(testCase,G.thVec,(0:5:180));
+end
+
+function testFullSphereSymmetric180(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    G = SF.getGridView("fullSphere",PhiRange="symmetric",ThetaRange="180");
+    verifyEqual(testCase,G.phVec,(-180:10:180));
+    verifyEqual(testCase,G.thVec,(0:5:180));
+end
+
+function testFullSpherePositive360(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    G = SF.getGridView("fullSphere",PhiRange="positive",ThetaRange="360");
+    verifyEqual(testCase,G.phVec,(0:10:180));
+    verifyEqual(testCase,G.thVec,(-180:5:180));
+end
+
+function testFullSphereSymmetric360(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    G = SF.getGridView("fullSphere",PhiRange="symmetric",ThetaRange="360");
+    verifyEqual(testCase,G.phVec,(-90:10:90));
+    verifyEqual(testCase,G.thVec,(-180:5:180));
+end
+
+function testInterpolationGridPadding(testCase)
+    SF = makeGridField(0:10:360,0:5:180);
+    G = SF.getGridView("interpolation",PaddingSamples=2);
+    verifyEqual(testCase,G.phVec,(-20:10:380));
+    verifyEqual(testCase,G.thVec,(-10:5:190));
+    verifyEqual(testCase,G.paddingSamples,2);
+end
+
+function testInterpolationFullSphere(testCase)
+    SF=makeGridField(0:10:360,0:5:180);
+    G=SF.getGridView("interpolation",PaddingSamples=2);
+
+    verifyEqual(testCase,G.phVec,-20:10:380);
+    verifyEqual(testCase,G.thVec,-10:5:190);
+    verifyTrue(testCase,G.extendedPhi);
+    verifyTrue(testCase,G.extendedNorthPole);
+    verifyTrue(testCase,G.extendedSouthPole);
+end
+
+function testInterpolationNorthernCap(testCase)
+    ph=0:10:360; th=0:5:40;
+    [PH,TH]=meshgrid(ph,th);
+    SF=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    G=SF.getGridView("interpolation",PaddingSamples=2);
+
+    verifyEqual(testCase,G.phVec,-20:10:380);
+    verifyEqual(testCase,G.thVec,-10:5:40);
+    verifyTrue(testCase,G.extendedPhi);
+    verifyTrue(testCase,G.extendedNorthPole);
+    verifyFalse(testCase,G.extendedSouthPole);
+end
+
+function testInterpolationSouthernCap(testCase)
+    ph=0:10:360; th=140:5:180;
+    [PH,TH]=meshgrid(ph,th);
+    SF=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    G=SF.getGridView("interpolation",PaddingSamples=2);
+
+    verifyEqual(testCase,G.phVec,-20:10:380);
+    verifyEqual(testCase,G.thVec,140:5:190);
+    verifyTrue(testCase,G.extendedPhi);
+    verifyFalse(testCase,G.extendedNorthPole);
+    verifyTrue(testCase,G.extendedSouthPole);
+end
+
+function testInterpolationFullPhiBand(testCase)
+    ph=0:10:360; th=40:5:100;
+    [PH,TH]=meshgrid(ph,th);
+    SF=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    G=SF.getGridView("interpolation",PaddingSamples=2);
+
+    verifyEqual(testCase,G.phVec,-20:10:380);
+    verifyEqual(testCase,G.thVec,40:5:100);
+    verifyTrue(testCase,G.extendedPhi);
+    verifyFalse(testCase,G.extendedNorthPole);
+    verifyFalse(testCase,G.extendedSouthPole);
+end
+
+function testInterpolationPartialPatch(testCase)
+    ph=-60:10:60; th=20:5:70;
+    [PH,TH]=meshgrid(ph,th);
+    SF=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    G=SF.getGridView("interpolation",PaddingSamples=2);
+
+    verifyEqual(testCase,G.phVec,ph);
+    verifyEqual(testCase,G.thVec,th);
+    verifyFalse(testCase,G.extendedPhi);
+    verifyFalse(testCase,G.extendedNorthPole);
+    verifyFalse(testCase,G.extendedSouthPole);
+end
+
+function testFullThetaFieldTransformation(testCase)
+    ph=0:10:360; th=0:5:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    Eth=cosd(TH(:)).*cosd(PH(:));
+    Eph=-sind(PH(:));
+    SF=SphereField(PH(:),TH(:),Eph,Eth,1e9);
+
+    G=SF.getGridView("fullSphere",PhiRange="symmetric",ThetaRange="360");
+
+    phNew=0; thNew=-10;
+    phOld=180; thOld=10;
+
+    iPhNew=find(abs(G.phVec-phNew)<1e-12,1);
+    iThNew=find(abs(G.thVec-thNew)<1e-12,1);
+
+    Enew=sphPatternToCartesian(phNew,thNew,G.Eph(iThNew,iPhNew),G.Eth(iThNew,iPhNew));
+
+    % Get the equivalent original sample directly.
+    iOld=find(abs(SF.ph-phOld)<1e-12 & abs(SF.th-thOld)<1e-12,1);
+    Eold=sphPatternToCartesian(phOld,thOld,SF.Eph(iOld),SF.Eth(iOld));
+
+    verifyEqual(testCase,Enew,Eold,AbsTol=1e-12);
+end
+
+function Ecart = sphPatternToCartesian(ph,th,Eph,Eth,Er)
+    if nargin<5, Er=0; end
+    sth=sind(th); cth=cosd(th); sph=sind(ph); cph=cosd(ph);
+    rHat=[sth*cph;sth*sph;cth];
+    thHat=[cth*cph;cth*sph;-sth];
+    phHat=[-sph;cph;0];
+    Ecart=Eth*thHat+Eph*phHat+Er*rHat;
+end
+
+%% Resample tests
+function testResampleOriginalGrid(testCase)
+    SF=makeComplexGridField();
+    G=SF.getGridView("stored");
+
+    S2=SF.resample(G.phVec,G.thVec,Method="linear");
+
+    verifyEqual(testCase,S2.Eth,SF.Eth,AbsTol=1e-12);
+    verifyEqual(testCase,S2.Eph,SF.Eph,AbsTol=1e-12);
+end
+
+function SF = makeComplexGridField()
+    ph=0:10:360; th=0:5:180;
+    [PH,TH]=meshgrid(ph,th);
+    Eth=sind(TH).*(1+0.3i*cosd(PH));
+    Eph=0.2*sind(TH).*exp(1i*deg2rad(PH));
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+end
+
+function testResampleOutputGrid(testCase)
+    SF=makeComplexGridField();
+    phNew=0:5:360; thNew=0:2.5:180;
+    S2=SF.resample(phNew,thNew);
+
+    verifyEqual(testCase,S2.Np,numel(phNew)*numel(thNew));
+    G=S2.getGridView("stored");
+    verifyEqual(testCase,G.phVec,phNew);
+    verifyEqual(testCase,G.thVec,thNew);
+end
+
+function testResampleSymmetricPhi(testCase)
+    SF=makeComplexGridField();
+
+    S1=SF.resample(0:5:355,0:5:180);
+    S2=SF.resample(-180:5:175,0:5:180);
+
+    G1=S1.getGridView("stored");
+    G2=S2.getGridView("stored");
+
+    % Shift G2 into the same physical phi ordering as G1.
+    i2=zeros(size(G1.phVec));
+    for ii=1:numel(G1.phVec)
+        d=mod(G2.phVec-G1.phVec(ii)+180,360)-180;
+        i2(ii)=find(abs(d)<1e-10,1);
+    end
+
+    verifyEqual(testCase,G2.Eth(:,i2,:),G1.Eth,AbsTol=1e-11);
+    verifyEqual(testCase,G2.Eph(:,i2,:),G1.Eph,AbsTol=1e-11);
+end
+
+function testResamplePartialField(testCase)
+    ph=-60:10:60; th=20:5:70;
+    [PH,TH]=meshgrid(ph,th);
+    Eth=cosd(PH).*sind(TH);
+    Eph=sind(PH).*sind(TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    S2=SF.resample(-50:5:50,25:2.5:65,Method="linear");
+
+    verifyEqual(testCase,S2.Np,21*17);
+end
+
+function testResamplePartialFieldRejectsExtrapolation(testCase)
+    ph=-60:10:60; th=20:5:70;
+    [PH,TH]=meshgrid(ph,th);
+    SF=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    verifyError(testCase,@() SF.resample(-70:10:70,20:5:70),'SphereField:ResampleOutsidePhiSupport');
+    verifyError(testCase,@() SF.resample(-60:10:60,10:5:80),'SphereField:ResampleOutsideThetaSupport');
+end
+
+function testResampleNorthernCap(testCase)
+    ph=0:10:360; th=0:5:40;
+    [PH,TH]=meshgrid(ph,th);
+
+    % Globally x-directed transverse field.
+    Eth=cosd(TH).*cosd(PH);
+    Eph=-sind(PH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    S2=SF.resample(0:5:360,0:1:40,Method="spline");
+
+    verifyFalse(testCase,any(isnan(S2.Eth),'all'));
+    verifyFalse(testCase,any(isnan(S2.Eph),'all'));
+end
+
+function testResampleEquivalentPhi(testCase)
+    SF=makeComplexGridField();
+
+    A=SF.resample(0,10:2:60,Method="makima");
+    B=SF.resample(360,10:2:60,Method="makima");
+
+    verifyEqual(testCase,A.Eth,B.Eth,AbsTol=1e-12);
+    verifyEqual(testCase,A.Eph,B.Eph,AbsTol=1e-12);
+end
+
+function testResampleMethods(testCase)
+    SF=makeComplexGridField();
+    methods=["nearest","linear","cubic","spline","makima"];
+
+    for method=methods
+        S2=SF.resample(2:8:358,2:4:178,Method=method);
+        verifyFalse(testCase,any(isnan(S2.Eth),'all'));
+        verifyFalse(testCase,any(isnan(S2.Eph),'all'));
+    end
+end
+
+function testResampleProperties(testCase)
+    SF=makeComplexGridField();
+    S2=SF.resample(0:5:360,0:5:180,Method="makima");
+
+    verifyEqual(testCase,S2.freqHz,SF.freqHz);
+    verifyEqual(testCase,S2.r,SF.r);
+    verifyEqual(testCase,S2.Prad,SF.Prad);
+    verifyEqual(testCase,S2.etaRad,SF.etaRad);
+    verifyEqual(testCase,S2.provenance.operation,"resample");
+    verifyEqual(testCase,S2.provenance.interpolationMethod,"makima");
+end
+
+% Test resample interpolation accuracy
+function [Eph,Eth] = analyticSmoothField(ph,th)
+    Eth=cosd(th).*cosd(ph)+0.25*cosd(th).*sind(ph);
+    Eph=-sind(ph)+0.25*cosd(ph);
+end
+
+function testResampleLinearAccuracy(testCase)
+    ph=0:10:360; th=0:10:180;
+    [PH,TH]=meshgrid(ph,th);
+    [Eph,Eth]=analyticSmoothField(PH,TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    phNew=5:10:355; thNew=5:10:175;
+    S2=SF.resample(phNew,thNew,Method="linear");
+
+    [PH2,TH2]=meshgrid(phNew,thNew);
+    [EphExact,EthExact]=analyticSmoothField(PH2,TH2);
+
+    errEth=max(abs(S2.Eth-EthExact(:)));
+    errEph=max(abs(S2.Eph-EphExact(:)));
+
+    verifyLessThan(testCase,errEth,1e-2);
+    verifyLessThan(testCase,errEph,1e-2);
+end
+
+function testResampleHigherOrderAccuracy(testCase)
+    ph=0:15:360; th=0:15:180;
+    [PH,TH]=meshgrid(ph,th);
+    [Eph,Eth]=analyticSmoothField(PH,TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    phNew=7.5:7.5:352.5; thNew=7.5:7.5:172.5;
+    [PH2,TH2]=meshgrid(phNew,thNew);
+    [EphExact,EthExact]=analyticSmoothField(PH2,TH2);
+
+    methods=["linear","cubic","spline","makima"];
+    err=zeros(size(methods));
+
+    for ii=1:numel(methods)
+        S2=SF.resample(phNew,thNew,Method=methods(ii));
+        err(ii)=max([abs(S2.Eth-EthExact(:));abs(S2.Eph-EphExact(:))]);
+    end
+
+    verifyLessThan(testCase,err(2),err(1));   % cubic
+    verifyLessThan(testCase,err(3),err(1));   % spline
+    verifyLessThan(testCase,err(4),err(1));   % makima
+end
+
+function testResampleAccuracyAcrossPhiSeam(testCase)
+    ph=0:10:360; th=0:10:180;
+    [PH,TH]=meshgrid(ph,th);
+    [Eph,Eth]=analyticSmoothField(PH,TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    phNew=[355 357.5 360 362.5 365];
+    thNew=20:10:160;
+    S2=SF.resample(phNew,thNew,Method="spline");
+
+    [PH2,TH2]=meshgrid(phNew,thNew);
+    [EphExact,EthExact]=analyticSmoothField(PH2,TH2);
+
+    err=max([abs(S2.Eth-EthExact(:));abs(S2.Eph-EphExact(:))]);
+    verifyLessThan(testCase,err,1e-3);
+end
+
+function testResampleAccuracyNearNorthPole(testCase)
+    ph=0:10:360; th=0:5:40;
+    [PH,TH]=meshgrid(ph,th);
+    [Eph,Eth]=analyticSmoothField(PH,TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    phNew=0:5:355; thNew=0:1:10;
+    S2=SF.resample(phNew,thNew,Method="spline");
+
+    [PH2,TH2]=meshgrid(phNew,thNew);
+    [EphExact,EthExact]=analyticSmoothField(PH2,TH2);
+
+    err=max([abs(S2.Eth-EthExact(:));abs(S2.Eph-EphExact(:))]);
+    verifyLessThan(testCase,err,1e-3);
+end
+
+function testResampleAccuracyNearSouthPole(testCase)
+    ph=0:10:360; th=140:5:180;
+    [PH,TH]=meshgrid(ph,th);
+    [Eph,Eth]=analyticSmoothField(PH,TH);
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+
+    phNew=0:5:355; thNew=170:1:180;
+    S2=SF.resample(phNew,thNew,Method="spline");
+
+    [PH2,TH2]=meshgrid(phNew,thNew);
+    [EphExact,EthExact]=analyticSmoothField(PH2,TH2);
+
+    err=max([abs(S2.Eth-EthExact(:));abs(S2.Eph-EphExact(:))]);
+    verifyLessThan(testCase,err,1e-3);
+end
+
+function testResampleConvergence(testCase)
+    phFine=2.5:5:357.5; thFine=2.5:5:177.5;
+    [PHf,THf]=meshgrid(phFine,thFine);
+    [EphExact,EthExact]=analyticSmoothField(PHf,THf);
+
+    steps=[20 10];
+    err=zeros(size(steps));
+
+    for ii=1:numel(steps)
+        ph=0:steps(ii):360; th=0:steps(ii):180;
+        [PH,TH]=meshgrid(ph,th);
+        [Eph,Eth]=analyticSmoothField(PH,TH);
+        SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+        S2=SF.resample(phFine,thFine,Method="linear");
+        err(ii)=max([abs(S2.Eth-EthExact(:));abs(S2.Eph-EphExact(:))]);
+    end
+
+    verifyLessThan(testCase,err(2),err(1));
+end
+
+function testResampleLike(testCase)
+    SF=makeComplexGridField();
+
+    phTarget=-180:5:175;
+    thTarget=0:2.5:180;
+    [PH,TH]=meshgrid(phTarget,thTarget);
+    target=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    S1=SF.resampleLike(target,Method="makima");
+    S2=SF.resample(phTarget,thTarget,Method="makima");
+
+    verifyEqual(testCase,S1.ph,S2.ph);
+    verifyEqual(testCase,S1.th,S2.th);
+    verifyEqual(testCase,S1.Eth,S2.Eth,AbsTol=1e-13);
+    verifyEqual(testCase,S1.Eph,S2.Eph,AbsTol=1e-13);
+end
+
+function testResampleLikeRejectsUnstructuredTarget(testCase)
+    SF=makeComplexGridField();
+    target=SphereField([0;20;55],[10;30;70],zeros(3,1),ones(3,1),1e9);
+
+    verifyError(testCase,@() SF.resampleLike(target),'SphereField:ResampleLikeRequiresStructuredTarget');
+end
+
+%% Plotting tests
+function testPlotMagnitude(testCase)
+    SF=makeComplexGridField();
+    fig=figure('Visible','off');
+    cleanup=onCleanup(@() close(fig));
+    ax=axes(fig);
+
+    h=SF.plot(Axes=ax,Quantity="magnitude",ComponentIndex=1);
+
+    verifyClass(testCase,h,'matlab.graphics.chart.primitive.Surface');
+    verifyEqual(testCase,size(h.ZData),[SF.Nth SF.Nph]);
+end
+
+function testPlotDataMatchesGetData(testCase)
+    SF=makeComplexGridField();
+    fig=figure('Visible','off');
+    cleanup=onCleanup(@() close(fig));
+    ax=axes(fig);
+
+    h=SF.plot(Axes=ax,Quantity="real",ComponentIndex=1);
+    D=SF.getData(Quantity="real",ComponentIndex=1);
+    G=SF.getGridView("stored");
+
+    verifyEqual(testCase,h.ZData,reshape(D.values,numel(G.thVec),numel(G.phVec)));
+end
+
+function testPlotAzElCoordinates(testCase)
+    SF=makeComplexGridField();
+    fig=figure('Visible','off');
+    cleanup=onCleanup(@() close(fig));
+    ax=axes(fig);
+
+    h=SF.plot(Axes=ax,Coordinates="AzEl",Quantity="magnitude",ComponentIndex=1);
+    D=SF.getData(Coordinates="AzEl",Quantity="magnitude",ComponentIndex=1);
+    G=SF.getGridView("stored");
+
+    verifyEqual(testCase,h.XData,reshape(D.x,numel(G.thVec),numel(G.phVec)));
+    verifyEqual(testCase,h.YData,reshape(D.y,numel(G.thVec),numel(G.phVec)));
+end
+
+function testPlotFullSphereSymmetric360(testCase)
+    SF=makeComplexGridField();
+    fig=figure('Visible','off');
+    cleanup=onCleanup(@() close(fig));
+    ax=axes(fig);
+
+    h=SF.plot(Axes=ax,GridView="fullSphere",PhiRange="symmetric",ThetaRange="360",...
+        Quantity="real",ComponentIndex=1);
+
+    G=SF.getGridView("fullSphere",PhiRange="symmetric",ThetaRange="360");
+    verifyEqual(testCase,size(h.ZData),[G.Nth G.Nph]);
+    verifyEqual(testCase,h.XData,repmat(G.phVec,G.Nth,1));
+    verifyEqual(testCase,h.YData,repmat(G.thVec.',1,G.Nph));
+end
+
+function testPlotFullSphereDataMatchesGetData(testCase)
+    SF=makeComplexGridField();
+    fig=figure('Visible','off');
+    cleanup=onCleanup(@() close(fig));
+    ax=axes(fig);
+
+    h=SF.plot(Axes=ax,GridView="fullSphere",PhiRange="symmetric",ThetaRange="360",...
+        Quantity="real",ComponentIndex=1);
+
+    D=SF.getData(GridView="fullSphere",PhiRange="symmetric",ThetaRange="360",...
+        Quantity="real",ComponentIndex=1);
+
+    verifyEqual(testCase,h.ZData,reshape(D.values,D.Nth,D.Nph));
+end
+
+% Symmetry
+function testSymmetryProperties(testCase)
+    SF=makeHalfSphereField(Symmetry=struct("YZ","electric"));
+
+    verifyEqual(testCase,SF.symmetry.YZ,"electric");
+    verifyEqual(testCase,SF.symmetry.XZ,"none");
+    verifyEqual(testCase,SF.symmetry.XY,"none");
+    verifyTrue(testCase,SF.hasSymmetry);
+    verifyEqual(testCase,SF.numberOfSymmetries,1);
+    verifyEqual(testCase,SF.symmetryFactor,2);
+    verifyEqual(testCase,SF.symmetrySide.YZ,1);
+end
+
+function testTwoSymmetryFactor(testCase)
+    SF=makeQuarterSphereField(Symmetry=struct("YZ","electric","XZ","magnetic"));
+
+    verifyEqual(testCase,SF.numberOfSymmetries,2);
+    verifyEqual(testCase,SF.symmetryFactor,4);
+end
+
+function testInvalidSymmetryPlane(testCase)
+    f=@() makeHalfSphereField(Symmetry=struct("AB","electric"));
+    verifyError(testCase,f,'SphereField:InvalidSymmetryPlane');
+end
+
+function testInvalidSymmetryType(testCase)
+    f=@() makeHalfSphereField(Symmetry=struct("YZ","periodic"));
+    verifyError(testCase,f,'SphereField:InvalidSymmetryType');
+end
+
+function testInvalidSymmetryDomain(testCase)
+    f=@() makeFullSphereField(Symmetry=struct("YZ","electric"));
+    verifyError(testCase,f,'SphereField:InvalidSymmetryDomain');
+end
+
+function SF=makeHalfSphereField(options)
+    arguments
+        options.Symmetry struct = struct()
+    end
+
+    ph=-90:10:90;
+    th=0:10:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    % Cartesian pattern E=[1;0;0]
+    Eth=cosd(TH).*cosd(PH);
+    Eph=-sind(PH);
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,Symmetry=options.Symmetry);
+end
+
+function SF=makeQuarterSphereField(options)
+    arguments
+        options.Symmetry struct = struct()
+    end
+
+    ph=0:10:90;
+    th=0:10:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    % Cartesian pattern E=[1;0;0]
+    Eth=cosd(TH).*cosd(PH);
+    Eph=-sind(PH);
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,Symmetry=options.Symmetry);
+end
+
+function SF=makeFullSphereField(options)
+    arguments
+        options.Symmetry struct = struct()
+    end
+
+    ph=0:10:350;
+    th=0:10:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    % Transverse projection of Cartesian E=[1;0;0]
+    Eth=cosd(TH).*cosd(PH);
+    Eph=-sind(PH);
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,Symmetry=options.Symmetry);
+end
+
+function SF=makeSymmetrySectorField(ph,th,symmetry)
+    [PH,TH]=meshgrid(ph,th);
+    Eph=zeros(numel(PH),1);
+    Eth=zeros(numel(PH),1);
+    SF=SphereField(PH(:),TH(:),Eph,Eth,1e9,Symmetry=symmetry);
+end
+
+function testYZHalfSphereCoverage(testCase)
+    SF=makeSymmetrySectorField(-90:10:90,0:10:180,struct("YZ","electric"));
+
+    verifyFalse(testCase,SF.isFullSphere);
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.symmetrySide.YZ,1);
+    verifyEqual(testCase,SF.symmetryFactor,2);
+end
+
+function testYZNegativeHalfSphereCoverage(testCase)
+    SF=makeSymmetrySectorField(90:10:270,0:10:180,struct("YZ","magnetic"));
+
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.symmetrySide.YZ,-1);
+end
+
+function testXZHalfSphereCoverage(testCase)
+    SF=makeSymmetrySectorField(0:10:180,0:10:180,struct("XZ","electric"));
+
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyEqual(testCase,SF.symmetrySide.XZ,1);
+    verifyEqual(testCase,SF.symmetryFactor,2);
+end
+
+function testXYHalfSphereCoverage(testCase)
+    SF=makeSymmetrySectorField(0:10:350,0:10:90,struct("XY","magnetic"));
+
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.symmetrySide.XY,1);
+    verifyEqual(testCase,SF.symmetryFactor,2);
+end
+
+function testQuarterSphereCoverage(testCase)
+    S=struct("YZ","electric","XZ","magnetic");
+    SF=makeSymmetrySectorField(0:10:90,0:10:180,S);
+
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.symmetrySide.YZ,1);
+    verifyEqual(testCase,SF.symmetrySide.XZ,1);
+    verifyEqual(testCase,SF.numberOfSymmetries,2);
+    verifyEqual(testCase,SF.symmetryFactor,4);
+end
+
+function testOctantCoverage(testCase)
+    S=struct("YZ","electric","XZ","magnetic","XY","electric");
+    SF=makeSymmetrySectorField(0:10:90,0:10:90,S);
+
+    verifyTrue(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.numberOfSymmetries,3);
+    verifyEqual(testCase,SF.symmetryFactor,8);
+end
+
+function testPartialHalfSphereIsNotFullCoverage(testCase)
+    SF=makeSymmetrySectorField(-60:10:60,20:10:160,struct("YZ","electric"));
+
+    verifyFalse(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyFalse(testCase,SF.representsFullSphere);
+end
+
+function testIncompleteThetaIsNotFullCoverage(testCase)
+    SF=makeSymmetrySectorField(-90:10:90,0:10:150,struct("YZ","electric"));
+
+    verifyFalse(testCase,SF.hasFullSphereSymmetryCoverage);
+end
+
+function testIncompletePhiIsNotFullCoverage(testCase)
+    SF=makeSymmetrySectorField(-90:10:70,0:10:180,struct("YZ","electric"));
+
+    verifyFalse(testCase,SF.hasFullSphereSymmetryCoverage);
+end
+
+function testExplicitFullSphereRepresentsFullSphere(testCase)
+    SF=makeSymmetrySectorField(0:10:350,0:10:180,struct());
+
+    verifyTrue(testCase,SF.isFullSphere);
+    verifyFalse(testCase,SF.hasSymmetry);
+    verifyFalse(testCase,SF.hasFullSphereSymmetryCoverage);
+    verifyTrue(testCase,SF.representsFullSphere);
+    verifyEqual(testCase,SF.symmetryFactor,1);
+end
+
+% Symmetry power integration
+function testIntegratePowerFullSphere(testCase)
+    ph=0:2:358;
+    th=0:2:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    Eth=sind(TH);
+    Eph=zeros(size(Eth));
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9);
+    P=SF.integratePower();
+
+    Pexact=4*pi/(3*SF.eta0);
+    verifyEqual(testCase,P,Pexact,'RelTol',5e-4);
+end
+
+function testIntegratePowerYZSymmetry(testCase)
+    ph=-90:2:90;
+    th=0:2:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    Eth=sind(TH);
+    Eph=zeros(size(Eth));
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,...
+        Symmetry=struct("YZ","magnetic"));
+
+    P=SF.integratePower();
+    Pexact=4*pi/(3*SF.eta0);
+
+    verifyEqual(testCase,SF.symmetryFactor,2);
+    verifyEqual(testCase,P,Pexact,'RelTol',5e-4);
+end
+
+function testIntegratePowerQuarterSphere(testCase)
+    ph=0:2:90;
+    th=0:2:180;
+    [PH,TH]=meshgrid(ph,th);
+
+    Eth=sind(TH);
+    Eph=zeros(size(Eth));
+
+    S=struct("YZ","magnetic","XZ","magnetic");
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,Symmetry=S);
+
+    P=SF.integratePower();
+    Pexact=4*pi/(3*SF.eta0);
+
+    verifyEqual(testCase,SF.symmetryFactor,4);
+    verifyEqual(testCase,P,Pexact,'RelTol',5e-4);
+end
+
+function testIntegratePowerXYSymmetry(testCase)
+    ph=0:2:358;
+    th=0:2:90;
+    [PH,TH]=meshgrid(ph,th);
+
+    Eth=sind(TH);
+    Eph=zeros(size(Eth));
+
+    SF=SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,...
+        Symmetry=struct("XY","electric"));
+
+    P=SF.integratePower();
+    Pexact=4*pi/(3*SF.eta0);
+
+    verifyEqual(testCase,SF.symmetryFactor,2);
+    verifyEqual(testCase,P,Pexact,'RelTol',5e-4);
+end
+
+function testSymmetryIntegrationMatchesFullSphere(testCase)
+    ph=0:2:358;
+    th=0:2:180;
+    [PH,TH]=meshgrid(ph,th);
+    SFfull=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9);
+
+    ph=0:2:90;
+    th=0:2:180;
+    [PH,TH]=meshgrid(ph,th);
+    S=struct("YZ","magnetic","XZ","magnetic");
+    SFquarter=SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    verifyEqual(testCase,SFquarter.integratePower(),SFfull.integratePower(),'RelTol',1e-12);
+end
+
+function testExpandSymmetryHalfSphere(testCase)
+    ph = -90:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,...
+        Symmetry=struct("YZ","magnetic"));
+
+    SF2 = SF.expandSymmetry();
+
+    verifyFalse(testCase,SF2.hasSymmetry);
+    verifyTrue(testCase,SF2.isFullSphere);
+    verifyTrue(testCase,SF2.representsFullSphere);
+    verifyEqual(testCase,SF2.Nph,36);
+    verifyEqual(testCase,SF2.Nth,19);
+end
+
+function testExpandSymmetryQuarterSphere(testCase)
+    ph = 0:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    SF2 = SF.expandSymmetry();
+
+    verifyFalse(testCase,SF2.hasSymmetry);
+    verifyTrue(testCase,SF2.isFullSphere);
+    verifyEqual(testCase,SF2.Nph,36);
+    verifyEqual(testCase,SF2.Nth,19);
+end
+
+function testExpandSymmetryOctant(testCase)
+    ph = 0:10:90;
+    th = 0:10:90;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic","XY","electric");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    SF2 = SF.expandSymmetry();
+
+    verifyFalse(testCase,SF2.hasSymmetry);
+    verifyTrue(testCase,SF2.isFullSphere);
+    verifyEqual(testCase,SF2.Nph,36);
+    verifyEqual(testCase,SF2.Nth,19);
+end
+
+function testExpandSymmetryPartialPatch(testCase)
+    ph = 0:10:40;
+    th = 30:10:70;
+    [PH,TH] = meshgrid(ph,th);
+
+    Eth = ones(size(PH));
+    Eph = zeros(size(PH));
+
+    SF = SphereField(PH(:),TH(:),Eph(:),Eth(:),1e9,...
+        Symmetry=struct("YZ","magnetic"));
+
+    SF2 = SF.expandSymmetry();
+
+    verifyFalse(testCase,SF2.hasSymmetry);
+    verifyFalse(testCase,SF2.isFullSphere);
+    verifyFalse(testCase,SF2.representsFullSphere);
+    verifyGreaterThan(testCase,SF2.Np,SF.Np);
+end
+
+function testExpandSymmetryNoSymmetry(testCase)
+    SF = makeFullSphereField();
+    SF2 = SF.expandSymmetry();
+
+    verifyEqual(testCase,SF2.ph,SF.ph);
+    verifyEqual(testCase,SF2.th,SF.th);
+    verifyEqual(testCase,SF2.Eph,SF.Eph);
+    verifyEqual(testCase,SF2.Eth,SF.Eth);
+end
+
+function testExpandSymmetryPreservesPower(testCase)
+    ph = 0:5:90;
+    th = 0:5:90;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic","XY","electric");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    P1 = SF.integratePower();
+    SF2 = SF.expandSymmetry();
+    P2 = SF2.integratePower();
+
+    verifyEqual(testCase,P2,P1,'RelTol',1e-12);
+end
+
+function testPlotExpandedSymmetry(testCase)
+    ph = -90:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,...
+        Symmetry=struct("YZ","magnetic"));
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+    ax = axes(fig);
+
+    h = SF.plot(Axes=ax,Symmetry="expand",Quantity="magnitude",ComponentIndex=1);
+
+    verifyEqual(testCase,size(h.ZData),[19 36]);
+end
+
+function testPlotExpandedSymmetryMatchesExplicitExpansion(testCase)
+    ph = 0:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+    SF2 = SF.expandSymmetry();
+
+    fig1 = figure('Visible','off');
+    fig2 = figure('Visible','off');
+    cleanup = onCleanup(@() close([fig1 fig2]));
+
+    h1 = SF.plot(Axes=axes(fig1),Symmetry="expand",Quantity="real",ComponentIndex=1);
+    h2 = SF2.plot(Axes=axes(fig2),Quantity="real",ComponentIndex=1);
+
+    verifyEqual(testCase,h1.XData,h2.XData);
+    verifyEqual(testCase,h1.YData,h2.YData);
+    verifyEqual(testCase,h1.ZData,h2.ZData,'AbsTol',1e-13);
+end
+
+function testPlotExpandedSymmetryFullSphereView(testCase)
+    ph = 0:10:90;
+    th = 0:10:90;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic","XY","electric");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+    ax = axes(fig);
+
+    h = SF.plot(Axes=ax,Symmetry="expand",GridView="fullSphere",...
+        PhiRange="symmetric",ThetaRange="360",Quantity="magnitude",ComponentIndex=1);
+
+    SF2 = SF.expandSymmetry();
+    D = SF2.getData(GridView="fullSphere",PhiRange="symmetric",ThetaRange="360",...
+        Quantity="magnitude",ComponentIndex=1);
+
+    verifyEqual(testCase,h.XData,reshape(D.x,D.Nth,D.Nph));
+    verifyEqual(testCase,h.YData,reshape(D.y,D.Nth,D.Nph));
+    verifyEqual(testCase,h.ZData,reshape(D.values,D.Nth,D.Nph),'AbsTol',1e-13);
+end
+
+function testPlotSymmetryDoesNotModifyObject(testCase)
+    ph = -90:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,...
+        Symmetry=struct("YZ","magnetic"));
+
+    Np = SF.Np;
+    symmetry = SF.symmetry;
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    SF.plot(Axes=axes(fig),Symmetry="expand",Quantity="magnitude",ComponentIndex=1);
+
+    verifyEqual(testCase,SF.Np,Np);
+    verifyEqual(testCase,SF.symmetry,symmetry);
+    verifyTrue(testCase,SF.hasSymmetry);
+end
+
+function testPlotCutAngle(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=0,Quantity="real",ComponentIndex=1);
+
+    G = SF.getGridView("stored");
+    expected = [-fliplr(G.thVec(2:end)) G.thVec].';
+
+    verifyEqual(testCase,C.angle,expected);
+end
+
+function testPlotCutMatchesData(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=0,Quantity="real",ComponentIndex=1);
+
+    G = SF.getGridView("stored");
+    SFcut = SF.resample([0 180],G.thVec);
+    D = SFcut.getData(Quantity="real",ComponentIndex=1);
+
+    Z = reshape(D.values,D.Nth,D.Nph);
+    expected = [flipud(Z(2:end,2)); Z(:,1)];
+
+    verifyEqual(testCase,C.values,expected,'AbsTol',1e-13);
+end
+
+function testPlotCutInterpolatedPhi(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=45,Quantity="magnitude",ComponentIndex=1,Method="spline");
+
+    verifyEqual(testCase,C.phi,45);
+    verifyFalse(testCase,any(isnan(C.values)));
+end
+
+function testPlotCutExpandedSymmetry(testCase)
+    ph = 0:10:90;
+    th = 0:10:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    S = struct("YZ","magnetic","XZ","magnetic");
+    SF = SphereField(PH(:),TH(:),zeros(numel(PH),1),sind(TH(:)),1e9,Symmetry=S);
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=45,Symmetry="expand",Quantity="magnitude");
+
+    verifyEqual(testCase,C.angle(1),-180);
+    verifyEqual(testCase,C.angle(end),180);
+    verifyFalse(testCase,any(isnan(C.values)));
+end
