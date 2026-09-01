@@ -3042,3 +3042,247 @@ function testPlotCutExpandedSymmetry(testCase)
     verifyEqual(testCase,C.angle(end),180);
     verifyFalse(testCase,any(isnan(C.values)));
 end
+
+function testGetDataNormalizationMax(testCase)
+    SF = makeComplexGridField();
+
+    D = SF.getData(Quantity="magnitude",ComponentIndex=0,Normalize="max");
+
+    verifyEqual(testCase,max(D.values,[],'all'),1,'AbsTol',1e-13);
+    verifyEqual(testCase,D.normalization,"max");
+end
+
+function testGetDataNormalizationSpecified(testCase)
+    SF = makeComplexGridField();
+
+    D0 = SF.getData(Quantity="magnitude",ComponentIndex=1);
+    D = SF.getData(Quantity="magnitude",ComponentIndex=1,...
+        Normalize="specified",ReferenceValue=2);
+
+    verifyEqual(testCase,D.values,D0.values/2,'AbsTol',1e-13);
+    verifyEqual(testCase,D.referenceValue,2);
+end
+
+function testGetDataComplexNormalization(testCase)
+    SF = makeComplexGridField();
+
+    ref = 2*exp(1i*pi/3);
+
+    D0 = SF.getData(Quantity="complex",ComponentIndex=1);
+    D = SF.getData(Quantity="complex",ComponentIndex=1,...
+        Normalize="specified",ReferenceValue=ref);
+
+    verifyEqual(testCase,D.values,D0.values/ref,'AbsTol',1e-13);
+    verifyEqual(testCase,D.referenceValue,ref);
+end
+
+function testGetDataMagnitudeNormalizationUsesReferenceMagnitude(testCase)
+    SF = makeComplexGridField();
+
+    ref = 2*exp(1i*pi/3);
+
+    D0 = SF.getData(Quantity="magnitude",ComponentIndex=1);
+    D = SF.getData(Quantity="magnitude",ComponentIndex=1,...
+        Normalize="specified",ReferenceValue=ref);
+
+    verifyEqual(testCase,D.values,D0.values/abs(ref),'AbsTol',1e-13);
+end
+
+function testGetDataCommonComponentNormalization(testCase)
+    SF = makeComplexGridField();
+
+    D = SF.getData(Quantity="magnitude",ComponentIndex=0,Normalize="max");
+
+    verifyEqual(testCase,max(D.values,[],'all'),1,'AbsTol',1e-13);
+
+    m1 = max(D.values(:,:,1),[],'all');
+    m2 = max(D.values(:,:,2),[],'all');
+
+    verifyTrue(testCase,m1 == 1 || m2 == 1);
+end
+
+function testPlotNormalization(testCase)
+    SF = makeComplexGridField();
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plot(Axes=axes(fig),Quantity="magnitude",ComponentIndex=1,...
+        Normalize="max");
+
+    verifyEqual(testCase,max(h.ZData,[],'all'),1,'AbsTol',1e-13);
+end
+
+function testPlotCutNormalization(testCase)
+    SF = makeComplexGridField();
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=0,Quantity="magnitude",...
+        ComponentIndex=1,Normalize="max");
+
+    verifyEqual(testCase,max(C.values),1,'AbsTol',1e-13);
+end
+
+function testNormalizationBeforeComponentSelection(testCase)
+    SF = makeComplexGridField();
+
+    Dall = SF.getData(Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Normalize="max");
+
+    D2 = SF.getData(Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=2,Normalize="max");
+
+    verifyEqual(testCase,D2.values,Dall.values(:,:,2),'AbsTol',1e-13);
+    verifyEqual(testCase,D2.referenceValue,Dall.referenceValue,'AbsTol',1e-13);
+end
+
+function testPlotCutAllComponents(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=0,Basis="Ludwig3",...
+        Quantity="magnitude",ComponentIndex=0);
+
+    verifyEqual(testCase,numel(C.componentNames),2);
+    verifyEqual(testCase,C.componentNames,["Eh","Ev"]);
+    verifyEqual(testCase,size(C.values,3),2);
+end
+
+function testPlotCutUsesFullFieldNormalization(testCase)
+    SF = makeComplexGridField();
+
+    D = SF.getData(Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Normalize="max");
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    [~,C] = SF.plotCut(Axes=axes(fig),Phi=0,Basis="Ludwig3",...
+        Quantity="magnitude",ComponentIndex=0,Normalize="max");
+
+    verifyEqual(testCase,C.referenceValue,D.referenceValue,'AbsTol',1e-13);
+end
+
+function testPlotCutSelectedComponentUsesCommonReference(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    ax1 = axes(fig);
+    [~,Call] = SF.plotCut(Axes=ax1,Phi=0,Basis="Ludwig3",...
+        Quantity="magnitude",ComponentIndex=0,Normalize="max");
+
+    clf(fig);
+    ax2 = axes(fig);
+    [~,C2] = SF.plotCut(Axes=ax2,Phi=0,Basis="Ludwig3",...
+        Quantity="magnitude",ComponentIndex=2,Normalize="max");
+
+    verifyEqual(testCase,C2.values,Call.values(:,:,2),'AbsTol',1e-13);
+    verifyEqual(testCase,C2.referenceValue,Call.referenceValue,'AbsTol',1e-13);
+end
+
+function testPlotPrincipalCutsScalar(testCase)
+    SF = makeFullSphereField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plotPrincipalCuts(Axes=axes(fig),...
+        Quantity="directivity",Scale="dB10",Normalize="none");
+
+    verifySize(testCase,h,[3 1]);
+    verifyTrue(testCase,all(isgraphics(h)));
+end
+
+function testPlotPrincipalCutsLudwig3Components(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plotPrincipalCuts(Axes=axes(fig),...
+        Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Scale="linear",Normalize="none");
+
+    verifySize(testCase,h,[3 2]);
+    verifyTrue(testCase,all(isgraphics(h),"all"));
+
+    % Same cut -> same colour, different component -> different line style.
+    for ii = 1:3
+        verifyEqual(testCase,h(ii,1).Color,h(ii,2).Color,'AbsTol',1e-13);
+        verifyNotEqual(testCase,string(h(ii,1).LineStyle),string(h(ii,2).LineStyle));
+    end
+end
+
+function testPlotPrincipalCutsUsesFullFieldNormalization(testCase)
+    SF = makeComplexGridField();
+
+    D = SF.getData(Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Normalize="max",Scale="linear");
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plotPrincipalCuts(Axes=axes(fig),...
+        Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Normalize="max",Scale="linear");
+
+    % Reconstruct each plotted cut independently using the already-known
+    % full-field reference and compare directly with plotted YData.
+    phi = [0 45 90];
+
+    for ii = 1:numel(phi)
+        ax2 = axes('Parent',fig,'Visible','off');
+
+        [~,C] = SF.plotCut(Axes=ax2,Phi=phi(ii),...
+            Basis="Ludwig3",Quantity="magnitude",...
+            ComponentIndex=0,Normalize="specified",...
+            ReferenceValue=D.referenceValue,Scale="linear");
+
+        Y = reshape(C.values,numel(C.angle),[]);
+
+        for jj = 1:size(Y,2)
+            verifyEqual(testCase,h(ii,jj).YData(:),Y(:,jj),'AbsTol',1e-13);
+        end
+
+        delete(ax2);
+    end
+end
+
+function testPlotPrincipalCutsExpandedSymmetry(testCase)
+    S=struct("YZ","electric","XZ","magnetic","XY","electric");
+    SF=makeSymmetrySectorField(0:10:90,0:10:90,S);
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plotPrincipalCuts(Axes=axes(fig),...
+        Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=0,Normalize="none",Scale="linear",...
+        Symmetry="expand");
+
+    verifySize(testCase,h,[3 2]);
+    verifyTrue(testCase,all(isgraphics(h),"all"));
+
+    for ii = 1:numel(h)
+        verifyTrue(testCase,all(isfinite(h(ii).XData)));
+        verifyTrue(testCase,all(isfinite(h(ii).YData)));
+    end
+end
+
+function testPlotPrincipalCutsSelectedComponent(testCase)
+    SF = makeComplexGridField();
+
+    fig = figure('Visible','off');
+    cleanup = onCleanup(@() close(fig));
+
+    h = SF.plotPrincipalCuts(Axes=axes(fig),...
+        Basis="Ludwig3",Quantity="magnitude",...
+        ComponentIndex=2,Normalize="max",Scale="dB20");
+
+    verifySize(testCase,h,[3 1]);
+    verifyTrue(testCase,all(isgraphics(h)));
+end

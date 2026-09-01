@@ -273,11 +273,8 @@ classdef SphereField < EMField
 
             if ~isempty(options.Prad)
                 if numel(options.Prad) ~= obj.Nf
-                    error( ...
-                        'SphereField:PradSizeMismatch', ...
-                        ['Prad must contain one value per frequency. ' ...
-                        'Expected %d values, received %d.'], ...
-                        obj.Nf, numel(options.Prad));
+                    error('SphereField:PradSizeMismatch', ['Prad must contain one value per frequency. ' ...
+                        'Expected %d values, received %d.'],obj.Nf, numel(options.Prad));
                 end
                 obj.Prad = reshape(options.Prad, 1, []);
             end
@@ -286,17 +283,12 @@ classdef SphereField < EMField
                 obj.etaRad = ones(1,obj.Nf);
             else
                 if numel(options.etaRad) ~= obj.Nf
-                    error( ...
-                        'SphereField:EtaRadSizeMismatch', ...
-                        ['etaRad must contain one value per frequency. ' ...
-                        'Expected %d values, received %d.'], ...
-                        obj.Nf, numel(options.etaRad));
+                    error('SphereField:EtaRadSizeMismatch',['etaRad must contain one value per frequency. ' ...
+                        'Expected %d values, received %d.'],obj.Nf, numel(options.etaRad));
                 end
                 etaRad = reshape(options.etaRad,1,[]);
                 if any(~isfinite(etaRad)) || any(etaRad < 0) || any(etaRad > 1)
-                    error( ...
-                        'SphereField:InvalidEtaRad', ...
-                        'etaRad must contain finite values between 0 and 1.');
+                    warning('SphereField:InvalidEtaRad','etaRad must contain finite values between 0 and 1.');
                 end
                 obj.etaRad = etaRad;
             end
@@ -774,6 +766,8 @@ classdef SphereField < EMField
                 % options.Component (1,1) string = "all"
                 options.ComponentIndex (1,1) double {mustBeInteger,mustBeNonnegative} = 0
                 options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "linear"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "none"
+                options.ReferenceValue (1,1) double = NaN
             end
 
             fi = obj.validateFrequencyIndex(options.FrequencyIndex);
@@ -902,44 +896,85 @@ classdef SphereField < EMField
                 end
             end
 
-            % Component selection
-            % if options.Component ~= "all"
-            %     ic = find(D.componentNames == options.Component,1);
-            %     if isempty(ic), error('SphereField:UnknownComponent','Component "%s" is not available.',options.Component); end
-            %     D.values = D.values(:,:,ic);
-            %     D.componentNames = D.componentNames(ic);
-            % end
+            % Normalization
+            switch options.Normalize
+                case "none"
+                    ref = ones(1,numel(fi));
 
-            Nc = numel(D.componentNames);
-            if options.ComponentIndex > Nc
-                error('SphereField:InvalidComponentIndex',...
-                    'ComponentIndex %d is invalid. Valid indices are 0:%d, where 0 returns all components. Available components are: %s.',...
-                    options.ComponentIndex,Nc,strjoin(D.componentNames,", "));
+                case "max"
+                    % One common reference over all directions and components,
+                    % independently for each selected frequency.
+                    if ndims(D.values) > 2
+                        ref = max(max(abs(D.values),[],1),[],3);
+                    else
+                        ref = max(abs(D.values),[],1);
+                    end
+                    ref = reshape(ref,1,[]);
+
+                    nz = ref ~= 0;
+                    if ndims(D.values) > 2
+                        D.values(:,nz,:) = D.values(:,nz,:)./reshape(ref(nz),1,[],1);
+                    else
+                        D.values(:,nz) = D.values(:,nz)./ref(nz);
+                    end
+
+                case "specified"
+                    ref = options.ReferenceValue;
+
+                    if ~isfinite(real(ref)) || ~isfinite(imag(ref)) || ref == 0
+                        error('SphereField:InvalidReferenceValue',...
+                            'ReferenceValue must be finite and nonzero.');
+                    end
+
+                    if options.Quantity == "complex"
+                        D.values = D.values/ref;
+                    else
+                        D.values = D.values/abs(ref);
+                    end
             end
-            if options.ComponentIndex > 0
-                if Nc > 1
-                    D.values = D.values(:,:,options.ComponentIndex);
+
+            D.normalization = options.Normalize;
+            D.referenceValue = ref;
+
+            % Component selection
+            Nc = numel(D.componentNames);
+
+            if options.ComponentIndex > Nc
+                compList = strings(1,Nc);
+                for ii = 1:Nc
+                    compList(ii) = sprintf('%d=%s',ii,D.componentNames(ii));
                 end
+                error('SphereField:InvalidComponentIndex',...
+                    'ComponentIndex %d is invalid. Use 0 for all components, or one of: %s.',...
+                    options.ComponentIndex,strjoin(compList,", "));
+            end
+
+            if options.ComponentIndex > 0
+                if Nc > 1, D.values = D.values(:,:,options.ComponentIndex); end
                 D.componentNames = D.componentNames(options.ComponentIndex);
             end
 
             % Scaling
             switch options.Scale
                 case "linear"
-                    % Nothing to do.
+
                 case "dB20"
                     if options.Quantity ~= "magnitude"
-                        error('SphereField:InvalidScale','dB20 scaling is only valid for magnitude field data.');
+                        error('SphereField:InvalidScale',...
+                            'dB20 scaling is only valid for magnitude field data.');
                     end
                     D.values = 20*log10(D.values);
                     D.valueUnit = "dB";
+
                 case "dB10"
                     if ~any(options.Quantity == ["W","U","directivity","gain"])
-                        error('SphereField:InvalidScale','dB10 scaling is only valid for power-like quantities.');
+                        error('SphereField:InvalidScale',...
+                            'dB10 scaling is only valid for power-like quantities.');
                     end
                     D.values = 10*log10(D.values);
                     D.valueUnit = "dB";
             end
+
             D.scale = options.Scale;
         end
 
@@ -1306,6 +1341,8 @@ classdef SphereField < EMField
                 options.ThetaRange (1,1) string {mustBeMember(options.ThetaRange,["180","360"])} = "180"
                 options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
                 options.Symmetry (1,1) string {mustBeMember(options.Symmetry,["stored","expand"])} = "stored"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "none"
+                options.ReferenceValue (1,1) double = NaN
                 options.Axes = []
                 options.ShowColorbar (1,1) logical = true
                 options.CLim double = []
@@ -1319,28 +1356,15 @@ classdef SphereField < EMField
             end
 
             if ~objPlot.isStructured, error('SphereField:PlotRequiresStructuredGrid','plot currently requires structured data.'); end
-            % if options.Component == "all" && any(options.Quantity == ["magnitude","phase","real","imag"])
-            %     error('SphereField:PlotRequiresComponent','Select one field component for a 2-D plot.');
-            % end
-
-            D=objPlot.getData(Coordinates = options.Coordinates,Basis = options.Basis,Polarization = options.Polarization,...
-                SlantAngle = options.SlantAngle,FieldType = options.FieldType,Quantity = options.Quantity,...
-                ComponentIndex = options.ComponentIndex,Scale = options.Scale,FrequencyIndex = options.FrequencyIndex,...
-                GridView = options.GridView,PhiRange = options.PhiRange,ThetaRange = options.ThetaRange,...
-                PowerSource = options.PowerSource);
-            % Select the requested component to plot
-            Nc = numel(D.componentNames);
-
-            if options.ComponentIndex > Nc
-                error('SphereField:InvalidComponentIndex',...
-                    'ComponentIndex %d is invalid. Valid indices are 0:%d, where 0 returns all components. Available components are: %s.',...
-                    options.ComponentIndex,Nc,strjoin(D.componentNames,", "));
-            end
-            if Nc > 1
-                D.values = D.values(:,:,options.ComponentIndex);
-            end
-            D.componentNames = D.componentNames(options.ComponentIndex);
-
+            D = objPlot.getData(Coordinates=options.Coordinates,Basis=options.Basis,...
+                Polarization=options.Polarization,SlantAngle=options.SlantAngle,...
+                FieldType=options.FieldType,Quantity=options.Quantity,...
+                ComponentIndex=options.ComponentIndex,Scale=options.Scale,...
+                FrequencyIndex=options.FrequencyIndex,GridView=options.GridView,...
+                PhiRange=options.PhiRange,ThetaRange=options.ThetaRange,...
+                PowerSource=options.PowerSource,Normalize=options.Normalize,...
+                ReferenceValue=options.ReferenceValue);
+            
             Z = reshape(D.values,D.Nth,D.Nph);
             X = reshape(D.x,D.Nth,D.Nph);
             Y = reshape(D.y,D.Nth,D.Nph);
@@ -1397,12 +1421,14 @@ classdef SphereField < EMField
                 options.SlantAngle (1,1) double {mustBeFinite} = 45
                 options.FieldType (1,1) string {mustBeMember(options.FieldType,["pattern","field"])} = "pattern"
                 options.Quantity (1,1) string {mustBeMember(options.Quantity,["magnitude","phase","real","imag","W","U","directivity","gain"])} = "directivity"
-                options.ComponentIndex (1,1) double {mustBeInteger,mustBePositive} = 1
+                options.ComponentIndex (1,1) double {mustBeInteger,mustBeNonnegative} = 1
                 options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "linear"
                 options.FrequencyIndex (1,1) double {mustBeInteger,mustBePositive} = 1
                 options.Method (1,1) string {mustBeMember(options.Method,["nearest","linear","cubic","spline","makima"])} = "linear"
                 options.Symmetry (1,1) string {mustBeMember(options.Symmetry,["stored","expand"])} = "stored"
                 options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "none"
+                options.ReferenceValue (1,1) double = NaN
                 options.Axes = []
                 options.LineSpec string = ""
                 options.Title string = ""
@@ -1414,41 +1440,13 @@ classdef SphereField < EMField
                 objPlot = obj;
             end
 
-            if ~objPlot.isStructured
-                error('SphereField:PlotCutRequiresStructuredGrid','plotCut currently requires structured data.');
-            end
-
-            G = objPlot.getGridView("stored");
-            thCut = G.thVec;
-
-            % Complete plane consists of phi0 and phi0 + 180 deg.
-            ph0 = mod(options.Phi,360);
-            phPair = [ph0 mod(ph0 + 180,360)];
-
-            % Resample only when necessary. This also handles equivalent phi ranges.
-            SFcut = objPlot.resample(phPair,thCut,Method=options.Method);
-
-            D = SFcut.getData(Basis=options.Basis,Polarization=options.Polarization,...
-                SlantAngle=options.SlantAngle,FieldType=options.FieldType,...
-                Quantity=options.Quantity,ComponentIndex=options.ComponentIndex,...
-                Scale=options.Scale,FrequencyIndex=options.FrequencyIndex,...
+            C = objPlot.getCutData(options.Phi,Basis=options.Basis,...
+                Polarization=options.Polarization,SlantAngle=options.SlantAngle,...
+                FieldType=options.FieldType,Quantity=options.Quantity,...
+                ComponentIndex=options.ComponentIndex,Scale=options.Scale,...
+                Normalize=options.Normalize,ReferenceValue=options.ReferenceValue,...
+                FrequencyIndex=options.FrequencyIndex,Method=options.Method,...
                 PowerSource=options.PowerSource);
-
-            Z = reshape(D.values,D.Nth,D.Nph);
-
-            % Positive cut: phi = phi0, theta = 0...180.
-            % Negative cut: phi = phi0 + 180, theta = 180...0.
-            angle = [-fliplr(thCut(2:end)) thCut];
-            values = [flipud(Z(2:end,2)); Z(:,1)];
-
-            C = struct();
-            C.angle = angle(:);
-            C.values = values;
-            C.phi = ph0;
-            C.componentName = D.componentNames;
-            C.quantity = D.quantity;
-            C.valueUnit = D.valueUnit;
-            C.frequencyHz = D.freqHz;
 
             if isempty(options.Axes)
                 figure;
@@ -1457,26 +1455,366 @@ classdef SphereField < EMField
                 ax = options.Axes;
             end
 
+            Y = reshape(C.values,numel(C.angle),[]);
             if options.LineSpec == ""
-                h = plot(ax,C.angle,C.values);
+                h = plot(ax,C.angle,Y);
             else
-                h = plot(ax,C.angle,C.values,options.LineSpec);
+                h = plot(ax,C.angle,Y,options.LineSpec);
             end
 
             grid(ax,'on');
             xlabel(ax,'Cut angle (deg)');
-            ylabel(ax,obj.makeCutYLabel(D));
-            
+            ylabel(ax,objPlot.makeCutYLabel(C));
+
             a = C.angle(isfinite(C.angle));
-            if numel(a) > 1
-                xlim(ax,[min(a) max(a)]);
-            end
+            if numel(a) > 1, xlim(ax,[min(a) max(a)]); end
 
             if options.Title ~= ""
                 title(ax,options.Title);
             else
                 title(ax,sprintf('\\phi = %.6g^\\circ cut, %s, %.6g GHz',...
-                    ph0,D.componentNames,D.freqHz/1e9));
+                    C.phi,strjoin(C.componentNames,", "),C.freqHz/1e9));
+            end
+        end
+
+        function h = plotPrincipalCuts(obj,options)
+            %PLOTPRINCIPALCUTS Plot principal great-circle cuts.
+            %
+            %   obj.plotPrincipalCuts()
+            %   obj.plotPrincipalCuts(Name=Value)
+            %
+            % By default, plots the phi = 0, 45 and 90 degree planes.
+            %
+            % For field quantities, all available field components are plotted.
+            % A single normalization reference is used for all cuts and components.
+            %
+            % Examples:
+            %   obj.plotPrincipalCuts()
+            %   obj.plotPrincipalCuts(Basis="Ludwig3")
+            %   obj.plotPrincipalCuts(Basis="Ludwig3",Quantity="magnitude",Scale="dB20")
+            %   obj.plotPrincipalCuts(Quantity="directivity",Scale="dB10")
+            %   obj.plotPrincipalCuts(Phi=[0 90])
+
+            arguments
+                obj
+                options.Phi (1,:) double {mustBeFinite} = [0 45 90]
+                options.Basis (1,1) string {mustBeMember(options.Basis,["spherical","Ludwig1","Ludwig2AE","Ludwig2EA","Ludwig3"])} = "Ludwig3"
+                options.Polarization (1,1) string {mustBeMember(options.Polarization,["linear","circular","slant"])} = "linear"
+                options.SlantAngle (1,1) double {mustBeFinite} = 45
+                options.FieldType (1,1) string {mustBeMember(options.FieldType,["pattern","field"])} = "pattern"
+                options.Quantity (1,1) string {mustBeMember(options.Quantity,["magnitude","phase","real","imag","W","U","directivity","gain"])} = "magnitude"
+                options.ComponentIndex (1,1) double {mustBeInteger,mustBeNonnegative} = 0
+                options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "dB20"
+                options.FrequencyIndex (1,1) double {mustBeInteger,mustBePositive} = 1
+                options.Method (1,1) string {mustBeMember(options.Method,["nearest","linear","cubic","spline","makima"])} = "linear"
+                options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
+                options.Symmetry (1,1) string {mustBeMember(options.Symmetry,["stored","expand"])} = "stored"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "max"
+                options.ReferenceValue (1,1) double = NaN
+                options.Axes = []
+                options.ShowLegend (1,1) logical = true
+                options.Title string = ""
+            end
+
+            if options.Symmetry == "expand"
+                objPlot = obj.expandSymmetry();
+            else
+                objPlot = obj;
+            end
+
+            if ~objPlot.isStructured
+                error('SphereField:PlotPrincipalCutsRequiresStructuredGrid',...
+                    'plotPrincipalCuts currently requires structured data.');
+            end
+
+            % Resolve the full-field normalization once. All cuts then use exactly
+            % the same normalization reference.
+            normalize = options.Normalize;
+            referenceValue = options.ReferenceValue;
+
+            if normalize == "max"
+                Dref = objPlot.getData(Basis=options.Basis,...
+                    Polarization=options.Polarization,...
+                    SlantAngle=options.SlantAngle,...
+                    FieldType=options.FieldType,...
+                    Quantity=options.Quantity,...
+                    ComponentIndex=0,...
+                    Scale="linear",...
+                    FrequencyIndex=options.FrequencyIndex,...
+                    PowerSource=options.PowerSource,...
+                    Normalize="max");
+
+                referenceValue = Dref.referenceValue;
+                normalize = "specified";
+            end
+
+            Ncut = numel(options.Phi);
+            C = cell(1,Ncut);
+
+            for ii = 1:Ncut
+                C{ii} = objPlot.getCutData(options.Phi(ii),...
+                    Basis=options.Basis,...
+                    Polarization=options.Polarization,...
+                    SlantAngle=options.SlantAngle,...
+                    FieldType=options.FieldType,...
+                    Quantity=options.Quantity,...
+                    ComponentIndex=options.ComponentIndex,...
+                    Scale=options.Scale,...
+                    Normalize=normalize,...
+                    ReferenceValue=referenceValue,...
+                    FrequencyIndex=options.FrequencyIndex,...
+                    Method=options.Method,...
+                    PowerSource=options.PowerSource);
+            end
+
+            if isempty(options.Axes)
+                figure;
+                ax = axes;
+            else
+                ax = options.Axes;
+            end
+
+            holdState = ishold(ax);
+            hold(ax,'on');
+
+            Nc = size(C{1}.values,3);
+            h = gobjects(Ncut,Nc);
+
+            % Colour identifies the cut; line style identifies the component.
+            lineStyles = ["-","--",":","-."];
+            colors = ax.ColorOrder;
+            Ncolor = size(colors,1);
+
+            for ii = 1:Ncut
+                col = colors(mod(ii - 1,Ncolor) + 1,:);
+                Y = reshape(C{ii}.values,numel(C{ii}.angle),[]);
+
+                for jj = 1:Nc
+                    ls = lineStyles(mod(jj - 1,numel(lineStyles)) + 1);
+
+                    h(ii,jj) = plot(ax,C{ii}.angle,Y(:,jj),...
+                        'Color',col,...
+                        'LineStyle',ls,...
+                        'DisplayName',sprintf('\\phi = %.6g^\\circ, %s',...
+                        C{ii}.phi,C{ii}.componentNames(jj)));
+
+                    % Components of the same cut should have the same colour.
+                    if jj > 1
+                        h(ii,jj).Color = h(ii,1).Color;
+                    end
+                end
+            end
+
+            if ~holdState, hold(ax,'off'); end
+
+            grid(ax,'on');
+            xlabel(ax,'Cut angle (deg)');
+
+            % All cuts should normally have the same angular extent.
+            a = C{1}.angle(isfinite(C{1}.angle));
+            if numel(a) > 1, xlim(ax,[min(a) max(a)]); end
+
+            if C{1}.valueUnit ~= ""
+                ylabel(ax,sprintf('%s (%s)',options.Quantity,C{1}.valueUnit));
+            else
+                ylabel(ax,options.Quantity);
+            end
+
+            if options.ShowLegend
+                legend(ax,'show','Location','best');
+            end
+
+            if options.Title ~= ""
+                title(ax,options.Title);
+            else
+                title(ax,sprintf('Principal cuts, %.6g GHz',C{1}.freqHz/1e9));
+            end
+        end
+
+        function h = plot3D(obj,options)
+            %PLOT3D Plot SphereField data as a 3-D radiation-pattern surface.
+            %
+            %   obj.plot3D()
+            %   obj.plot3D(Name=Value)
+            %
+            % The requested field quantity determines the colour of the surface.
+            % The radial coordinate is normalized for visualization.
+            %
+            % For linear data:
+            %   R = abs(value)/max(abs(value))
+            %
+            % For dB data, Floor specifies the radial dynamic range relative to
+            % the maximum plotted value. For example, Floor=-40 maps:
+            %   peak       -> R = 1
+            %   peak-20 dB -> R = 0.5
+            %   peak-40 dB -> R = 0
+            %
+            % Examples:
+            %   obj.plot3D()
+            %   obj.plot3D(Basis="Ludwig3",ComponentIndex=1)
+            %   obj.plot3D(Basis="Ludwig3",ComponentIndex=2,...
+            %       Quantity="magnitude",Scale="dB20",Normalize="max")
+            %   obj.plot3D(Quantity="directivity",Scale="dB10",Normalize="max")
+            %   obj.plot3D(Symmetry="expand")
+
+            arguments
+                obj
+                options.Basis (1,1) string {mustBeMember(options.Basis,["spherical","Ludwig1","Ludwig2AE","Ludwig2EA","Ludwig3"])} = "Ludwig3"
+                options.Polarization (1,1) string {mustBeMember(options.Polarization,["linear","circular","slant"])} = "linear"
+                options.SlantAngle (1,1) double {mustBeFinite} = 45
+                options.FieldType (1,1) string {mustBeMember(options.FieldType,["pattern","field"])} = "pattern"
+                options.Quantity (1,1) string {mustBeMember(options.Quantity,["magnitude","W","U","directivity","gain"])} = "magnitude"
+                options.ComponentIndex (1,1) double {mustBeInteger,mustBePositive} = 1
+                options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "dB20"
+                options.FrequencyIndex (1,1) double {mustBeInteger,mustBePositive} = 1
+                options.GridView (1,1) string {mustBeMember(options.GridView,["stored","singlePeriod","fullSphere"])} = "fullSphere"
+                options.PhiRange (1,1) string {mustBeMember(options.PhiRange,["positive","symmetric"])} = "positive"
+                options.ThetaRange (1,1) string {mustBeMember(options.ThetaRange,["180","360"])} = "180"
+                options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
+                options.Symmetry (1,1) string {mustBeMember(options.Symmetry,["stored","expand"])} = "stored"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "max"
+                options.ReferenceValue (1,1) double = NaN
+                options.Floor (1,1) double {mustBeFinite} = -40
+                options.ShowReferenceSphere (1,1) logical = true
+                options.ShowAxes (1,1) logical = true
+                options.Axes = []
+                options.ShowColorbar (1,1) logical = true
+                options.CLim double = []
+                options.Title string = ""
+            end
+
+            if options.Floor >= 0
+                error('SphereField:InvalidPlot3DFloor',...
+                    'Floor must be negative and specifies the dB range below the peak.');
+            end
+
+            if options.Symmetry == "expand"
+                objPlot = obj.expandSymmetry();
+            else
+                objPlot = obj;
+            end
+
+            if ~objPlot.isStructured
+                error('SphereField:Plot3DRequiresStructuredGrid',...
+                    'plot3D currently requires structured data.');
+            end
+
+            D = objPlot.getData(Basis=options.Basis,...
+                Polarization=options.Polarization,...
+                SlantAngle=options.SlantAngle,...
+                FieldType=options.FieldType,...
+                Quantity=options.Quantity,...
+                ComponentIndex=options.ComponentIndex,...
+                Scale=options.Scale,...
+                FrequencyIndex=options.FrequencyIndex,...
+                GridView=options.GridView,...
+                PhiRange=options.PhiRange,...
+                ThetaRange=options.ThetaRange,...
+                PowerSource=options.PowerSource,...
+                Normalize=options.Normalize,...
+                ReferenceValue=options.ReferenceValue);
+
+            if ~D.isStructured
+                error('SphereField:Plot3DRequiresStructuredGrid',...
+                    'The requested grid representation is not structured.');
+            end
+
+            % Obtain angular grid corresponding exactly to the requested data view.
+            G = objPlot.getGridView(options.GridView,...
+                PhiRange=options.PhiRange,...
+                ThetaRange=options.ThetaRange);
+
+            [PH,TH] = meshgrid(G.phVec,G.thVec);
+
+            V = reshape(D.values,D.Nth,D.Nph);
+
+            % Convert requested quantity to a normalized plotting radius.
+            switch options.Scale
+                case "linear"
+                    A = abs(V);
+                    vmax = max(A,[],'all');
+
+                    if vmax > 0
+                        R = A/vmax;
+                    else
+                        R = zeros(size(A));
+                    end
+
+                case {"dB10","dB20"}
+                    vmax = max(V,[],'all');
+                    vfloor = vmax + options.Floor;
+
+                    Vrad = max(V,vfloor);
+                    R = (Vrad - vfloor)/(vmax - vfloor);
+            end
+
+            % Spherical pattern surface -> Cartesian plotting coordinates.
+            X = R.*sind(TH).*cosd(PH);
+            Y = R.*sind(TH).*sind(PH);
+            Z = R.*cosd(TH);
+
+            if isempty(options.Axes)
+                figure;
+                ax = axes;
+            else
+                ax = options.Axes;
+            end
+
+            holdState = ishold(ax);
+            hold(ax,'on');
+
+            axis(ax,'equal');
+            axis(ax,[-1 1 -1 1 -1 1]*1.15);
+            axis(ax,'off');
+            view(ax,3);
+
+            a = linspace(0,360,361);
+
+            if options.ShowReferenceSphere
+                plot3(ax,cosd(a),sind(a),zeros(size(a)),...
+                    'k:','LineWidth',0.5);
+                plot3(ax,cosd(a),zeros(size(a)),sind(a),...
+                    'k:','LineWidth',0.5);
+                plot3(ax,zeros(size(a)),cosd(a),sind(a),...
+                    'k:','LineWidth',0.5);
+            end
+
+            if options.ShowAxes
+                L = 1.1;
+
+                plot3(ax,[-L L],[0 0],[0 0],...
+                    'k-','LineWidth',0.5);
+                plot3(ax,[0 0],[-L L],[0 0],...
+                    'k-','LineWidth',0.5);
+                plot3(ax,[0 0],[0 0],[-L L],...
+                    'k-','LineWidth',0.5);
+
+                text(ax,L,0,0,'  x');
+                text(ax,0,L,0,'  y');
+                text(ax,0,0,L,'  z');
+            end
+
+            h = surf(ax,X,Y,Z,V,...
+                'EdgeColor','none',...
+                'FaceColor','interp');
+
+            if ~holdState, hold(ax,'off'); end
+
+            if options.ShowColorbar
+                colorbar(ax);
+            end
+
+            if ~isempty(options.CLim)
+                clim(ax,options.CLim);
+            elseif any(options.Scale == ["dB10","dB20"])
+                clim(ax,[vmax + options.Floor vmax]);
+            end
+
+            if options.Title ~= ""
+                title(ax,options.Title);
+            else
+                title(ax,sprintf('%s, %s, %.6g GHz',...
+                    D.quantity,D.componentNames(1),D.freqHz/1e9));
             end
         end
     end
@@ -2400,6 +2738,86 @@ classdef SphereField < EMField
             G = D.*reshape(obj.etaRad,1,[]);
         end
 
+        function C = getCutData(obj,phi,options)
+            %GETCUTDATA Extract data along a great-circle phi-plane cut.
+            %
+            % The signed cut angle is defined by:
+            %   angle >= 0 : phi = phi0,       theta =  angle
+            %   angle <  0 : phi = phi0 + 180, theta = -angle
+
+            arguments
+                obj
+                phi (1,1) double {mustBeFinite}
+                options.Basis (1,1) string {mustBeMember(options.Basis,["spherical","Ludwig1","Ludwig2AE","Ludwig2EA","Ludwig3"])} = "spherical"
+                options.Polarization (1,1) string {mustBeMember(options.Polarization,["linear","circular","slant"])} = "linear"
+                options.SlantAngle (1,1) double {mustBeFinite} = 45
+                options.FieldType (1,1) string {mustBeMember(options.FieldType,["pattern","field"])} = "pattern"
+                options.Quantity (1,1) string {mustBeMember(options.Quantity,["complex","magnitude","phase","real","imag","W","U","directivity","gain"])} = "magnitude"
+                options.ComponentIndex (1,1) double {mustBeInteger,mustBeNonnegative} = 0
+                options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "linear"
+                options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "none"
+                options.ReferenceValue (1,1) double = NaN
+                options.FrequencyIndex (1,1) double {mustBeInteger,mustBePositive} = 1
+                options.Method (1,1) string {mustBeMember(options.Method,["nearest","linear","cubic","spline","makima"])} = "linear"
+                options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
+            end
+
+            if ~obj.isStructured
+                error('SphereField:CutRequiresStructuredGrid','Cut extraction currently requires structured data.');
+            end
+
+            % Resolve full-field normalization before reducing the data to a cut.
+            normalize = options.Normalize;
+            referenceValue = options.ReferenceValue;
+
+            if normalize == "max"
+                Dref = obj.getData(Basis=options.Basis,Polarization=options.Polarization,...
+                    SlantAngle=options.SlantAngle,FieldType=options.FieldType,...
+                    Quantity=options.Quantity,ComponentIndex=0,...
+                    FrequencyIndex=options.FrequencyIndex,PowerSource=options.PowerSource,...
+                    Normalize="max",Scale="linear");
+
+                referenceValue = Dref.referenceValue;
+                normalize = "specified";
+            end
+
+            G = obj.getGridView("stored");
+            thCut = G.thVec;
+
+            ph0 = mod(phi,360);
+            phPair = [ph0 mod(ph0 + 180,360)];
+
+            SFcut = obj.resample(phPair,thCut,Method=options.Method);
+
+            D = SFcut.getData(Basis=options.Basis,Polarization=options.Polarization,...
+                SlantAngle=options.SlantAngle,FieldType=options.FieldType,...
+                Quantity=options.Quantity,ComponentIndex=options.ComponentIndex,...
+                Scale=options.Scale,FrequencyIndex=options.FrequencyIndex,...
+                PowerSource=options.PowerSource,Normalize=normalize,...
+                ReferenceValue=referenceValue);
+
+            Z = reshape(D.values,D.Nth,D.Nph,[]);
+
+            angle = [-fliplr(thCut(2:end)) thCut].';
+            values = cat(1,flip(Z(2:end,2,:),1),Z(:,1,:));
+
+            C = struct();
+            C.angle = angle;
+            C.values = values;
+            C.phi = ph0;
+            C.componentNames = D.componentNames;
+            C.quantity = D.quantity;
+            C.fieldType = D.fieldType;
+            C.valueUnit = D.valueUnit;
+            C.freqHz = D.freqHz;
+            C.frequencyIndex = D.frequencyIndex;
+            C.scale = D.scale;
+            C.normalization = options.Normalize;
+            C.referenceValue = D.referenceValue;
+            C.basis = D.basis;
+            C.polarization = D.polarization;
+        end
+
         function A = fieldToGrid(obj, E)
             %FIELDTOGRID Reshape Np x Nf field samples to Nth x Nph x Nf.
 
@@ -2460,6 +2878,193 @@ classdef SphereField < EMField
     end
 
     methods (Static)
+
+        function SF = readCSTffs(pathName,options)
+            %READCSTFFS Create a SphereField from a CST .ffs file.
+            %
+            %   SF = SphereField.readCSTffs(pathName)
+            %   SF = SphereField.readCSTffs(pathName,Name=Value)
+            %
+            % Reads CST far-field source (.ffs) files containing one or more
+            % frequencies. The stored field components are interpreted as the
+            % spherical far-field pattern quantities rE:
+            %
+            %   Eth [V]
+            %   Eph [V]
+            %
+            % with angles stored in degrees.
+            %
+            % CST radiated and accepted powers are used to populate Prad and
+            % radiation efficiency.
+            %
+            % If pathName is empty, a file-selection dialog is opened.
+
+            arguments
+                pathName (1,1) string = ""
+                options.r (1,1) double {mustBeReal,mustBeFinite,mustBePositive} = 1
+            end
+
+            if pathName == ""
+                [name,path] = uigetfile('*.ffs');
+                if isequal(name,0)
+                    SF = SphereField.empty;
+                    return
+                end
+                pathName = fullfile(path,name);
+            end
+
+            [~,~,ext] = fileparts(pathName);
+            if ext == ""
+                pathName = pathName + ".ffs";
+            elseif ~strcmpi(ext,'.ffs')
+                error('SphereField:InvalidCSTffsExtension',...
+                    'Expected a CST .ffs file.');
+            end
+
+            fid = fopen(pathName,'r');
+            if fid == -1
+                error('SphereField:UnableToOpenFile',...
+                    'Unable to open CST far-field file %s.',pathName);
+            end
+            cleanup = onCleanup(@() fclose(fid));
+
+            % CST markers
+            freqMarker = '// #Frequencies';
+            posMarker = '// Position';
+            zAxisMarker = '// zAxis';
+            xAxisMarker = '// xAxis';
+            powerFreqMarker = '// Radiated/Accepted/Stimulated Power , Frequency';
+            NphNthMarker = '// >> Total #phi samples, total #theta samples';
+            fieldMarker = '// >> Phi, Theta, Re(E_Theta), Im(E_Theta), Re(E_Phi), Im(E_Phi):';
+
+            Nf = [];
+            Nph = [];
+            Nth = [];
+            freq = [];
+            Prad = [];
+            Pacc = [];
+            Pstim = [];
+            pos = [];
+            zAxis = [];
+            xAxis = [];
+
+            fCount = 0;
+
+            while ~feof(fid)
+                a = fgetl(fid);
+                if ~ischar(a), break; end
+
+                if strcmp(a,freqMarker)
+                    Nf = fscanf(fid,'%i',1);
+
+                elseif strcmp(a,posMarker)
+                    pos = fscanf(fid,'%f%f%f',[3,1]);
+
+                elseif strcmp(a,zAxisMarker)
+                    zAxis = fscanf(fid,'%f%f%f',[3,1]);
+
+                elseif strcmp(a,xAxisMarker)
+                    xAxis = fscanf(fid,'%f%f%f',[3,1]);
+
+                elseif strncmp(a,powerFreqMarker,length(powerFreqMarker))
+                    if isempty(Nf)
+                        error('SphereField:InvalidCSTffs',...
+                            'Frequency count must appear before the power/frequency block.');
+                    end
+
+                    PF = fscanf(fid,'%f',[4,Nf]);
+
+                    Prad = PF(1,:);
+                    Pacc = PF(2,:);
+                    Pstim = PF(3,:);
+                    freq = PF(4,:);
+
+                elseif strncmp(a,NphNthMarker,length(NphNthMarker))
+                    NphNth = fscanf(fid,'%i %i',[2,1]);
+                    Nph = NphNth(1);
+                    Nth = NphNth(2);
+
+                    if isempty(Nf)
+                        error('SphereField:InvalidCSTffs',...
+                            'Frequency count must appear before the angular-grid definition.');
+                    end
+
+                    if fCount == 0
+                        Np = Nph*Nth;
+                        ph = zeros(Np,1);
+                        th = zeros(Np,1);
+                        Eth = zeros(Np,Nf);
+                        Eph = zeros(Np,Nf);
+                    end
+
+                elseif strncmp(a,fieldMarker,length(fieldMarker))
+                    if isempty(Nph) || isempty(Nth)
+                        error('SphereField:InvalidCSTffs',...
+                            'Angular-grid dimensions are missing before the field data.');
+                    end
+
+                    fCount = fCount + 1;
+
+                    fData = fscanf(fid,'%f',[6,Nph*Nth]).';
+
+                    if size(fData,1) ~= Nph*Nth
+                        error('SphereField:InvalidCSTffs',...
+                            'Unexpected number of field samples in frequency block %d.',fCount);
+                    end
+
+                    % Angular sampling should be identical at all frequencies.
+                    if fCount == 1
+                        ph = fData(:,1);
+                        th = fData(:,2);
+                    else
+                        tol = 1e-10;
+                        if any(abs(ph - fData(:,1)) > tol) || any(abs(th - fData(:,2)) > tol)
+                            error('SphereField:CSTffsFrequencyGridMismatch',...
+                                'Angular sampling differs between CST frequency blocks.');
+                        end
+                    end
+
+                    Eth(:,fCount) = complex(fData(:,3),fData(:,4));
+                    Eph(:,fCount) = complex(fData(:,5),fData(:,6));
+
+                    if fCount == Nf
+                        break
+                    end
+                end
+            end
+
+            if isempty(Nf) || fCount ~= Nf
+                error('SphereField:InvalidCSTffs',...
+                    'The file contained %d field blocks, but %d frequencies were expected.',...
+                    fCount,Nf);
+            end
+
+            if isempty(freq)
+                error('SphereField:InvalidCSTffs',...
+                    'No CST frequency information was found.');
+            end
+
+            etaRad = Prad./Pacc;
+
+            metadata = struct();
+            metadata.source = "CST";
+            metadata.fileFormat = "ffs";
+            metadata.fileName = pathName;
+            metadata.position = pos;
+            metadata.xAxis = xAxis;
+            metadata.zAxis = zAxis;
+            metadata.acceptedPower = Pacc;
+            metadata.stimulatedPower = Pstim;
+
+            provenance = struct();
+            provenance.source = "CST";
+            provenance.reader = "readCSTffs";
+            provenance.file = pathName;
+
+            SF = SphereField(ph,th,Eph,Eth,freq,...
+                Prad=Prad,etaRad=etaRad,r=options.r,...
+                Metadata=metadata,Provenance=provenance);
+        end
 
         function C = getPolarizationConvention()
             %GETPOLARIZATIONCONVENTION Return canonical polarization convention.
