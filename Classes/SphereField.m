@@ -96,7 +96,9 @@ classdef SphereField < EMField
         % -1   stored data lie on negative side
         % 0   no symmetry on this plane
         symmetrySide struct = struct("YZ",0,"XZ",0,"XY",0)
+    end
 
+    properties (SetAccess = private, Hidden = true)
         isPowerPattern_ (1,1) logical = false
     end
 
@@ -323,7 +325,7 @@ classdef SphereField < EMField
                 if any(etaRad > 1)
                     warning('SphereField:InvalidEtaRad','etaRad is larger than 1.');
                 end
-                if any(~isfinite(etaRad)) || any(etaRad < 0) 
+                if any(~isfinite(etaRad)) || any(etaRad < 0)
                     error('SphereField:InvalidEtaRad','etaRad must contain finite positive values.');
                 end
                 obj.etaRad = etaRad;
@@ -332,7 +334,7 @@ classdef SphereField < EMField
             % % ---------------------------------------------------------
             % % Detect structured grid
             % % ---------------------------------------------------------
-            % 
+            %
             % obj.gridInfo = obj.detectStructuredGrid();
 
         end
@@ -421,11 +423,11 @@ classdef SphereField < EMField
         end
 
         function U = get.powerPattern(obj)
-            if obj.isPowerPattern
-                U = obj.getUFromPattern(obj.Eph,obj.Eth);
-            else
+            if ~obj.isPowerPattern
                 U = [];
+                return
             end
+            U = obj.getUFromPattern(obj.Eph,obj.Eth);
         end
 
 
@@ -553,6 +555,7 @@ classdef SphereField < EMField
             % Uses the stored pattern quantities Eth, Eph and Er [V], without the
             % exp(-jkr)/r propagation factor.
 
+            obj.assertVectorField("getCartesianPattern");
             ECart = obj.sphericalPatternToCartesian(obj.ph,obj.th,obj.Eph,obj.Eth,obj.Er);
         end
 
@@ -758,6 +761,8 @@ classdef SphereField < EMField
                 options.Polarization (1,1) string {mustBeMember(options.Polarization,["linear","circular","slant"])} = "linear"
                 options.SlantAngle (1,1) double {mustBeFinite} = 45
             end
+
+            obj.assertVectorField("getField");
 
             [E1lin,E2lin,E3lin,basisInfo]=obj.getLinearBasis(Basis=options.Basis);
             [E1,E2,E3,info]=obj.applyPolarization(E1lin,E2lin,E3lin,basisInfo,options.Polarization,options.SlantAngle);
@@ -1065,7 +1070,7 @@ classdef SphereField < EMField
 
             if ~obj.isStructured, error('SphereField:ResampleRequiresStructuredGrid','resample currently requires structured source data.'); end
 
-            phNew=phNew(:).'; thNew=thNew(:).';
+            phNew = phNew(:).'; thNew = thNew(:).';
             if isempty(phNew) || isempty(thNew), error('SphereField:EmptyResampleGrid','phNew and thNew must be non-empty.'); end
             if numel(unique(phNew))~=numel(phNew) || numel(unique(thNew))~=numel(thNew), error('SphereField:DuplicateResampleCoordinates','phNew and thNew must contain unique values.'); end
             if any(thNew<0 | thNew>180), error('SphereField:InvalidResampleTheta','Canonical resampled theta values must lie in [0,180] deg.'); end
@@ -1078,74 +1083,115 @@ classdef SphereField < EMField
                 end
             else
                 pad=options.PaddingSamples;
-                if ~isscalar(pad) || ~isfinite(pad) || pad<0 || fix(pad)~=pad, error('SphereField:InvalidPaddingSamples','PaddingSamples must be a nonnegative integer.'); end
+                if ~isscalar(pad) || ~isfinite(pad) || pad<0 || fix(pad) ~= pad, error('SphereField:InvalidPaddingSamples','PaddingSamples must be a nonnegative integer.'); end
             end
 
-            G=obj.getGridView("interpolation",PaddingSamples=pad);
+            G = obj.getGridView("interpolation",PaddingSamples=pad);
 
             % Full-phi fields are periodic, so map arbitrary phi representations
             % onto the source period before interpolation.
-            phEval=phNew;
+            phEval = phNew;
             if obj.coversFullPhi
-                G0=obj.getGridView("singlePeriod");
-                ph0=G0.phVec(1);
-                phEval=mod(phNew-ph0,360)+ph0;
+                G0 = obj.getGridView("singlePeriod");
+                ph0 = G0.phVec(1);
+                phEval = mod(phNew-ph0,360)+ph0;
             end
 
-            tol=1e-10;
+            tol = 1e-10;
             if min(phEval)<min(G.phVec)-tol || max(phEval)>max(G.phVec)+tol
                 error('SphereField:ResampleOutsidePhiSupport','Requested phi values extend outside the available interpolation support.');
             end
             if min(thNew)<min(G.thVec)-tol || max(thNew)>max(G.thVec)+tol
                 error('SphereField:ResampleOutsideThetaSupport','Requested theta values extend outside the available interpolation support.');
             end
-
             if options.Method=="cubic"
                 if ~obj.isUniformVector(G.phVec) || ~obj.isUniformVector(G.thVec)
                     error('SphereField:CubicRequiresUniformGrid','Cubic interpolation requires uniformly spaced phi and theta grids.');
                 end
             end
 
-            % Convert extended spherical pattern components to Cartesian pattern.
-            [PH,TH]=meshgrid(G.phVec,G.thVec);
-            sth=sind(TH); cth=cosd(TH); sph=sind(PH); cph=cosd(PH);
+            % Convert extended spherical pattern components to interpolation fields.
+            if obj.isPowerPattern
+                % For power patterns, use U directly as a scalar interpolation field.
+                Ex = obj.getUFromPattern(G.Eph,G.Eth);
+                Ey = [];
+                Ez = [];
+            else
+                % For vector fields, convert spherical pattern components to Cartesian.
+                [PH,TH] = meshgrid(G.phVec,G.thVec);
+                sth = sind(TH); cth = cosd(TH);
+                sph = sind(PH); cph = cosd(PH);
 
-            Ex=cth.*cph.*G.Eth-sph.*G.Eph;
-            Ey=cth.*sph.*G.Eth+cph.*G.Eph;
-            Ez=-sth.*G.Eth;
+                Ex = cth.*cph.*G.Eth - sph.*G.Eph;
+                Ey = cth.*sph.*G.Eth + cph.*G.Eph;
+                Ez = -sth.*G.Eth;
 
-            if ~isempty(G.Er)
-                Ex=Ex+sth.*cph.*G.Er;
-                Ey=Ey+sth.*sph.*G.Er;
-                Ez=Ez+cth.*G.Er;
+                if ~isempty(G.Er)
+                    Ex = Ex + sth.*cph.*G.Er;
+                    Ey = Ey + sth.*sph.*G.Er;
+                    Ez = Ez + cth.*G.Er;
+                end
             end
 
-            % Interpolate Cartesian components.
-            ExNew=obj.interpolateComplexGrid(G.thVec,G.phVec,Ex,thNew,phEval,options.Method);
-            EyNew=obj.interpolateComplexGrid(G.thVec,G.phVec,Ey,thNew,phEval,options.Method);
-            EzNew=obj.interpolateComplexGrid(G.thVec,G.phVec,Ez,thNew,phEval,options.Method);
+            % Interpolate.
+            ExNew = obj.interpolateComplexGrid(G.thVec,G.phVec,Ex,thNew,phEval,options.Method);
 
-            % Project back onto the spherical basis at the requested coordinates.
-            [PHnew,THnew]=meshgrid(phNew,thNew);
-            sth=sind(THnew); cth=cosd(THnew); sph=sind(PHnew); cph=cosd(PHnew);
+            if ~obj.isPowerPattern
+                EyNew = obj.interpolateComplexGrid(G.thVec,G.phVec,Ey,thNew,phEval,options.Method);
 
-            EthNew=cth.*cph.*ExNew+cth.*sph.*EyNew-sth.*EzNew;
-            EphNew=-sph.*ExNew+cph.*EyNew;
-            if obj.hasEr, ErNew=sth.*cph.*ExNew+sth.*sph.*EyNew+cth.*EzNew; else, ErNew=[]; end
+                EzNew = obj.interpolateComplexGrid(G.thVec,G.phVec,Ez,thNew,phEval,options.Method);
+            end
 
-            EphNew=reshape(EphNew,[],obj.Nf);
-            EthNew=reshape(EthNew,[],obj.Nf);
-            if ~isempty(ErNew), ErNew=reshape(ErNew,[],obj.Nf); end
+            if obj.isPowerPattern
+                % ExNew is actually the interpolated radiation intensity U.
+                Unew = real(ExNew);
 
-            prov=obj.provenance;
+                % Numerical interpolation may create extremely small negative values.
+                % Initially leave genuine negatives to the constructor to catch.
+                tol = 100*eps(max(abs(Unew),[],'all'));
+                ind = Unew < 0 & Unew >= -tol;
+                Unew(ind) = 0;
+
+                Unew = reshape(Unew,[],obj.Nf);
+            else
+                % Project Cartesian vector field back onto spherical basis at the
+                % requested coordinates.
+                [PHnew,THnew] = meshgrid(phNew,thNew);
+                sth = sind(THnew); cth = cosd(THnew);
+                sph = sind(PHnew); cph = cosd(PHnew);
+
+                EthNew = cth.*cph.*ExNew + cth.*sph.*EyNew - sth.*EzNew;
+                EphNew = -sph.*ExNew + cph.*EyNew;
+
+                if obj.hasEr
+                    ErNew = sth.*cph.*ExNew + sth.*sph.*EyNew + cth.*EzNew;
+                else
+                    ErNew = [];
+                end
+
+                EphNew = reshape(EphNew,[],obj.Nf);
+                EthNew = reshape(EthNew,[],obj.Nf);
+                if ~isempty(ErNew)
+                    ErNew = reshape(ErNew,[],obj.Nf);
+                end
+            end
+
+            prov = obj.provenance;
             prov.operation="resample";
             prov.interpolationMethod=options.Method;
             prov.paddingSamples=pad;
 
-            if isempty(ErNew)
-                objNew=SphereField(PHnew(:),THnew(:),EphNew,EthNew,obj.freqHz,r=obj.r,Prad=obj.Prad,etaRad=obj.etaRad,Metadata=obj.metadata,Provenance=prov);
+            if obj.isPowerPattern
+                objNew = SphereField(PHnew(:),THnew(:),[],[],obj.freqHz,PowerPattern=Unew,r=obj.r,Prad=obj.Prad,etaRad=obj.etaRad,...
+                    Metadata=obj.metadata,Provenance=prov);
+
+            elseif isempty(ErNew)
+                objNew = SphereField(PHnew(:),THnew(:),EphNew,EthNew,obj.freqHz,r=obj.r,Prad=obj.Prad,etaRad=obj.etaRad,...
+                    Metadata=obj.metadata,Provenance=prov);
+
             else
-                objNew=SphereField(PHnew(:),THnew(:),EphNew,EthNew,obj.freqHz,Er=ErNew,r=obj.r,Prad=obj.Prad,etaRad=obj.etaRad,Metadata=obj.metadata,Provenance=prov);
+                objNew = SphereField(PHnew(:),THnew(:),EphNew,EthNew,obj.freqHz,Er=ErNew,r=obj.r,Prad=obj.Prad,etaRad=obj.etaRad,...
+                    Metadata=obj.metadata,Provenance=prov);
             end
         end
 
@@ -1418,7 +1464,7 @@ classdef SphereField < EMField
                 PhiRange=options.PhiRange,ThetaRange=options.ThetaRange,...
                 PowerSource=options.PowerSource,Normalize=options.Normalize,...
                 ReferenceValue=options.ReferenceValue);
-            
+
             Z = reshape(D.values,D.Nth,D.Nph);
             X = reshape(D.x,D.Nth,D.Nph);
             Y = reshape(D.y,D.Nth,D.Nph);
@@ -1876,6 +1922,14 @@ classdef SphereField < EMField
 
     methods (Access = private)
 
+        function assertVectorField(obj,methodName)
+            if obj.isPowerPattern
+                error('SphereField:PowerPatternVectorOperation',...
+                    '%s is not available for a power-pattern SphereField.',...
+                    methodName);
+            end
+        end
+
         function E = normaliseFieldArray(~, E, Np_, Nf_, name)
             %NORMALISEFIELDARRAY Convert field component to Np x Nf.
 
@@ -1915,7 +1969,7 @@ classdef SphereField < EMField
         end
 
         function validateSymmetryBoundary(obj)
-            if ~obj.hasSymmetry, return; end
+            if ~obj.hasSymmetry || obj.isPowerPattern, return; end
 
             [rHat,~,~] = obj.getCartesianDirections();
             E = obj.getCartesianPattern();
@@ -2467,7 +2521,7 @@ classdef SphereField < EMField
         end
 
         function [E1,E2,E3,info] = getLinearBasisFromData(~,ph,th,Eph,Eth,Er,basis)
-            
+
             E3 = [];
             info = struct();
             info.basis = basis;
@@ -2764,7 +2818,7 @@ classdef SphereField < EMField
             Eth = Eth(idx,:);
             if ~isempty(Er), Er = Er(idx,:); end
         end
-        
+
         function W = getWFromPattern(obj,Eph,Eth)
             %GETWFROMPATTERN Calculate physical radial power density from pattern data.
             %
@@ -2932,6 +2986,94 @@ classdef SphereField < EMField
     end
 
     methods (Static)
+
+        function SF = readGRASPgrd(pathName,options)
+            arguments
+                pathName (1,1) string = ""
+                options.r (1,1) double {mustBeFinite,mustBePositive} = 1
+                options.Prad double = []
+                options.etaRad double = []
+                options.Symmetry struct = struct()
+            end
+
+            if pathName == ""
+                [fileName,filePath] = uigetfile(...
+                    {'*.grd;*.h5;*.hdf5;*.he5','GRASP field files (*.grd, *.h5, *.hdf5, *.he5)';...
+                    '*.grd','GRASP ASCII grid (*.grd)';...
+                    '*.h5;*.hdf5;*.he5','GRASP HDF5 grid (*.h5, *.hdf5, *.he5)';...
+                    '*.*','All files (*.*)'},...
+                    'Select GRASP field file');
+
+                if isequal(fileName,0)
+                    SF = SphereField.empty;
+                    return
+                end
+
+                pathName = string(fullfile(filePath,fileName));
+            end
+
+            [~,~,ext] = fileparts(pathName);
+            ext = lower(string(ext));
+
+            switch ext
+                case ".grd"
+                    G = SphereField.readGRASPgrdASCII(pathName);
+
+                case {".h5",".hdf5",".he5"}
+                    G = SphereField.readGRASPgrdHDF5(pathName);
+
+                otherwise
+                    error('SphereField:UnsupportedGRASPFormat','Unsupported GRASP field-file extension "%s".',ext);
+            end
+
+            % Only quantities which genuinely represent a vector electric field
+            % or a scalar power pattern are supported.
+            if G.ICOMP < 0
+                error('SphereField:GRASPPolarisationModification',['Negative ICOMP indicates that the polarisation components ',...
+                    'are defined in a separate polarisation coordinate system. ','This cannot be reconstructed from the field file alone.']);
+            end
+
+            if ~ismember(G.ICOMP,[1 2 3 9])
+                error('SphereField:UnsupportedGRASPComponents','GRASP ICOMP = %d is not supported by SphereField.',G.ICOMP);
+            end
+
+            % Convert native GRASP coordinates to canonical ph-th.
+            [ph,th] = SphereField.graspGridToPhTh(G.x,G.y,G.IGRID);
+
+            % Convert GRASP field representation to SphereField representation.
+            if G.ICOMP == 9
+                U = SphereField.graspPowerToU(G.F1);
+
+                metadata = G.metadata;
+                metadata.source = "GRASP";
+                metadata.ICOMP = G.ICOMP;
+                metadata.IGRID = G.IGRID;
+
+                provenance = struct();
+                provenance.source = "GRASP";
+                provenance.reader = "readGRASPgrd";
+                provenance.file = pathName;
+
+                SF = SphereField(ph,th,[],[],G.freqHz,PowerPattern=U,r=options.r,Prad=options.Prad,etaRad=options.etaRad,...
+                    Metadata=metadata,Provenance=provenance,Symmetry=options.Symmetry);
+
+            else
+                [Eph,Eth] = SphereField.graspFieldToSpherical(ph,G.F1,G.F2,G.ICOMP);
+
+                metadata = G.metadata;
+                metadata.source = "GRASP";
+                metadata.ICOMP = G.ICOMP;
+                metadata.IGRID = G.IGRID;
+
+                provenance = struct();
+                provenance.source = "GRASP";
+                provenance.reader = "readGRASPgrd";
+                provenance.file = pathName;
+
+                SF = SphereField(ph,th,Eph,Eth,G.freqHz,r=options.r,Prad=options.Prad,etaRad=options.etaRad,Metadata=metadata,...
+                    Provenance=provenance,Symmetry=options.Symmetry);
+            end
+        end
 
         function SF = readCSTffs(pathName,options)
             %READCSTFFS Create a SphereField from a CST .ffs file.
@@ -3130,6 +3272,711 @@ classdef SphereField < EMField
             C.circularComponentOrder = ["RHCP","LHCP"];
             C.description = ...
                 "IEEE antenna polarization convention.";
+        end
+
+    end
+
+    methods (Static,Hidden=true)
+        function G = readGRASPgrdASCII(pathName)
+            fid = fopen(pathName,'r');
+
+            if fid < 0
+                error('SphereField:GRASPFileOpen',...
+                    'Could not open GRASP file "%s".',pathName);
+            end
+
+            c = onCleanup(@() fclose(fid));
+
+            %--------------------------------------------------------------
+            % Header
+            %--------------------------------------------------------------
+            freq = [];
+            freqUnit = "";
+            readingFreq = false;
+
+            while true
+                a = fgetl(fid);
+
+                if ~ischar(a)
+                    error('SphereField:InvalidGRASPFile','Reached end of file before GRASP data marker ++++.');
+                end
+
+                s = strtrim(a);
+
+                if startsWith(s,"++++"), break; end
+
+                if startsWith(upper(s),"FREQUENCIES")
+                    i1 = strfind(s,'[');
+                    i2 = strfind(s,']');
+
+                    if isempty(i1) || isempty(i2) || i2(1) <= i1(1)
+                        error('SphereField:GRASPFrequencyUnit','Could not determine the frequency unit from "%s".',s);
+                    end
+
+                    freqUnit = string(s(i1(1)+1:i2(1)-1));
+                    readingFreq = true;
+                    continue
+                end
+
+                % Frequency values can span several lines.
+                if readingFreq
+                    v = sscanf(s,'%f').';
+
+                    if ~isempty(v)
+                        freq = [freq,v]; %#ok<AGROW>
+                    end
+                end
+            end
+
+            %--------------------------------------------------------------
+            % File type
+            %--------------------------------------------------------------
+            a = SphereField.graspNextNumericLine(fid);
+            KTYPE = sscanf(a,'%d',1);
+
+            if KTYPE ~= 1
+                error('SphereField:UnsupportedGRASPKTYPE','Only GRASP KTYPE = 1 rectangular-grid files are supported.');
+            end
+
+            %--------------------------------------------------------------
+            % General field information
+            %--------------------------------------------------------------
+            a = SphereField.graspNextNumericLine(fid);
+            fieldInfo = sscanf(a,'%d').';
+
+            if numel(fieldInfo) < 4
+                error('SphereField:InvalidGRASPFile',...
+                    'Could not read NSET, ICOMP, NCOMP and IGRID.');
+            end
+
+            NSET = fieldInfo(1);
+            ICOMP = fieldInfo(2);
+            NCOMP = fieldInfo(3);
+            IGRID = fieldInfo(4);
+
+            if ~ismember(NCOMP,[2 3])
+                error('SphereField:UnsupportedGRASPNCOMP','NCOMP = %d is not supported.',NCOMP);
+            end
+
+            % SphereField currently represents far fields only.
+            if NCOMP == 3
+                error('SphereField:GRASPNearField',['NCOMP = 3 indicates a spherical near field with a radial ',...
+                    'component. SphereField currently represents far fields only.']);
+            end
+
+            %--------------------------------------------------------------
+            % Beam/set centres
+            %--------------------------------------------------------------
+            IX = zeros(1,NSET);
+            IY = zeros(1,NSET);
+
+            for ss = 1:NSET
+                a = SphereField.graspNextNumericLine(fid);
+                v = sscanf(a,'%d').';
+
+                if numel(v) < 2
+                    error('SphereField:InvalidGRASPFile',...
+                        'Invalid GRASP beam-centre record.');
+                end
+
+                IX(ss) = v(1);
+                IY(ss) = v(2);
+            end
+
+            %--------------------------------------------------------------
+            % Frequency information
+            %
+            % For the GRASP files we use, each set corresponds to one
+            % frequency. Multiple independent beams are not represented by
+            % SphereField.
+            %--------------------------------------------------------------
+            if isempty(freq)
+                error('SphereField:GRASPNoFrequency','No FREQUENCIES information was found in the GRASP file.');
+            end
+
+            if freqUnit == ""
+                error('SphereField:GRASPFrequencyUnit','No frequency unit was found in the GRASP file.');
+            end
+
+            if numel(freq) ~= NSET
+                error('SphereField:GRASPMultipleSets',['The file contains %d field sets but %d frequencies. ',...
+                    'SphereField currently supports one field set per frequency, ',...
+                    'not multiple independent beams.'],NSET,numel(freq));
+            end
+
+            freqHz = EMField.convertFrequencyToHz(freq,freqUnit);
+            freqHz = freqHz(:).';
+
+            %--------------------------------------------------------------
+            % Read each field set
+            %--------------------------------------------------------------
+            xRef = [];
+            yRef = [];
+
+            F1 = [];
+            F2 = [];
+
+            for ff = 1:NSET
+                % Grid limits.
+                a = SphereField.graspNextNumericLine(fid);
+                v = sscanf(a,'%f').';
+
+                if numel(v) < 4
+                    error('SphereField:InvalidGRASPFile','Invalid GRASP grid-limit record.');
+                end
+
+                XS = v(1);
+                YS = v(2);
+                XE = v(3);
+                YE = v(4);
+
+                % Grid dimensions.
+                a = SphereField.graspNextNumericLine(fid);
+                v = sscanf(a,'%d').';
+
+                if numel(v) < 3
+                    error('SphereField:InvalidGRASPFile','Invalid GRASP grid-size record.');
+                end
+
+                NX = v(1);
+                NY = v(2);
+                KLIMIT = v(3);
+
+                DX = 0;
+                DY = 0;
+
+                if NX > 1
+                    DX = (XE - XS)/(NX - 1);
+                end
+                if NY > 1
+                    DY = (YE - YS)/(NY - 1);
+                end
+
+                XCEN = DX*IX(ff);
+                YCEN = DY*IY(ff);
+
+                X = XCEN + XS + DX*(0:NX - 1);
+                Y = YCEN + YS + DY*(0:NY - 1);
+
+                switch KLIMIT
+                    case 0
+                        %--------------------------------------------------
+                        % Full rectangular grid.
+                        %
+                        % GRASP stores X fastest. Read in native order and
+                        % then rearrange to MATLAB meshgrid(:) ordering.
+                        %--------------------------------------------------
+                        n = NX*NY;
+
+                        if NCOMP == 2
+                            A = textscan(fid,'%f %f %f %f',n,'CollectOutput',true);
+
+                            A = A{1};
+
+                            if size(A,1) ~= n
+                                error('SphereField:InvalidGRASPFile','Unexpected end of GRASP field data.');
+                            end
+
+                            f1 = A(:,1) + 1i*A(:,2);
+                            f2 = A(:,3) + 1i*A(:,4);
+
+                        else
+                            error('SphereField:UnsupportedGRASPNCOMP','Only NCOMP = 2 is supported for far fields.');
+                        end
+
+                        % GRASP file ordering:
+                        %
+                        % x1,y1
+                        % x2,y1
+                        % ...
+                        % xN,y1
+                        % x1,y2
+                        %
+                        % SphereField structured ordering follows
+                        % meshgrid(X,Y)(:), so reorder accordingly.
+                        f1 = reshape(f1,NX,NY).';
+                        f2 = reshape(f2,NX,NY).';
+
+                        f1 = f1(:);
+                        f2 = f2(:);
+
+                        [Xm,Ym] = meshgrid(X,Y);
+                        x = Xm(:);
+                        y = Ym(:);
+
+                    case 1
+                        %--------------------------------------------------
+                        % Row-limited grid. Store only the actual samples.
+                        % The resulting ph-th data may be scattered.
+                        %--------------------------------------------------
+                        x = [];
+                        y = [];
+                        f1 = [];
+                        f2 = [];
+
+                        for jj = 1:NY
+                            a = SphereField.graspNextNumericLine(fid);
+                            lim = sscanf(a,'%d').';
+
+                            if numel(lim) < 2
+                                error('SphereField:InvalidGRASPFile','Invalid KLIMIT row specification.');
+                            end
+
+                            IS = lim(1);
+                            IN = lim(2);
+
+                            if IN == 0
+                                continue
+                            end
+
+                            IE = IS + IN - 1;
+
+                            if IS < 1 || IE > NX
+                                error('SphereField:InvalidGRASPFile','Invalid KLIMIT column range.');
+                            end
+
+                            A = textscan(fid,'%f %f %f %f',IN,'CollectOutput',true);
+
+                            A = A{1};
+
+                            if size(A,1) ~= IN
+                                error('SphereField:InvalidGRASPFile','Unexpected end of GRASP field data.');
+                            end
+
+                            xj = X(IS:IE).';
+                            yj = repmat(Y(jj),IN,1);
+
+                            x = [x;xj]; %#ok<AGROW>
+                            y = [y;yj]; %#ok<AGROW>
+
+                            f1 = [f1;A(:,1) + 1i*A(:,2)]; %#ok<AGROW>
+                            f2 = [f2;A(:,3) + 1i*A(:,4)]; %#ok<AGROW>
+                        end
+
+                    otherwise
+                        error('SphereField:UnsupportedGRASPKLIMIT','Unsupported KLIMIT = %d.',KLIMIT);
+                end
+
+                %----------------------------------------------------------
+                % SphereField uses one common angular sampling for all
+                % frequencies.
+                %----------------------------------------------------------
+                if ff == 1
+                    xRef = x;
+                    yRef = y;
+
+                    Np = numel(xRef);
+
+                    F1 = zeros(Np,NSET);
+                    F2 = zeros(Np,NSET);
+                else
+                    if numel(x) ~= numel(xRef) || any(abs(x - xRef) > 1e-12) || any(abs(y - yRef) > 1e-12)
+
+                        error('SphereField:GRASPFrequencyGridMismatch',['The GRASP angular sampling is not identical at ',...
+                            'all frequencies.']);
+                    end
+                end
+
+                F1(:,ff) = f1; %#ok<AGROW>
+                F2(:,ff) = f2; %#ok<AGROW>
+            end
+
+            %--------------------------------------------------------------
+            % Return raw GRASP representation
+            %--------------------------------------------------------------
+            G = struct();
+
+            G.x = xRef;
+            G.y = yRef;
+
+            G.F1 = F1;
+            G.F2 = F2;
+
+            G.freqHz = freqHz;
+
+            G.ICOMP = ICOMP;
+            G.NCOMP = NCOMP;
+            G.IGRID = IGRID;
+
+            G.metadata = struct();
+            G.metadata.fileName = pathName;
+            G.metadata.fileFormat = "grd";
+            G.metadata.originalFrequencyUnit = freqUnit;
+            G.metadata.KTYPE = KTYPE;
+        end
+
+        function G = readGRASPgrdHDF5(pathName)
+            %--------------------------------------------------------------
+            % Check object type
+            %--------------------------------------------------------------
+            gridClass = string(h5readatt(pathName,'/object','class'));
+
+            if gridClass ~= "spherical_grid"
+                error('SphereField:UnsupportedGRASPGrid','Only GRASP spherical_grid data can be read into SphereField.');
+            end
+
+            fieldType = string(h5readatt(pathName,'/object','field_type'));
+
+            if fieldType ~= "E field"
+                error('SphereField:UnsupportedGRASPFieldType','Only GRASP E-field data can be read into SphereField.');
+            end
+
+            fieldRegion = string(h5readatt(pathName,'/object','field_region'));
+
+            if fieldRegion ~= "far"
+                error('SphereField:GRASPNearField','Only GRASP far-field spherical grids are supported.');
+            end
+
+            ICOMP = double(h5readatt(pathName,'/object','icomp'));
+            IGRID = double(h5readatt(pathName,'/object','igrid'));
+
+            if ICOMP < 0
+                error('SphereField:GRASPPolarisationModification',['Negative ICOMP indicates a separate polarisation ',...
+                    'coordinate system, which cannot be reconstructed here.']);
+            end
+
+            %--------------------------------------------------------------
+            % Dimensions
+            %
+            % GRASP logical order:
+            % NF x NB x NY x NX x NCOMP
+            %--------------------------------------------------------------
+            dataInfo = h5info(pathName,'/data');
+            sz = dataInfo.Dataspace.Size;
+
+            % MATLAB reports HDF5 dimensions reversed.
+            sz = fliplr(sz);
+
+            NF = sz(1);
+            NB = sz(2);
+            NY = sz(3);
+            NX = sz(4);
+            NCOMP = sz(5);
+
+            if NB ~= 1
+                error('SphereField:GRASPMultipleBeams',['The HDF5 file contains %d beams. SphereField currently ',...
+                    'supports one beam at a time.'],NB);
+            end
+
+            if NCOMP ~= 2
+                error('SphereField:UnsupportedGRASPNCOMP','Expected NCOMP = 2 for a GRASP far field; found %d.',NCOMP);
+            end
+
+            %--------------------------------------------------------------
+            % Parameters
+            %--------------------------------------------------------------
+            paramList = h5read(pathName,'/parameterlist');
+
+            yName = char(paramList(3));
+            xName = char(paramList(4));
+
+            X = double(h5read(pathName,['/parameters/',xName]));
+            Y = double(h5read(pathName,['/parameters/',yName]));
+
+            X = X(:).';
+            Y = Y(:).';
+
+            if numel(X) ~= NX || numel(Y) ~= NY
+                error('SphereField:InvalidGRASPHDF5','HDF5 grid dimensions do not agree with parameter arrays.');
+            end
+
+            %--------------------------------------------------------------
+            % Beam-centre offset
+            %--------------------------------------------------------------
+            try
+                bc = double(h5readatt(pathName,'/object','beam_centres'));
+
+                if numel(bc) >= 2
+                    IX = bc(1);
+                    IY = bc(2);
+
+                    DX = 0;
+                    DY = 0;
+
+                    if NX > 1
+                        DX = X(2) - X(1);
+                    end
+                    if NY > 1
+                        DY = Y(2) - Y(1);
+                    end
+
+                    X = X + DX*IX;
+                    Y = Y + DY*IY;
+                end
+            catch
+                % Older files may not contain beam_centres.
+            end
+
+            %--------------------------------------------------------------
+            % Frequencies
+            %--------------------------------------------------------------
+            freq = double(h5read(pathName,'/parameters/frequency'));
+            freq = freq(:).';
+
+            freqUnit = string(h5readatt(pathName,'/parameters/frequency','unit'));
+
+            freqHz = EMField.convertFrequencyToHz(freq,freqUnit);
+            freqHz = freqHz(:).';
+
+            if numel(freqHz) ~= NF
+                error('SphereField:InvalidGRASPHDF5','Frequency dimension does not agree with frequency dataset.');
+            end
+
+            %--------------------------------------------------------------
+            % Read complex data.
+            %
+            % This is the permutation explicitly recommended by TICRA for
+            % MATLAB.
+            %--------------------------------------------------------------
+            rawData = h5read(pathName,'/data');
+
+            data = permute(rawData.r + 1i*rawData.i,[5 4 3 2 1]);
+
+            clear rawData
+
+            % data is now:
+            %
+            % NF x NB x NY x NX x NCOMP
+
+            D1 = data(:,1,:,:,1);
+            D2 = data(:,1,:,:,2);
+
+            % Convert to Np x Nf with MATLAB meshgrid ordering:
+            % NY x NX x NF -> (NY*NX) x NF.
+            D1 = permute(D1,[3 4 1 2]);
+            D2 = permute(D2,[3 4 1 2]);
+
+            F1 = reshape(D1,NY*NX,NF);
+            F2 = reshape(D2,NY*NX,NF);
+
+            [Xm,Ym] = meshgrid(X,Y);
+
+            x = Xm(:);
+            y = Ym(:);
+
+            %--------------------------------------------------------------
+            % Elliptically truncated HDF5 grids are rectangular on disk,
+            % with NaN at points which were not calculated.
+            %
+            % Remove those points and simply let SphereField regard the
+            % resulting angular data as scattered.
+            %--------------------------------------------------------------
+            valid = all(isfinite(real(F1)) & isfinite(imag(F1)),2);
+
+            if ICOMP ~= 9
+                valid = valid & all(isfinite(real(F2)) & isfinite(imag(F2)),2);
+            end
+
+            x = x(valid);
+            y = y(valid);
+            F1 = F1(valid,:);
+            F2 = F2(valid,:);
+
+            %--------------------------------------------------------------
+            % Output
+            %--------------------------------------------------------------
+            G = struct();
+
+            G.x = x;
+            G.y = y;
+
+            G.F1 = F1;
+            G.F2 = F2;
+
+            G.freqHz = freqHz;
+
+            G.ICOMP = ICOMP;
+            G.NCOMP = NCOMP;
+            G.IGRID = IGRID;
+
+            G.metadata = struct();
+            G.metadata.fileName = pathName;
+            G.metadata.fileFormat = "hdf5";
+            G.metadata.originalFrequencyUnit = freqUnit;
+            G.metadata.gridType = string(h5readatt(pathName,'/object','grid_type'));
+        end
+
+        function [ph,th] = graspGridToPhTh(x,y,IGRID)
+            x = x(:);
+            y = y(:);
+
+            switch IGRID
+                case 1
+                    % uv grid
+                    u = x;
+                    v = y;
+
+                    q = u.^2 + v.^2;
+
+                    if any(q > 1 + 1e-12)
+                        error('SphereField:InvalidGRASPUV',...
+                            'GRASP uv grid contains points outside the unit sphere.');
+                    end
+
+                    q = min(q,1);
+                    w = sqrt(1 - q);
+
+                    ph = mod(atan2d(v,u),360);
+                    th = atan2d(hypot(u,v),w);
+
+                case 4
+                    % Elevation over azimuth
+                    Az = x;
+                    El = y;
+
+                    rx = -sind(Az).*cosd(El);
+                    ry =  sind(El);
+                    rz =  cosd(Az).*cosd(El);
+
+                    [ph,th] = SphereField.graspDirCosToPhTh(rx,ry,rz);
+                    ph = mod(ph,360);
+
+                case 5
+                    % Elevation and azimuth
+                    %
+                    % Az = -theta*cos(phi)
+                    % El =  theta*sin(phi)
+                    Az = x;
+                    El = y;
+
+                    th = hypot(Az,El);
+                    ph = mod(atan2d(El,-Az),360);
+
+                case 6
+                    % Azimuth over elevation
+                    Az = x;
+                    El = y;
+
+                    rx = -sind(Az);
+                    ry =  cosd(Az).*sind(El);
+                    rz =  cosd(Az).*cosd(El);
+
+                    [ph,th] = SphereField.graspDirCosToPhTh(rx,ry,rz);
+                    ph = mod(ph,360);
+
+                case 7
+                    % Conventional theta-phi grid:
+                    % (X,Y) = (phi,theta)
+                    %
+                    % IMPORTANT: preserve the phi coordinates exactly.
+                    % A structured grid may explicitly contain both 0 and
+                    % 360 degree cuts.
+                    ph = x;
+                    th = y;
+
+                case 9
+                    % Azimuth over elevation, EDX
+                    Az = x;
+                    El = y;
+
+                    rx = sind(Az).*cosd(El);
+                    ry = sind(El);
+                    rz = cosd(Az).*cosd(El);
+
+                    [ph,th] = SphereField.graspDirCosToPhTh(rx,ry,rz);
+                    ph = mod(ph,360);
+
+                case 10
+                    % Elevation over azimuth, EDX
+                    Az = x;
+                    El = y;
+
+                    rx = sind(Az);
+                    ry = cosd(Az).*sind(El);
+                    rz = cosd(Az).*cosd(El);
+
+                    [ph,th] = SphereField.graspDirCosToPhTh(rx,ry,rz);
+                    ph = mod(ph,360);
+
+                otherwise
+                    error('SphereField:UnsupportedGRASPGrid',...
+                        'GRASP IGRID = %d is not supported.',IGRID);
+            end
+
+            % Clean up numerical -0 values without changing periodic endpoints.
+            ph(abs(ph) < 1e-12) = 0;
+            th(abs(th) < 1e-12) = 0;
+        end
+
+        function [ph,th] = graspDirCosToPhTh(rx,ry,rz)
+            rn = sqrt(rx.^2 + ry.^2 + rz.^2);
+
+            rx = rx./rn;
+            ry = ry./rn;
+            rz = rz./rn;
+
+            ph = atan2d(ry,rx);
+            th = atan2d(hypot(rx,ry),rz);
+        end
+
+        function [Eph,Eth] = graspFieldToSpherical(ph,F1,F2,ICOMP)
+            PH = repmat(ph(:),1,size(F1,2));
+
+            switch ICOMP
+                case 1
+                    % F1 = Etheta
+                    % F2 = Ephi
+                    Eth = F1;
+                    Eph = F2;
+                case 2
+                    % F1 = Erhc
+                    % F2 = Elhc
+                    %
+                    % SphereField circular convention:
+                    %
+                    % ER = (ELx + 1i*ELy)/sqrt(2)
+                    % EL = (ELx - 1i*ELy)/sqrt(2)
+                    %
+                    % Therefore:
+                    ELx = (F1 + F2)/sqrt(2);
+                    ELy = 1i*(F2 - F1)/sqrt(2);
+
+                    % Ludwig-3 -> spherical.
+                    Eth = cosd(PH).*ELx + sind(PH).*ELy;
+                    Eph = -sind(PH).*ELx + cosd(PH).*ELy;
+                case 3
+                    % F1 = ELx
+                    % F2 = ELy
+                    ELx = F1;
+                    ELy = F2;
+
+                    Eth = cosd(PH).*ELx + sind(PH).*ELy;
+                    Eph = -sind(PH).*ELx + cosd(PH).*ELy;
+                otherwise
+                    error('SphereField:UnsupportedGRASPComponents','GRASP ICOMP = %d is not a supported vector field.',ICOMP);
+            end
+        end
+
+        function U = graspPowerToU(F1)
+            eta0 = 376.730313668;
+
+            if any(abs(imag(F1)) > 1e-12*max(1,max(abs(real(F1)),[],'all')),'all')
+                error('SphereField:InvalidGRASPPower',...
+                    'GRASP ICOMP = 9 F1 should be real.');
+            end
+
+            Emag = real(F1);
+
+            if any(Emag < 0,'all')
+                error('SphereField:InvalidGRASPPower',...
+                    'GRASP ICOMP = 9 field magnitude contains negative values.');
+            end
+
+            U = Emag.^2/(2*eta0);
+        end
+
+        function a = graspNextNumericLine(fid)
+            while true
+                a = fgetl(fid);
+
+                if ~ischar(a)
+                    error('SphereField:InvalidGRASPFile','Unexpected end of GRASP file.');
+                end
+
+                if ~isempty(strtrim(a))
+                    return
+                end
+            end
         end
 
     end

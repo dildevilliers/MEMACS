@@ -3286,3 +3286,156 @@ function testPlotPrincipalCutsSelectedComponent(testCase)
     verifySize(testCase,h,[3 1]);
     verifyTrue(testCase,all(isgraphics(h)));
 end
+
+function testPowerPatternStoredU(testCase)
+    ph = [0;90;180];
+    th = [30;30;30];
+    U = [1;2;4];
+
+    SF = SphereField(ph,th,[],[],1e9,PowerPattern=U);
+
+    D = SF.getData(Quantity="U");
+
+    testCase.verifyEqual(D.values,U,'AbsTol',1e-12);
+    testCase.verifyTrue(SF.isPowerPattern);
+    testCase.verifyEqual(SF.powerPattern,U,'AbsTol',1e-12);
+end
+
+function testPowerPatternBlocksGetField(testCase)
+    SF = SphereField([0;90],[30;30],[],[],1e9,...
+        PowerPattern=[1;2]);
+
+    testCase.verifyError(@() SF.getField(),...
+        'SphereField:PowerPatternVectorOperation');
+end
+
+function testPowerPatternBlocksCartesianField(testCase)
+    SF = SphereField([0;90],[30;30],[],[],1e9,...
+        PowerPattern=[1;2]);
+
+    testCase.verifyError(@() SF.getCartesianPattern(),...
+        'SphereField:PowerPatternVectorOperation');
+end
+
+function testPowerPatternIntegratedIsotropic(testCase)
+    ph = 0:5:360;
+    th = 0:5:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    U0 = 2;
+    U = U0*ones(size(PH));
+
+    SF = SphereField(PH(:),TH(:),[],[],1e9,...
+        PowerPattern=U(:));
+
+    P = SF.integratePower();
+
+    testCase.verifyEqual(P,4*pi*U0,'RelTol',2e-3);
+end
+
+function testPowerPatternDirectivityIsotropic(testCase)
+    ph = 0:5:360;
+    th = 0:5:180;
+    [PH,TH] = meshgrid(ph,th);
+
+    U = 3*ones(size(PH));
+
+    SF = SphereField(PH(:),TH(:),[],[],1e9,...
+        PowerPattern=U(:));
+
+    D = SF.getData(Quantity="directivity",...
+        PowerSource="integrated");
+
+    testCase.verifyEqual(D.values,...
+        ones(size(D.values)),...
+        'RelTol',2e-3);
+end
+
+function testReadGRASPPhThCircular(testCase)
+    p = fileparts(mfilename("fullpath"));
+    pathName = [p,'\..\..\data\SimPatterns\GRASPgrd\FF_phth_circular_pos180.grd'];
+
+    SF = SphereField.readGRASPgrd(pathName);
+
+    % Basic dimensions
+    testCase.verifyEqual(SF.Nf,11);
+    testCase.verifyEqual(SF.freqHz,...
+        (1.00:0.05:1.50)*1e9,...
+        'AbsTol',1);
+
+    % Structured PhTh grid
+    testCase.verifyTrue(SF.isStructured);
+
+    G = SF.getGridView("stored");
+
+    testCase.verifyEqual(G.phVec,0:10:360,'AbsTol',1e-12);
+    testCase.verifyEqual(G.thVec,0:5:180,'AbsTol',1e-12);
+
+    testCase.verifySize(G.Eth,[37 37 11]);
+    testCase.verifySize(G.Eph,[37 37 11]);
+end
+
+function testReadGRASPPeriodicPhi(testCase)
+    p = fileparts(mfilename("fullpath"));
+    pathName = [p,'\..\..\data\SimPatterns\GRASPgrd\FF_phth_circular_pos180.grd'];
+
+    SF = SphereField.readGRASPgrd(pathName);
+    G = SF.getGridView("stored");
+
+    testCase.verifyEqual(G.Eth(:,1,:),G.Eth(:,end,:),...
+        'RelTol',1e-10,'AbsTol',1e-12);
+
+    testCase.verifyEqual(G.Eph(:,1,:),G.Eph(:,end,:),...
+        'RelTol',1e-10,'AbsTol',1e-12);
+end
+
+function testReadGRASPAgainstFarField(testCase)
+    p = fileparts(mfilename("fullpath"));
+    pathName = [p,'\..\..\data\SimPatterns\GRASPgrd\FF_phth_circular_pos180.grd'];
+
+    SF = SphereField.readGRASPgrd(pathName);
+    FF = FarField.readGRASPgrd(char(pathName));
+
+    % Frequencies
+    testCase.verifyEqual(SF.freqHz,FF.freqHz,...
+        'RelTol',1e-12);
+
+    % Compare canonical spherical fields.
+    %
+    % Adjust this part depending on exactly how FarField exposes
+    % spherical linear components.
+    FFs = FF.coor2spherical(true);
+    FFs = FFs.pol2linear;
+
+    testCase.verifyEqual(SF.th,rad2deg(FFs.y),...
+        'AbsTol',1e-10);
+
+    testCase.verifyEqual(SF.ph,rad2deg(FFs.x),...
+        'AbsTol',1e-10);
+
+    testCase.verifyEqual(SF.Eth,FFs.E1,...
+        'RelTol',1e-10,'AbsTol',1e-12);
+
+    testCase.verifyEqual(SF.Eph,FFs.E2,...
+        'RelTol',1e-10,'AbsTol',1e-12);
+end
+
+function testReadGRASPPowerInvariant(testCase)
+    p = fileparts(mfilename("fullpath"));
+    pathName = [p,'\..\..\data\SimPatterns\GRASPgrd\FF_phth_circular_pos180.grd'];
+
+    SF = SphereField.readGRASPgrd(pathName);
+    FF = FarField.readGRASPgrd(char(pathName));
+
+    Usf = SF.getU;
+
+    FFs = FF.coor2spherical(true);
+    FFs = FFs.pol2linear;
+
+    Uff = (abs(FFs.E1).^2 + abs(FFs.E2).^2)/(2*FF.eta0);
+
+    testCase.verifyEqual(Usf,Uff,...
+        'RelTol',1e-9,'AbsTol',1e-10);
+end
+
+

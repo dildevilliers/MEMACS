@@ -83,9 +83,7 @@ classdef (Abstract) EMField
             %       Provenance = provenance)
 
             arguments
-                freqHz double {mustBeVector, ...
-                               mustBeFinite, ...
-                               mustBePositive}
+                freqHz double {mustBeVector,mustBeFinite,mustBePositive}
 
                 options.Metadata struct = struct()
                 options.Provenance struct = struct()
@@ -101,16 +99,13 @@ classdef (Abstract) EMField
             value = numel(obj.freqHz);
         end
 
-
         function value = get.wavelength(obj)
             value = obj.c0 ./ obj.freqHz;
         end
 
-
         function value = get.wavenumber(obj)
             value = 2*pi*obj.freqHz ./ obj.c0;
         end
-
 
         function idx = frequencyIndex(obj, frequencyHz, options)
             %FREQUENCYINDEX Find the index of a stored frequency.
@@ -166,7 +161,6 @@ classdef (Abstract) EMField
             end
         end
 
-
         function idx = nearestFrequencyIndex(obj, frequencyHz)
             %NEARESTFREQUENCYINDEX Return nearest stored frequency index.
             %
@@ -186,12 +180,10 @@ classdef (Abstract) EMField
             end
         end
 
-
         function freqHz = getFrequency(obj, idx)
             %GETFREQUENCY Return stored frequency/frequencies by index.
 
             idx = obj.validateFrequencyIndex(idx);
-
             freqHz = obj.freqHz(idx);
         end
 
@@ -226,7 +218,6 @@ classdef (Abstract) EMField
             idx = reshape(idx, 1, []);
         end
 
-
         function obj = setFrequency(obj, freqHz)
             %SETFREQUENCY Replace the canonical frequency vector.
             %
@@ -247,6 +238,40 @@ classdef (Abstract) EMField
             obj.freqHz = reshape(freqHz, 1, []);
         end
 
+    end
+
+    methods (Static)
+        function freqHz = convertFrequencyToHz(freq,freqUnit)
+            freqHz = freq*EMField.frequencyUnitScale(freqUnit);
+        end
+
+        function freq = convertFrequencyFromHz(freqHz,freqUnit)
+            freq = freqHz/EMField.frequencyUnitScale(freqUnit);
+        end
+    end
+
+    methods (Static,Access=private)
+        function scale = frequencyUnitScale(freqUnit)
+            arguments
+                freqUnit (1,1) string
+            end
+
+            switch lower(strtrim(freqUnit))
+                case "hz"
+                    scale = 1;
+                case "khz"
+                    scale = 1e3;
+                case "mhz"
+                    scale = 1e6;
+                case "ghz"
+                    scale = 1e9;
+                case "thz"
+                    scale = 1e12;
+                otherwise
+                    error('EMField:UnsupportedFrequencyUnit',...
+                        'Unsupported frequency unit "%s".',freqUnit);
+            end
+        end
     end
 
 end
