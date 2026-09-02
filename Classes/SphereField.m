@@ -96,6 +96,8 @@ classdef SphereField < EMField
         % -1   stored data lie on negative side
         % 0   no symmetry on this plane
         symmetrySide struct = struct("YZ",0,"XZ",0,"XY",0)
+
+        isPowerPattern_ (1,1) logical = false
     end
 
 
@@ -122,6 +124,9 @@ classdef SphereField < EMField
         numberOfSymmetries
         hasFullSphereSymmetryCoverage
         representsFullSphere
+
+        isPowerPattern
+        powerPattern
     end
 
 
@@ -161,6 +166,7 @@ classdef SphereField < EMField
                 freqHz double {mustBeVector, mustBeFinite, mustBePositive} = 1e9  % Dummy
 
                 options.Er double = []
+                options.PowerPattern double = []
 
                 options.r (1,1) double ...
                     {mustBeFinite, mustBePositive} = 1
@@ -211,6 +217,20 @@ classdef SphereField < EMField
 
             end
 
+            % Check input format
+            hasVectorField = ~isempty(Eph) || ~isempty(Eth) || ~isempty(options.Er);
+            hasPowerField = ~isempty(options.PowerPattern);
+
+            if hasVectorField && hasPowerField
+                error('SphereField:ConflictingFieldData',...
+                    'Specify either vector E-field data or PowerPattern, not both.');
+            end
+
+            if xor(isempty(Eph),isempty(Eth))
+                error('SphereField:IncompleteVectorField',...
+                    'Eph and Eth must either both be supplied or both be empty.');
+            end
+
             % Initialise superclass.
             obj@EMField( ...
                 freqHz, ...
@@ -243,17 +263,30 @@ classdef SphereField < EMField
 
             Np_ = numel(obj.ph);
 
-            obj.Eph = obj.normaliseFieldArray( ...
-                Eph, Np_, obj.Nf, 'Eph');
+            if ~isempty(options.PowerPattern)
+                if ~isempty(Eph) || ~isempty(Eth) || ~isempty(options.Er)
+                    error('SphereField:ConflictingFieldData',...
+                        'Specify either Eph/Eth/Er or PowerPattern, not both.');
+                end
 
-            obj.Eth = obj.normaliseFieldArray( ...
-                Eth, Np_, obj.Nf, 'Eth');
+                P = options.PowerPattern;
 
+                if ~isreal(P) || any(~isfinite(P),'all') || any(P < 0,'all')
+                    error('SphereField:InvalidPowerPattern',...
+                        'PowerPattern must be real, finite and nonnegative.');
+                end
 
+                % Nominal vector representation of radiation intensity U.
+                Eth = sqrt(2*obj.eta0*P);
+                Eph = zeros(size(Eth));
+
+                obj.isPowerPattern_ = true;
+            end
+
+            obj.Eph = obj.normaliseFieldArray(Eph, Np_, obj.Nf, 'Eph');
+            obj.Eth = obj.normaliseFieldArray(Eth, Np_, obj.Nf, 'Eth');
             if ~isempty(options.Er)
-
-                obj.Er = obj.normaliseFieldArray( ...
-                    options.Er, Np_, obj.Nf, 'Er');
+                obj.Er = obj.normaliseFieldArray(options.Er, Np_, obj.Nf, 'Er');
             end
 
             % Symmetry
@@ -287,8 +320,11 @@ classdef SphereField < EMField
                         'Expected %d values, received %d.'],obj.Nf, numel(options.etaRad));
                 end
                 etaRad = reshape(options.etaRad,1,[]);
-                if any(~isfinite(etaRad)) || any(etaRad < 0) || any(etaRad > 1)
-                    warning('SphereField:InvalidEtaRad','etaRad must contain finite values between 0 and 1.');
+                if any(etaRad > 1)
+                    warning('SphereField:InvalidEtaRad','etaRad is larger than 1.');
+                end
+                if any(~isfinite(etaRad)) || any(etaRad < 0) 
+                    error('SphereField:InvalidEtaRad','etaRad must contain finite positive values.');
                 end
                 obj.etaRad = etaRad;
             end
@@ -379,6 +415,19 @@ classdef SphereField < EMField
         function tf = get.representsFullSphere(obj)
             tf = obj.isFullSphere || obj.hasFullSphereSymmetryCoverage;
         end
+
+        function tf = get.isPowerPattern(obj)
+            tf = obj.isPowerPattern_;
+        end
+
+        function U = get.powerPattern(obj)
+            if obj.isPowerPattern
+                U = obj.getUFromPattern(obj.Eph,obj.Eth);
+            else
+                U = [];
+            end
+        end
+
 
         %% Actual public methods
         function [Eph, Eth, Er] = getEfield(obj)
@@ -763,7 +812,6 @@ classdef SphereField < EMField
                 options.Quantity (1,1) string {mustBeMember(options.Quantity,["complex","magnitude","phase","real","imag","W","U","directivity","gain"])} = "complex"
                 options.PowerSource (1,1) string {mustBeMember(options.PowerSource,["auto","stored","integrated"])} = "auto"
                 options.FrequencyIndex double {mustBeVector,mustBeFinite} = 1
-                % options.Component (1,1) string = "all"
                 options.ComponentIndex (1,1) double {mustBeInteger,mustBeNonnegative} = 0
                 options.Scale (1,1) string {mustBeMember(options.Scale,["linear","dB10","dB20"])} = "linear"
                 options.Normalize (1,1) string {mustBeMember(options.Normalize,["none","max","specified"])} = "none"
@@ -820,6 +868,12 @@ classdef SphereField < EMField
             end
 
             fieldQuantities = ["complex","magnitude","phase","real","imag"];
+
+            if obj.isPowerPattern && any(options.Quantity == fieldQuantities)
+                error('SphereField:PowerPatternVectorOperation',['Vector field quantity "%s" is not available for a ',...
+                    'power-pattern SphereField. Use W, U, directivity or gain.'],...
+                    options.Quantity);
+            end
 
             if any(options.Quantity == fieldQuantities)
                 if G.isStructured
