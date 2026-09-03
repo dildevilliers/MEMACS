@@ -3438,4 +3438,176 @@ function testReadGRASPPowerInvariant(testCase)
         'RelTol',1e-9,'AbsTol',1e-10);
 end
 
+function testNativeDirCosGridDetected(testCase)
 
+    uVec = -0.2:0.1:0.2;
+    vVec = -0.15:0.05:0.15;
+
+    [U,V] = meshgrid(uVec,vVec);
+    W = sqrt(1 - U.^2 - V.^2);
+
+    ph = atan2d(V,U);
+    th = atan2d(hypot(U,V),W);
+
+    ph = ph(:);
+    th = th(:);
+
+    Eth = ones(size(ph));
+    Eph = zeros(size(ph));
+
+    SF = SphereField(ph,th,Eph,Eth,1e9,...
+        NativeGrid="DirCos");
+
+    testCase.verifyTrue(SF.hasNativeStructuredGrid);
+end
+
+function testNativeAzElGridDetected(testCase)
+
+    azVec = -40:10:40;
+    elVec = -30:10:30;
+
+    [AZ,EL] = meshgrid(azVec,elVec);
+
+    u = sind(AZ).*cosd(EL);
+    v = sind(EL);
+    w = cosd(AZ).*cosd(EL);
+
+    ph = atan2d(v,u);
+    th = atan2d(hypot(u,v),w);
+
+    ph = ph(:);
+    th = th(:);
+
+    Eth = ones(size(ph));
+    Eph = zeros(size(ph));
+
+    SF = SphereField(ph,th,Eph,Eth,1e9,...
+        NativeGrid="AzEl");
+
+    testCase.verifyTrue(SF.hasNativeStructuredGrid);
+end
+
+function testNativeAzElPoleWarning(testCase)
+
+    azVec = -180:30:180;
+    elVec = -90:30:90;
+
+    [AZ,EL] = meshgrid(azVec,elVec);
+
+    u = sind(AZ).*cosd(EL);
+    v = sind(EL);
+    w = cosd(AZ).*cosd(EL);
+
+    ph = atan2d(v,u);
+    th = atan2d(hypot(u,v),w);
+
+    ph = ph(:);
+    th = th(:);
+
+    Eth = ones(size(ph));
+    Eph = zeros(size(ph));
+
+    lastwarn("");
+    SF = SphereField(ph,th,Eph,Eth,1e9,...
+        NativeGrid="AzEl");
+
+    [~,warnID] = lastwarn;
+
+    testCase.verifyEqual(warnID,...
+        'SphereField:NativeGridPoleAmbiguity');
+
+    testCase.verifyFalse(SF.hasNativeStructuredGrid);
+end
+
+function testNativeGridUnstructuredFallback(testCase)
+
+    ph = [0;17;43;91;137];
+    th = [10;24;39;61;83];
+
+    Eth = ones(size(ph));
+    Eph = zeros(size(ph));
+
+    lastwarn("");
+    SF = SphereField(ph,th,Eph,Eth,1e9,...
+        NativeGrid="DirCos");
+
+    [~,warnID] = lastwarn;
+
+    testCase.verifyEqual(warnID,...
+        'SphereField:NativeGridNotStructured');
+
+    testCase.verifyFalse(SF.hasNativeStructuredGrid);
+end
+
+function testNoNativeGridByDefault(testCase)
+
+    phVec = 0:30:330;
+    thVec = 0:15:180;
+
+    [PH,TH] = meshgrid(phVec,thVec);
+
+    Eth = sind(TH(:));
+    Eph = zeros(size(Eth));
+
+    SF = SphereField(PH(:),TH(:),Eph,Eth,1e9);
+
+    testCase.verifyTrue(SF.isStructured);
+    testCase.verifyFalse(SF.hasNativeStructuredGrid);
+end
+
+function testNativeAzElGridWithPolesAndAxes(testCase)
+
+    azVec = -180:30:180;
+    elVec = -90:30:90;
+
+    [AZ,EL] = meshgrid(azVec,elVec);
+
+    u = sind(AZ).*cosd(EL);
+    v = sind(EL);
+    w = cosd(AZ).*cosd(EL);
+
+    ph = atan2d(v,u);
+    th = atan2d(hypot(u,v),w);
+
+    Eth = ones(numel(ph),1);
+    Eph = zeros(numel(ph),1);
+
+    SF = SphereField(ph(:),th(:),Eph,Eth,1e9,...
+        NativeGrid="AzEl",...
+        NativeXVec=azVec,...
+        NativeYVec=elVec);
+
+    testCase.verifyTrue(SF.hasNativeStructuredGrid);
+    testCase.verifyEqual(SF.nativeGridInfo.coordinates,"AzEl");
+    testCase.verifyEqual(SF.nativeGridInfo.xVec,azVec);
+    testCase.verifyEqual(SF.nativeGridInfo.yVec,elVec);
+end
+
+function testNativeGridAxesMismatch(testCase)
+
+    azVec = -40:10:40;
+    elVec = -30:10:30;
+
+    [AZ,EL] = meshgrid(azVec,elVec);
+
+    u = sind(AZ).*cosd(EL);
+    v = sind(EL);
+    w = cosd(AZ).*cosd(EL);
+
+    ph = atan2d(v,u);
+    th = atan2d(hypot(u,v),w);
+
+    Eth = ones(numel(ph),1);
+    Eph = zeros(numel(ph),1);
+
+    badAz = azVec;
+    badAz(3) = badAz(3) + 1;
+
+    f = @() SphereField(ph(:),th(:),Eph,Eth,1e9,...
+        NativeGrid="AzEl",...
+        NativeXVec=badAz,...
+        NativeYVec=elVec);
+
+    testCase.verifyError(f,...
+        'SphereField:NativeGridDirectionMismatch');
+end

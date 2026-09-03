@@ -61,7 +61,6 @@ classdef SphereField < EMField
 
     end
 
-
     properties (SetAccess = private)
 
         % Information describing the structured Ph-Th sampling grid.
@@ -89,6 +88,7 @@ classdef SphereField < EMField
         %
         % where rows correspond to theta and columns to phi.
         gridInfo struct = struct()
+        nativeGridInfo struct = struct()
 
         symmetry struct = struct("YZ","none","XZ","none","XY","none")
         % symmetrySide meaning:
@@ -102,7 +102,6 @@ classdef SphereField < EMField
         isPowerPattern_ (1,1) logical = false
     end
 
-
     properties (Dependent, SetAccess = private)
 
         Np
@@ -110,6 +109,7 @@ classdef SphereField < EMField
 
         % Grid information
         isStructured
+        hasNativeStructuredGrid
         Nph
         Nth
         coversFullPhi
@@ -130,7 +130,6 @@ classdef SphereField < EMField
         isPowerPattern
         powerPattern
     end
-
 
     methods
 
@@ -180,6 +179,12 @@ classdef SphereField < EMField
                 options.Provenance struct = struct()
 
                 options.Symmetry struct = struct()
+
+                options.NativeGrid (1,1) string {mustBeMember(options.NativeGrid,...
+                    ["","PhTh","AzEl","ElAz","DirCos","TrueView","ArcSin"])} = ""
+                options.NativeXVec double = []
+                options.NativeYVec double = []
+                options.NativeGridIndex double = []
             end
 
             % ---------------------------------------------------------
@@ -201,22 +206,13 @@ classdef SphereField < EMField
                 Eph = zeros(size(Eth));
 
                 freqHz = 1e9;
-
                 options.r = 1;
+                options.Metadata = struct('name', "Default SphereField",'description', "Synthetic test pattern");
 
-                options.Metadata = struct( ...
-                    'name', "Default SphereField", ...
-                    'description', "Synthetic test pattern");
-
-                options.Provenance = struct( ...
-                    'source', "SphereField default constructor");
+                options.Provenance = struct('source', "SphereField default constructor");
             elseif nargin < 5
-
-                error( ...
-                    'SphereField:NotEnoughInputs', ...
-                    ['SphereField requires either no inputs, or the five ' ...
+                error('SphereField:NotEnoughInputs',['SphereField requires either no inputs, or the five ' ...
                     'canonical inputs ph, th, Eph, Eth and freqHz.']);
-
             end
 
             % Check input format
@@ -234,10 +230,7 @@ classdef SphereField < EMField
             end
 
             % Initialise superclass.
-            obj@EMField( ...
-                freqHz, ...
-                Metadata = options.Metadata, ...
-                Provenance = options.Provenance);
+            obj@EMField(freqHz,Metadata = options.Metadata,Provenance = options.Provenance);
 
 
             % ---------------------------------------------------------
@@ -245,24 +238,64 @@ classdef SphereField < EMField
             % ---------------------------------------------------------
 
             if numel(ph) ~= numel(th)
-                error( ...
-                    'SphereField:CoordinateSizeMismatch', ...
-                    'ph and th must contain the same number of points.');
+                error('SphereField:CoordinateSizeMismatch','ph and th must contain the same number of points.');
             end
 
             obj.ph = ph(:);
             obj.th = th(:);
 
-            % ---------------------------------------------------------
-            % Detect structured grid
-            % ---------------------------------------------------------
-
             obj.gridInfo = obj.detectStructuredGrid();
 
-            % ---------------------------------------------------------
-            % Field components
-            % ---------------------------------------------------------
+            % Native structured-grid information
+            if xor(isempty(options.NativeXVec),isempty(options.NativeYVec))
+                error('SphereField:IncompleteNativeGridAxes',...
+                    'NativeXVec and NativeYVec must either both be supplied or both be empty.');
+            end
 
+            if options.NativeGrid == "" && ...
+                    (~isempty(options.NativeXVec) || ~isempty(options.NativeYVec))
+                error('SphereField:NativeGridAxesWithoutGrid',...
+                    'NativeXVec and NativeYVec require NativeGrid to be specified.');
+            end
+
+            if ~isempty(options.NativeGridIndex) && isempty(options.NativeXVec)
+                error('SphereField:NativeGridIndexWithoutAxes',...
+                    'NativeGridIndex requires NativeXVec and NativeYVec.');
+            end
+
+            obj.nativeGridInfo = struct("isStructured",false,"coordinates","","xVec",[],"yVec",[],"Nx",[],"Ny",[],"gridIndex",[]);
+
+            if options.NativeGrid ~= ""
+                if isempty(options.NativeXVec)
+                    [info,status] = obj.detectNativeGrid(options.NativeGrid);
+                    switch status
+                        case "structured"
+                            obj.nativeGridInfo = info;
+
+                        case "poleAmbiguity"
+                            warning('SphereField:NativeGridPoleAmbiguity',...
+                                ['The samples appear to use the %s coordinate system, ',...
+                                'but the grid contains a coordinate pole where the native ',...
+                                'coordinate labels cannot be recovered uniquely. Supply ',...
+                                'NativeXVec and NativeYVec to preserve the native ',...
+                                'structured grid.'],options.NativeGrid);
+
+                        case "unstructured"
+                            warning('SphereField:NativeGridNotStructured',...
+                                ['The samples could not be recovered as a structured %s ',...
+                                'grid. They will be retained as canonical samples without ',...
+                                'native structured-grid information.'],options.NativeGrid);
+                    end
+                else
+                    obj.nativeGridInfo = obj.buildNativeGridFromAxes(...
+                        options.NativeGrid,...
+                        options.NativeXVec,...
+                        options.NativeYVec,...
+                        options.NativeGridIndex);
+                end
+            end
+
+            % Handle field inputs
             Np_ = numel(obj.ph);
 
             if ~isempty(options.PowerPattern)
@@ -296,15 +329,7 @@ classdef SphereField < EMField
             obj.symmetrySide=obj.validateSymmetryDomain();
             obj.validateSymmetryBoundary();
 
-            % ---------------------------------------------------------
-            % Radius
-            % ---------------------------------------------------------
-
             obj.r = options.r;
-
-            % ---------------------------------------------------------
-            % Radiated power
-            % ---------------------------------------------------------
 
             if ~isempty(options.Prad)
                 if numel(options.Prad) ~= obj.Nf
@@ -330,6 +355,8 @@ classdef SphereField < EMField
                 end
                 obj.etaRad = etaRad;
             end
+
+            
 
             % % ---------------------------------------------------------
             % % Detect structured grid
@@ -430,6 +457,9 @@ classdef SphereField < EMField
             U = obj.getUFromPattern(obj.Eph,obj.Eth);
         end
 
+        function tf = get.hasNativeStructuredGrid(obj)
+            tf = obj.nativeGridInfo.isStructured;
+        end
 
         %% Actual public methods
         function [Eph, Eth, Er] = getEfield(obj)
@@ -1307,6 +1337,9 @@ classdef SphereField < EMField
             % This is primarily a diagnostic method for visually checking grid topology,
             % periodic extensions, full-sphere representations, and interpolation padding.
             %
+            % For unstructured SphereField data, the stored sampling points are plotted
+            % directly. Derived grid views require a structured grid.
+            %
             % viewType may be:
             %   "stored"        - exact stored grid
             %   "singlePeriod"  - one complete phi period
@@ -1326,17 +1359,6 @@ classdef SphereField < EMField
             %   MarkerSize     = marker size
             %   Axes           = axes into which the grid is plotted
             %
-            % Examples:
-            %   obj.plotGrid()
-            %   obj.plotGrid("fullSphere",PhiRange="symmetric",ThetaRange="360")
-            %
-            %   G=obj.getGridView("interpolation",PaddingSamples=3);
-            %   obj.plotGrid(G,Marker="x",Color="r")
-            %
-            %   ax=axes; hold(ax,"on")
-            %   obj.plotGrid("stored",Axes=ax,Marker="o",Color="b")
-            %   obj.plotGrid("interpolation",Axes=ax,Marker="x",Color="r")
-            %
             % No interpolation, resampling, or modification of SphereField is performed.
 
             arguments
@@ -1352,34 +1374,70 @@ classdef SphereField < EMField
                 options.Axes = []
             end
 
-            if isstruct(viewType)
-                G=viewType;
-            else
-                viewType=string(viewType);
-                mustBeMember(viewType,["stored","singlePeriod","fullSphere","interpolation"]);
-                G=obj.getGridView(viewType,PhiRange=options.PhiRange,ThetaRange=options.ThetaRange,PaddingSamples=options.PaddingSamples);
-            end
+            isStructuredView = true;
 
-            [PH,TH]=meshgrid(G.phVec,G.thVec);
+            if isstruct(viewType)
+                G = viewType;
+
+                % A normal getGridView struct contains phVec and thVec.
+                % Allow a scattered struct containing ph and th as well.
+                if isfield(G,"phVec") && isfield(G,"thVec")
+                    [PH,TH] = meshgrid(G.phVec,G.thVec);
+                elseif isfield(G,"ph") && isfield(G,"th")
+                    PH = G.ph(:);
+                    TH = G.th(:);
+                    isStructuredView = false;
+                else
+                    error('SphereField:InvalidGridView',...
+                        'Grid struct must contain phVec/thVec or ph/th.');
+                end
+
+            else
+                viewType = string(viewType);
+                mustBeMember(viewType,["stored","singlePeriod","fullSphere","interpolation"]);
+
+                if viewType == "stored" && ~obj.isStructured
+                    % Unstructured canonical SphereField samples.
+                    PH = obj.ph(:);
+                    TH = obj.th(:);
+                    isStructuredView = false;
+                else
+                    G = obj.getGridView(viewType,...
+                        PhiRange=options.PhiRange,...
+                        ThetaRange=options.ThetaRange,...
+                        PaddingSamples=options.PaddingSamples);
+
+                    [PH,TH] = meshgrid(G.phVec,G.thVec);
+                end
+            end
 
             if isempty(options.Axes)
                 figure;
-                ax=axes;
+                ax = axes;
             else
-                ax=options.Axes;
+                ax = options.Axes;
             end
 
-            holdState=ishold(ax);
+            holdState = ishold(ax);
             hold(ax,"on");
 
-            plotArgs={"Marker",options.Marker,"MarkerSize",options.MarkerSize};
-            if ~isempty(options.Color), plotArgs=[plotArgs,{"Color",options.Color}]; end
+            plotArgs = {"Marker",options.Marker,"MarkerSize",options.MarkerSize};
+            if ~isempty(options.Color)
+                plotArgs = [plotArgs,{"Color",options.Color}];
+            end
 
-            if options.ShowLines
-                h(1)=plot(ax,PH,TH,"-",plotArgs{:});
-                h(2)=plot(ax,PH.',TH.',"-",plotArgs{:});
+            if options.ShowLines && isStructuredView
+                h(1) = plot(ax,PH,TH,"-",plotArgs{:});
+                h(2) = plot(ax,PH.',TH.',"-",plotArgs{:});
             else
-                h=plot(ax,PH(:),TH(:),"LineStyle","none",plotArgs{:});
+                if options.ShowLines && ~isStructuredView
+                    warning('SphereField:UnstructuredGridLines',...
+                        ['Grid lines cannot be inferred uniquely for unstructured ',...
+                        'sampling. Plotting sampling points instead.']);
+                end
+
+                h = plot(ax,PH(:),TH(:),...
+                    "LineStyle","none",plotArgs{:});
             end
 
             xlabel(ax,"\phi (deg)");
@@ -1387,7 +1445,9 @@ classdef SphereField < EMField
             grid(ax,"on");
             axis(ax,"tight");
 
-            if ~holdState, hold(ax,"off"); end
+            if ~holdState
+                hold(ax,"off");
+            end
         end
 
         function h = plot(obj,options)
@@ -1919,7 +1979,6 @@ classdef SphereField < EMField
         end
     end
 
-
     methods (Access = private)
 
         function assertVectorField(obj,methodName)
@@ -2109,6 +2168,194 @@ classdef SphereField < EMField
             end
         end
 
+        function [info,status] = detectNativeGrid(obj,coordinates)
+            %DETECTNATIVEGRID Try to recover a structured native coordinate grid.
+            %
+            % status:
+            %   "structured"    - native tensor grid recovered
+            %   "poleAmbiguity" - angular grid contains a coordinate pole
+            %   "unstructured"  - native tensor structure could not be recovered
+
+            info = struct(...
+                "isStructured",false,...
+                "coordinates","",...
+                "xVec",[],...
+                "yVec",[],...
+                "Nx",[],...
+                "Ny",[],...
+                "gridIndex",[]);
+
+            status = "unstructured";
+
+            if coordinates == ""
+                return
+            end
+
+            C = obj.getCoordinatesFromPhTh(obj.ph,obj.th,coordinates);
+
+            % Coordinate conversion introduces tiny floating-point differences
+            % between values that should lie on the same tensor-grid coordinate.
+            tol = 1e-10;
+            x = round(C.x/tol)*tol;
+            y = round(C.y/tol)*tol;
+
+            % Az-El and El-Az have coordinate poles at y = +/-90 deg.
+            % The corresponding x coordinate is physically undefined there, so
+            % the original native x labels cannot be recovered uniquely.
+            if any(coordinates == ["AzEl","ElAz"])
+                poleMask = abs(abs(y) - 90) <= 1e-8;
+
+                if any(poleMask)
+                    status = "poleAmbiguity";
+                    return
+                end
+            end
+
+            T = obj.detectTensorGrid(x,y);
+
+            if ~T.isStructured
+                return
+            end
+
+            info = T;
+            info.coordinates = coordinates;
+            status = "structured";
+        end
+
+        function info = buildNativeGridFromAxes(obj,coordinates,xVec,yVec,gridIndex)
+            %BUILDNATIVEGRIDFROMAXES Build native structured-grid information from
+            % explicitly supplied native axis vectors.
+            %
+            % gridIndex maps sample number -> linear tensor-grid index.
+
+            if nargin < 5
+                gridIndex = [];
+            end
+
+            if ~isvector(xVec) || ~isvector(yVec) || isempty(xVec) || isempty(yVec)
+                error('SphereField:InvalidNativeGridAxes',...
+                    'NativeXVec and NativeYVec must be non-empty vectors.');
+            end
+
+            if any(~isfinite(xVec)) || any(~isfinite(yVec))
+                error('SphereField:InvalidNativeGridAxes',...
+                    'NativeXVec and NativeYVec must contain finite values.');
+            end
+
+            xVec = reshape(xVec,1,[]);
+            yVec = reshape(yVec,1,[]);
+
+            Nx = numel(xVec);
+            Ny = numel(yVec);
+
+            if Nx*Ny ~= obj.Np
+                error('SphereField:NativeGridSizeMismatch',...
+                    'The supplied native grid contains %d x %d = %d samples, but SphereField contains %d samples.',...
+                    Nx,Ny,Nx*Ny,obj.Np);
+            end
+
+            if isempty(gridIndex)
+                gridIndex = (1:obj.Np).';
+            else
+                gridIndex = gridIndex(:);
+
+                if numel(gridIndex) ~= obj.Np || ...
+                        ~isequal(sort(gridIndex),(1:obj.Np).')
+                    error('SphereField:InvalidNativeGridIndex',...
+                        'NativeGridIndex must be a permutation of 1:Np.');
+                end
+            end
+
+            % Construct the native tensor grid.
+            [X,Y] = meshgrid(xVec,yVec);
+
+            % Reorder tensor-grid coordinates into the same sample order as obj.ph/th.
+            x = X(gridIndex);
+            y = Y(gridIndex);
+
+            [phTest,thTest] = obj.getPhThFromCoordinates(x,y,coordinates);
+
+            % Compare physical directions rather than raw angular coordinates.
+            rStored = [sind(obj.th).*cosd(obj.ph), ...
+                sind(obj.th).*sind(obj.ph), ...
+                cosd(obj.th)];
+
+            rTest = [sind(thTest).*cosd(phTest), ...
+                sind(thTest).*sind(phTest), ...
+                cosd(thTest)];
+
+            err = sqrt(sum((rStored - rTest).^2,2));
+
+            tol = 1e-10;
+
+            if max(err) > tol
+                error('SphereField:NativeGridDirectionMismatch',...
+                    'The supplied native grid does not reproduce the stored SphereField directions. Maximum direction-vector error = %.3g.',...
+                    max(err));
+            end
+
+            info = struct(...
+                "isStructured",true,...
+                "coordinates",coordinates,...
+                "xVec",xVec,...
+                "yVec",yVec,...
+                "Nx",Nx,...
+                "Ny",Ny,...
+                "gridIndex",gridIndex);
+        end
+
+        function info = detectTensorGrid(~,x,y)
+            %DETECTTENSORGRID Detect a 2-D tensor-product sampling grid.
+            %
+            % The sample ordering is not modified.
+            %
+            % Returns:
+            %   isStructured
+            %   xVec
+            %   yVec
+            %   Nx
+            %   Ny
+            %   gridIndex
+            %
+            % gridIndex maps stored samples onto an [Ny x Nx] grid:
+            %
+            %   A(gridIndex) = sampleValues
+            %
+            % where rows correspond to y and columns to x.
+
+            xVec = unique(x,'sorted');
+            yVec = unique(y,'sorted');
+
+            Nx = numel(xVec);
+            Ny = numel(yVec);
+
+            info = struct();
+            info.isStructured = false;
+            info.xVec = [];
+            info.yVec = [];
+            info.Nx = [];
+            info.Ny = [];
+            info.gridIndex = [];
+
+            if Nx*Ny ~= numel(x), return; end
+
+            [tfX,iX] = ismember(x,xVec);
+            [tfY,iY] = ismember(y,yVec);
+
+            if ~all(tfX) || ~all(tfY), return; end
+                
+            gridIndex = sub2ind([Ny,Nx],iY,iX);
+
+            if numel(unique(gridIndex)) ~= numel(x), return; end
+          
+            info.isStructured = true;
+            info.xVec = reshape(xVec,1,[]);
+            info.yVec = reshape(yVec,1,[]);
+            info.Nx = Nx;
+            info.Ny = Ny;
+            info.gridIndex = gridIndex;
+        end
+
         function info = detectStructuredGrid(obj)
             %DETECTSTRUCTUREDGRID Analyse the canonical Ph-Th sampling grid.
             %
@@ -2118,15 +2365,11 @@ classdef SphereField < EMField
             % but are recognised as periodic representations of the same
             % physical azimuth.
 
-            phVec = unique(obj.ph, 'sorted');
-            thVec = unique(obj.th, 'sorted');
-
-            Nph_ = numel(phVec);
-            Nth_ = numel(thVec);
+            T = obj.detectTensorGrid(obj.ph,obj.th);
 
             info = struct();
 
-            info.isStructured = false;
+            info.isStructured = T.isStructured;
 
             info.phVec = [];
             info.thVec = [];
@@ -2143,34 +2386,25 @@ classdef SphereField < EMField
             info.coversFullTheta = false;
             info.isFullSphere = false;
 
+            info.northPoleIndex = [];
+            info.southPoleIndex = [];
+            info.hasNorthPole = false;
+            info.hasSouthPole = false;
 
-            % Structured tensor-product grid
-            if Nph_*Nth_ ~= obj.Np
+            if ~T.isStructured
                 return
             end
 
-            [tfPh, iPh] = ismember(obj.ph, phVec);
-            [tfTh, iTh] = ismember(obj.th, thVec);
+            info.phVec = T.xVec;
+            info.thVec = T.yVec;
 
-            if ~all(tfPh) || ~all(tfTh)
-                return
-            end
+            info.Nph = T.Nx;
+            info.Nth = T.Ny;
 
-            gridIndex = sub2ind([Nth_, Nph_], iTh, iPh);
+            info.gridIndex = T.gridIndex;
 
-            if numel(unique(gridIndex)) ~= obj.Np
-                return
-            end
-
-            info.isStructured = true;
-
-            info.phVec = reshape(phVec,1,[]);
-            info.thVec = reshape(thVec,1,[]);
-
-            info.Nph = Nph_;
-            info.Nth = Nth_;
-
-            info.gridIndex = gridIndex;
+            phVec = info.phVec;
+            thVec = info.thVec;
 
             % Theta coverage
             angleTol = 1e-8;
@@ -2181,49 +2415,38 @@ classdef SphereField < EMField
             info.hasNorthPole = ~isempty(info.northPoleIndex);
             info.hasSouthPole = ~isempty(info.southPoleIndex);
 
-            info.coversFullTheta = abs(thVec(1)) <= angleTol && abs(thVec(end) - 180) <= angleTol;
+            info.coversFullTheta = ...
+                abs(thVec(1)) <= angleTol && ...
+                abs(thVec(end) - 180) <= angleTol;
 
             % Phi periodicity and coverage
-            if Nph_ >= 2
+            if info.Nph >= 2
 
                 phSpan = phVec(end) - phVec(1);
 
-                % Explicit duplicate periodic endpoint, e.g.
-                %
-                %   0 ... 360
-                %  -180 ... 180
-                %
-                info.hasPhiPeriodicEndpoint = abs(phSpan - 360) <= angleTol;
-                info.hasRedundantPhi = phSpan > 360 + angleTol;
+                info.hasPhiPeriodicEndpoint = ...
+                    abs(phSpan - 360) <= angleTol;
+
+                info.hasRedundantPhi = ...
+                    phSpan > 360 + angleTol;
 
                 if phSpan >= 360 - angleTol
                     info.coversFullPhi = true;
+
                 else
-
-                    % Interior angular gaps.
                     dph = diff(phVec);
-
-                    % Periodic gap from final sample back to first sample.
                     seamGap = 360 - phSpan;
 
-                    % A complete periodic grid should have a seam gap no larger
-                    % than the largest ordinary grid gap.
-                    %
-                    % Examples:
-                    %
-                    %   0:10:350   -> seamGap = 10  -> full
-                    %   0:10:180   -> seamGap = 180 -> incomplete
-                    %
                     maxInteriorGap = max(dph);
-                    gapTol = max(angleTol, 1e-8*maxInteriorGap);
-                    info.coversFullPhi = seamGap <= maxInteriorGap + gapTol;
-                end
+                    gapTol = max(angleTol,1e-8*maxInteriorGap);
 
+                    info.coversFullPhi = ...
+                        seamGap <= maxInteriorGap + gapTol;
+                end
             end
 
-            % Complete sphere
-            info.isFullSphere = info.coversFullPhi && info.coversFullTheta;
-
+            info.isFullSphere = ...
+                info.coversFullPhi && info.coversFullTheta;
         end
 
         function G = getStoredGridView(obj)
@@ -2688,6 +2911,82 @@ classdef SphereField < EMField
             end
         end
 
+        function [ph,th] = getPhThFromCoordinates(~,x,y,coordinates)
+            %GETPHTHFROMCOORDINATES Convert supported coordinates to canonical Ph-Th.
+
+            switch coordinates
+                case "PhTh"
+                    ph = x;
+                    th = y;
+
+                case "DirCos"
+                    u = x;
+                    v = y;
+
+                    q = u.^2 + v.^2;
+
+                    if any(q > 1 + 1e-12)
+                        error('SphereField:InvalidDirectionCosines',...
+                            'Direction-cosine coordinates require u^2 + v^2 <= 1.');
+                    end
+
+                    q = min(q,1);
+                    w = sqrt(1-q);
+
+                    ph = atan2d(v,u);
+                    th = atan2d(hypot(u,v),w);
+
+                case "AzEl"
+                    az = x;
+                    el = y;
+
+                    u = sind(az).*cosd(el);
+                    v = sind(el);
+                    w = cosd(az).*cosd(el);
+
+                    ph = atan2d(v,u);
+                    th = atan2d(hypot(u,v),w);
+
+                case "ElAz"
+                    ep = x;
+                    al = y;
+
+                    u = sind(al);
+                    v = sind(ep).*cosd(al);
+                    w = cosd(ep).*cosd(al);
+
+                    ph = atan2d(v,u);
+                    th = atan2d(hypot(u,v),w);
+
+                case "TrueView"
+                    th = hypot(x,y);
+                    ph = atan2d(y,x);
+
+                case "ArcSin"
+                    u = sind(x);
+                    v = sind(y);
+
+                    q = u.^2 + v.^2;
+
+                    if any(q > 1 + 1e-12)
+                        error('SphereField:InvalidArcSinCoordinates',...
+                            'ArcSin coordinates imply u^2 + v^2 > 1.');
+                    end
+
+                    q = min(q,1);
+                    w = sqrt(1-q);
+
+                    ph = atan2d(v,u);
+                    th = atan2d(hypot(u,v),w);
+                otherwise
+                    error('SphereField:InvalidCoordinates',...
+                        'Unsupported coordinate system "%s".',coordinates);
+            end
+
+            ph = ph(:);
+            th = th(:);
+        end
+
         function ECart = sphericalPatternToCartesian(~,ph,th,Eph,Eth,Er)
             %SPHERICALPATTERNTOCARTESIAN Convert spherical pattern components to Cartesian.
             %
@@ -3040,6 +3339,16 @@ classdef SphereField < EMField
             % Convert native GRASP coordinates to canonical ph-th.
             [ph,th] = SphereField.graspGridToPhTh(G.x,G.y,G.IGRID);
 
+            nativeGrid = "";
+            nativeXVec = [];
+            nativeYVec = [];
+            nativeGridIndex = [];
+
+            if G.isNativeStructured
+                nativeGrid = SphereField.graspGridCoordinates(G.IGRID);
+                [nativeXVec,nativeYVec,nativeGridIndex] = SphereField.graspNativeGridInfo(G);
+            end
+
             % Convert GRASP field representation to SphereField representation.
             if G.ICOMP == 9
                 U = SphereField.graspPowerToU(G.F1);
@@ -3055,7 +3364,8 @@ classdef SphereField < EMField
                 provenance.file = pathName;
 
                 SF = SphereField(ph,th,[],[],G.freqHz,PowerPattern=U,r=options.r,Prad=options.Prad,etaRad=options.etaRad,...
-                    Metadata=metadata,Provenance=provenance,Symmetry=options.Symmetry);
+                    Metadata=metadata,Provenance=provenance,Symmetry=options.Symmetry,NativeGrid=nativeGrid,...
+                    NativeXVec=nativeXVec,NativeYVec=nativeYVec,NativeGridIndex=nativeGridIndex);
 
             else
                 [Eph,Eth] = SphereField.graspFieldToSpherical(ph,G.F1,G.F2,G.ICOMP);
@@ -3071,7 +3381,8 @@ classdef SphereField < EMField
                 provenance.file = pathName;
 
                 SF = SphereField(ph,th,Eph,Eth,G.freqHz,r=options.r,Prad=options.Prad,etaRad=options.etaRad,Metadata=metadata,...
-                    Provenance=provenance,Symmetry=options.Symmetry);
+                    Provenance=provenance,Symmetry=options.Symmetry,NativeGrid=nativeGrid,...
+                    NativeXVec=nativeXVec,NativeYVec=nativeYVec,NativeGridIndex=nativeGridIndex);
             end
         end
 
@@ -3416,6 +3727,10 @@ classdef SphereField < EMField
             F1 = [];
             F2 = [];
 
+            isNativeStructured = [];
+            nativeXVec = [];
+            nativeYVec = [];
+
             for ff = 1:NSET
                 % Grid limits.
                 a = SphereField.graspNextNumericLine(fid);
@@ -3441,6 +3756,14 @@ classdef SphereField < EMField
                 NX = v(1);
                 NY = v(2);
                 KLIMIT = v(3);
+
+                thisIsNativeStructured = KLIMIT == 0;
+                if ff == 1
+                    isNativeStructured = thisIsNativeStructured;
+                elseif thisIsNativeStructured ~= isNativeStructured
+                    error('SphereField:GRASPFrequencyGridTopologyMismatch',...
+                        'GRASP grid topology differs between frequency sets.');
+                end
 
                 DX = 0;
                 DY = 0;
@@ -3503,7 +3826,6 @@ classdef SphereField < EMField
                         [Xm,Ym] = meshgrid(X,Y);
                         x = Xm(:);
                         y = Ym(:);
-
                     case 1
                         %--------------------------------------------------
                         % Row-limited grid. Store only the actual samples.
@@ -3552,7 +3874,6 @@ classdef SphereField < EMField
                             f1 = [f1;A(:,1) + 1i*A(:,2)]; %#ok<AGROW>
                             f2 = [f2;A(:,3) + 1i*A(:,4)]; %#ok<AGROW>
                         end
-
                     otherwise
                         error('SphereField:UnsupportedGRASPKLIMIT','Unsupported KLIMIT = %d.',KLIMIT);
                 end
@@ -3569,6 +3890,11 @@ classdef SphereField < EMField
 
                     F1 = zeros(Np,NSET);
                     F2 = zeros(Np,NSET);
+
+                    if KLIMIT == 0
+                        nativeXRef = X;
+                        nativeYRef = Y;
+                    end
                 else
                     if numel(x) ~= numel(xRef) || any(abs(x - xRef) > 1e-12) || any(abs(y - yRef) > 1e-12)
 
@@ -3597,6 +3923,10 @@ classdef SphereField < EMField
             G.ICOMP = ICOMP;
             G.NCOMP = NCOMP;
             G.IGRID = IGRID;
+
+            G.isNativeStructured = isNativeStructured;
+            G.nativeXVec = nativeXRef;
+            G.nativeYVec = nativeYRef;
 
             G.metadata = struct();
             G.metadata.fileName = pathName;
@@ -3767,6 +4097,8 @@ classdef SphereField < EMField
                 valid = valid & all(isfinite(real(F2)) & isfinite(imag(F2)),2);
             end
 
+            isNativeStructured = all(valid);
+           
             x = x(valid);
             y = y(valid);
             F1 = F1(valid,:);
@@ -3788,6 +4120,15 @@ classdef SphereField < EMField
             G.ICOMP = ICOMP;
             G.NCOMP = NCOMP;
             G.IGRID = IGRID;
+
+            G.isNativeStructured = isNativeStructured;
+            if isNativeStructured
+                G.nativeXVec = X;
+                G.nativeYVec = Y;
+            else
+                G.nativeXVec = [];
+                G.nativeYVec = [];
+            end
 
             G.metadata = struct();
             G.metadata.fileName = pathName;
@@ -3979,6 +4320,100 @@ classdef SphereField < EMField
             end
         end
 
+        function coordinates = graspGridCoordinates(IGRID)
+            %GRASPGRIDCOORDINATES SphereField coordinate family corresponding
+            % to a GRASP spherical-grid coordinate system.
+            %
+            % This identifies the topology of the coordinate chart. The numerical
+            % GRASP coordinates need not be identical to SphereField's convention;
+            % native-grid detection is performed from the canonical directions.
+
+            switch IGRID
+                case 1
+                    coordinates = "DirCos";
+                case 4
+                    coordinates = "AzEl";
+                case 5
+                    coordinates = "TrueView";
+                case 6
+                    coordinates = "ElAz";
+                case 7
+                    coordinates = "PhTh";
+                case 9
+                    coordinates = "AzEl";
+                case 10
+                    coordinates = "ElAz";
+                otherwise
+                    coordinates = "";
+            end
+        end
+    
+        function [xVec,yVec,gridIndex] = graspNativeGridInfo(G)
+            %GRASPNATIVEGRIDINFO Convert GRASP rectangular-grid axes to the
+            % corresponding SphereField native coordinate system.
+            %
+            % gridIndex maps sample number -> linear tensor-grid index.
+
+            X = G.nativeXVec;
+            Y = G.nativeYVec;
+
+            if isempty(X) || isempty(Y)
+                xVec = [];
+                yVec = [];
+                gridIndex = [];
+                return
+            end
+
+            Np = numel(G.x);
+
+            switch G.IGRID
+                case 1
+                    % GRASP uv -> SphereField DirCos
+                    xVec = X;
+                    yVec = Y;
+                    gridIndex = (1:Np).';
+                case 4
+                    % GRASP elevation over azimuth -> SphereField AzEl
+                    xVec = -X;
+                    yVec = Y;
+                    gridIndex = (1:Np).';
+                case 5
+                    % GRASP true-view coordinates
+                    xVec = -X;
+                    yVec = Y;
+                    gridIndex = (1:Np).';
+                case 6
+                    % GRASP azimuth over elevation -> SphereField ElAz
+                    xVec = Y;
+                    yVec = -X;
+
+                    idx = reshape(1:Np,numel(Y),numel(X));
+                    gridIndex = idx.';
+                    gridIndex = gridIndex(:);
+                case 7
+                    % Conventional phi-theta
+                    xVec = X;
+                    yVec = Y;
+                    gridIndex = (1:Np).';
+                case 9
+                    % EDX AzEl
+                    xVec = X;
+                    yVec = Y;
+                    gridIndex = (1:Np).';
+                case 10
+                    % EDX ElAz
+                    xVec = Y;
+                    yVec = X;
+
+                    idx = reshape(1:Np,numel(Y),numel(X));
+                    gridIndex = idx.';
+                    gridIndex = gridIndex(:);
+                otherwise
+                    xVec = [];
+                    yVec = [];
+                    gridIndex = [];
+            end
+        end
     end
 
 end
